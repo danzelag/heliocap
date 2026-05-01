@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
-import { LeadService } from '@/services/lead.service'
+import { SolarUtils } from '@/lib/solar-utils'
 
 /**
  * Automation Hook for external AIs like OpenClaw.
@@ -25,12 +25,12 @@ export async function POST(request: Request) {
     let payback = body.estimated_payback
 
     if (roof_sqft && !savings) {
-      const estimation = LeadService.calculateEstimation(roof_sqft, utility_rate || 0.12)
+      const estimation = SolarUtils.calculateEstimation(roof_sqft, utility_rate || 0.12)
       savings = estimation.savings
       payback = estimation.payback
     }
 
-    const slug = LeadService.generateSlug(business_name)
+    const slug = SolarUtils.generateSlug(business_name)
 
     const { data, error } = await supabase
       .from('leads')
