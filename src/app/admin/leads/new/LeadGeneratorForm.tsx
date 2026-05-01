@@ -274,105 +274,11 @@ export default function LeadGeneratorForm() {
       <input type="hidden" name="lat" ref={latRef} />
       <input type="hidden" name="lng" ref={lngRef} />
 
-      <section className="border border-white/10 bg-[#0b1016]">
-        <div className="border-b border-white/10 px-5 py-4">
-          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">01 / Site imagery</div>
-          <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-white">Google site intelligence</h2>
-        </div>
 
-        <div className="grid gap-5 p-5 lg:grid-cols-2">
-          <div className="space-y-3">
-            <label className={labelClass}>Roof satellite image</label>
-            <div className="relative min-h-64 overflow-hidden border border-white/10 bg-[#090d12]">
-              {roofGenerating ? (
-                <div className="flex h-64 flex-col items-center justify-center gap-3 text-slate-500">
-                  <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
-                  <p className="font-mono text-[10px] uppercase tracking-[0.2em]">Fetching satellite + solar geometry</p>
-                </div>
-              ) : roofPreviewSrc ? (
-                <>
-                  <img src={roofPreviewSrc} className="h-64 w-full object-cover" alt="Roof preview" />
-                  {roofIsAuto && (
-                    <div className="absolute left-3 top-3 border border-white/15 bg-black/65 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.18em] text-white">
-                      Auto-generated
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-slate-500">
-                  <Satellite className="h-7 w-7" />
-                  <p className="font-mono text-[10px] uppercase tracking-[0.2em]">Select an address to fetch imagery</p>
-                  <p className="max-w-xs text-xs text-slate-600">Manual upload remains available as a fallback.</p>
-                </div>
-              )}
-
-              <input
-                ref={manualRoofFileRef}
-                type="file"
-                name="roof_image"
-                accept="image/*"
-                onChange={handleManualRoofChange}
-                className="absolute inset-0 cursor-pointer opacity-0"
-              />
-            </div>
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <Upload className="h-3.5 w-3.5" />
-              Click the image area to replace with an uploaded roof asset.
-            </div>
-            {intelligenceError && (
-              <div className="border border-amber-300/25 bg-amber-300/10 p-3 text-xs text-amber-100">
-                Google site intelligence did not complete: {intelligenceError}
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-3">
-            <label className={labelClass}>Solar panel render</label>
-            <div className="relative min-h-64 overflow-hidden border border-white/10 bg-[#090d12]">
-              {renderPreview ? (
-                <img src={renderPreview} className="h-64 w-full object-cover" alt="Render preview" />
-              ) : (
-                <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-slate-500">
-                  <ImageUp className="h-7 w-7" />
-                  <p className="font-mono text-[10px] uppercase tracking-[0.2em]">Auto-render appears after address lookup</p>
-                  <p className="text-xs text-slate-600">Optional manual PNG/JPG upload overrides it.</p>
-                </div>
-              )}
-              <input
-                type="file"
-                name="render_image"
-                accept="image/*"
-                onChange={handleRenderChange}
-                className="absolute inset-0 cursor-pointer opacity-0"
-              />
-            </div>
-            {solarModel && (
-              <div className="grid grid-cols-2 gap-2">
-                <div className="border border-white/10 bg-white/[0.025] p-3">
-                  <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-slate-500">Panels</div>
-                  <div className="num mt-1 text-lg font-semibold text-white">{solarModel.panelCount.toLocaleString()}</div>
-                </div>
-                <div className="border border-white/10 bg-white/[0.025] p-3">
-                  <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-slate-500">System</div>
-                  <div className="num mt-1 text-lg font-semibold text-white">{solarModel.systemSizeKw.toLocaleString()} kW</div>
-                </div>
-                <div className="border border-white/10 bg-white/[0.025] p-3">
-                  <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-slate-500">Year 1</div>
-                  <div className="num mt-1 text-lg font-semibold text-white">${solarModel.yearlySavings.toLocaleString()}</div>
-                </div>
-                <div className="border border-white/10 bg-white/[0.025] p-3">
-                  <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-slate-500">Federal ITC</div>
-                  <div className="num mt-1 text-lg font-semibold text-white">${solarModel.federalItc.toLocaleString()}</div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
 
       <section className="border border-white/10 bg-[#0b1016]">
         <div className="border-b border-white/10 px-5 py-4">
-          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">02 / Target dossier</div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">01 / Target dossier</div>
           <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-white">Business and site details</h2>
         </div>
 
@@ -415,7 +321,7 @@ export default function LeadGeneratorForm() {
 
       <section className="border border-white/10 bg-[#0b1016]">
         <div className="border-b border-white/10 px-5 py-4">
-          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">03 / Economics</div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">02 / Economics</div>
           <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-white">Modeling inputs</h2>
         </div>
 
