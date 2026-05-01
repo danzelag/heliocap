@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
+import {
+  buildSolarModel,
+  buildSolarOverlaySvg,
+  fetchSolarInsights,
+  fetchStaticSatelliteImage,
+  uploadLeadAsset,
+} from '@/lib/openclaw-google'
 
 /**
  * POST /api/generate-roof-image
- * Fetches a satellite image for given coordinates, uploads to Supabase Storage,
- * and returns the public URL. Compatible with automated callers (e.g. OpenClaw).
+ * Fetches satellite imagery + Google Solar geometry for given coordinates,
+ * uploads the raw roof image and panel overlay render to Supabase Storage,
+ * and returns OpenClaw-ready modeling data.
  *
  * Body: { lat, lng, slug, formattedAddress? }
- * Response: { roof_image_url }
+ * Response: { roof_image_url, render_image_url, solar_model }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -20,36 +28,46 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'slug is required' }, { status: 400 })
     }
 
-    const mapsKey = process.env.GOOGLE_MAPS_STATIC_API_KEY
-    if (!mapsKey) {
-      return NextResponse.json({ error: 'GOOGLE_MAPS_STATIC_API_KEY not configured' }, { status: 500 })
-    }
-
-    // Fetch satellite image from Google Maps Static API
-    const mapUrl =
-      `https://maps.googleapis.com/maps/api/staticmap` +
-      `?center=${lat},${lng}&zoom=19&size=800x600&maptype=satellite&key=${mapsKey}`
-
-    const imageResponse = await fetch(mapUrl)
-    if (!imageResponse.ok) {
-      throw new Error(`Google Maps Static API returned ${imageResponse.status}: ${await imageResponse.text()}`)
-    }
-
-    const imageBuffer = await imageResponse.arrayBuffer()
-
-    // Upload to Supabase Storage at leads/{slug}/roof.png
     const supabase = await createAdminClient()
-    const filePath = `${slug}/roof.png`
+    const [imageBuffer, solarInsights] = await Promise.all([
+      fetchStaticSatelliteImage(Number(lat), Number(lng)),
+      fetchSolarInsights(Number(lat), Number(lng)).catch((error) => {
+        console.error('[generate-roof-image] Google Solar fallback:', error)
+        return null
+      }),
+    ])
+    const solarModel = buildSolarModel(solarInsights)
 
-    const { error: uploadError } = await supabase.storage
-      .from('leads')
-      .upload(filePath, imageBuffer, { contentType: 'image/png', upsert: true })
+    const roofImageUrl = await uploadLeadAsset({
+      supabase,
+      slug,
+      fileName: 'roof.png',
+      body: imageBuffer,
+      contentType: 'image/png',
+    })
 
-    if (uploadError) throw uploadError
+    const overlaySvg = buildSolarOverlaySvg({
+      satelliteUrl: roofImageUrl,
+      insights: solarInsights,
+      lat: Number(lat),
+      lng: Number(lng),
+      model: solarModel,
+    })
 
-    const { data } = supabase.storage.from('leads').getPublicUrl(filePath)
+    const renderImageUrl = await uploadLeadAsset({
+      supabase,
+      slug,
+      fileName: 'render.svg',
+      body: overlaySvg,
+      contentType: 'image/svg+xml',
+    })
 
-    return NextResponse.json({ roof_image_url: data.publicUrl })
+    return NextResponse.json({
+      roof_image_url: roofImageUrl,
+      render_image_url: renderImageUrl,
+      solar_model: solarModel,
+      solar_insights_available: Boolean(solarInsights),
+    })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     console.error('[generate-roof-image]', message)

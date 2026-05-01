@@ -12,6 +12,37 @@ import Link from 'next/link'
 const inputClass = 'w-full border border-white/10 bg-[#090d12] px-3 py-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-slate-400'
 const labelClass = 'font-mono text-[10px] uppercase tracking-[0.22em] text-slate-500'
 
+type SolarModel = {
+  panelCount: number
+  maxPanelCount: number
+  systemSizeKw: number
+  yearlyKwh: number
+  yearlySavings: number
+  savings25yr: number
+  systemCost: number
+  federalItc: number
+  estimatedPayback: number
+  utilityRate: number
+  usableRoofAreaSqft: number | null
+  quality: 'google_solar' | 'fallback'
+}
+
+function buildNotes(notes: string, model: SolarModel | null) {
+  if (!model) return notes
+
+  const modelSummary = [
+    'OpenClaw Google Solar model',
+    `quality=${model.quality}`,
+    `panels=${model.panelCount}/${model.maxPanelCount}`,
+    `system_kw=${model.systemSizeKw}`,
+    `yearly_kwh=${model.yearlyKwh}`,
+    `yearly_savings=${model.yearlySavings}`,
+    `federal_itc=${model.federalItc}`,
+  ].join('; ')
+
+  return notes ? `${notes}\n\n${modelSummary}` : modelSummary
+}
+
 export default function LeadGeneratorForm() {
   const [loading, setLoading] = useState(false)
   const [successData, setSuccessData] = useState<{ url: string; slug: string } | null>(null)
@@ -20,6 +51,9 @@ export default function LeadGeneratorForm() {
   const [roofGenerating, setRoofGenerating] = useState(false)
   const [manualRoofPreview, setManualRoofPreview] = useState<string | null>(null)
   const [renderPreview, setRenderPreview] = useState<string | null>(null)
+  const [autoRenderUrl, setAutoRenderUrl] = useState<string | null>(null)
+  const [solarModel, setSolarModel] = useState<SolarModel | null>(null)
+  const [intelligenceError, setIntelligenceError] = useState<string | null>(null)
 
   const manualRoofFileRef = useRef<HTMLInputElement>(null)
   const latRef = useRef<HTMLInputElement>(null)
@@ -37,6 +71,9 @@ export default function LeadGeneratorForm() {
 
     setRoofGenerating(true)
     setAutoRoofUrl(null)
+    setAutoRenderUrl(null)
+    setSolarModel(null)
+    setIntelligenceError(null)
     try {
       const res = await fetch('/api/generate-roof-image', {
         method: 'POST',
@@ -44,9 +81,16 @@ export default function LeadGeneratorForm() {
         body: JSON.stringify({ lat, lng, slug, formattedAddress }),
       })
       const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to fetch site intelligence')
       if (data.roof_image_url) setAutoRoofUrl(data.roof_image_url)
+      if (data.render_image_url) {
+        setAutoRenderUrl(data.render_image_url)
+        setRenderPreview(data.render_image_url)
+      }
+      if (data.solar_model) setSolarModel(data.solar_model)
     } catch (err) {
       console.error('Roof image generation failed:', err)
+      setIntelligenceError(err instanceof Error ? err.message : 'Site intelligence failed')
     } finally {
       setRoofGenerating(false)
     }
@@ -67,6 +111,7 @@ export default function LeadGeneratorForm() {
     const reader = new FileReader()
     reader.onloadend = () => setRenderPreview(reader.result as string)
     reader.readAsDataURL(file)
+    setAutoRenderUrl(null)
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -107,6 +152,11 @@ export default function LeadGeneratorForm() {
             })
             const data = await res.json()
             roof_url = data.roof_image_url || roof_url
+            if (data.render_image_url) {
+              setAutoRenderUrl(data.render_image_url)
+              setRenderPreview(data.render_image_url)
+            }
+            if (data.solar_model) setSolarModel(data.solar_model)
           }
         } catch {
           // Keep the already generated URL if re-keying the storage path fails.
@@ -114,7 +164,7 @@ export default function LeadGeneratorForm() {
       }
 
       const renderFile = formData.get('render_image') as File
-      let render_url = ''
+      let render_url = autoRenderUrl || ''
       if (renderFile?.size > 0) {
         render_url = await StorageService.uploadLeadImage(supabase, slug, renderFile, 'render') || ''
       }
@@ -125,7 +175,10 @@ export default function LeadGeneratorForm() {
       let estimated_savings = manual_savings ? parseFloat(manual_savings) : 0
       let estimated_payback = 5.5
 
-      if (!manual_savings) {
+      if (!manual_savings && solarModel) {
+        estimated_savings = solarModel.yearlySavings
+        estimated_payback = solarModel.estimatedPayback
+      } else if (!manual_savings) {
         const sqft = SolarUtils.getProxySqftByBuildingType(building_type)
         const rate = SolarUtils.getRateByBuildingType(building_type)
         const est = SolarUtils.calculateEstimation(sqft, rate)
@@ -144,10 +197,12 @@ export default function LeadGeneratorForm() {
           building_type,
           slug,
           roof_image_url: roof_url || null,
-          render_image_url: render_url || null,
+          render_image_url: render_url || roof_url || null,
           estimated_savings,
           estimated_payback,
-          notes: formData.get('notes'),
+          roof_sqft: solarModel?.usableRoofAreaSqft || null,
+          utility_rate: solarModel?.utilityRate || null,
+          notes: buildNotes(formData.get('notes') as string, solarModel),
           status: 'published',
         }])
         .select()
@@ -222,7 +277,7 @@ export default function LeadGeneratorForm() {
       <section className="border border-white/10 bg-[#0b1016]">
         <div className="border-b border-white/10 px-5 py-4">
           <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">01 / Site imagery</div>
-          <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-white">Visual record</h2>
+          <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-white">Google site intelligence</h2>
         </div>
 
         <div className="grid gap-5 p-5 lg:grid-cols-2">
@@ -232,7 +287,7 @@ export default function LeadGeneratorForm() {
               {roofGenerating ? (
                 <div className="flex h-64 flex-col items-center justify-center gap-3 text-slate-500">
                   <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
-                  <p className="font-mono text-[10px] uppercase tracking-[0.2em]">Fetching satellite view</p>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em]">Fetching satellite + solar geometry</p>
                 </div>
               ) : roofPreviewSrc ? (
                 <>
@@ -264,29 +319,53 @@ export default function LeadGeneratorForm() {
               <Upload className="h-3.5 w-3.5" />
               Click the image area to replace with an uploaded roof asset.
             </div>
+            {intelligenceError && (
+              <div className="border border-amber-300/25 bg-amber-300/10 p-3 text-xs text-amber-100">
+                Google site intelligence did not complete: {intelligenceError}
+              </div>
+            )}
           </div>
 
           <div className="space-y-3">
-            <label className={labelClass}>Solar render</label>
+            <label className={labelClass}>Solar panel render</label>
             <div className="relative min-h-64 overflow-hidden border border-white/10 bg-[#090d12]">
               {renderPreview ? (
                 <img src={renderPreview} className="h-64 w-full object-cover" alt="Render preview" />
               ) : (
                 <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-slate-500">
                   <ImageUp className="h-7 w-7" />
-                  <p className="font-mono text-[10px] uppercase tracking-[0.2em]">Upload proposed render</p>
-                  <p className="text-xs text-slate-600">PNG or JPG required.</p>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em]">Auto-render appears after address lookup</p>
+                  <p className="text-xs text-slate-600">Optional manual PNG/JPG upload overrides it.</p>
                 </div>
               )}
               <input
                 type="file"
                 name="render_image"
                 accept="image/*"
-                required
                 onChange={handleRenderChange}
                 className="absolute inset-0 cursor-pointer opacity-0"
               />
             </div>
+            {solarModel && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="border border-white/10 bg-white/[0.025] p-3">
+                  <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-slate-500">Panels</div>
+                  <div className="num mt-1 text-lg font-semibold text-white">{solarModel.panelCount.toLocaleString()}</div>
+                </div>
+                <div className="border border-white/10 bg-white/[0.025] p-3">
+                  <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-slate-500">System</div>
+                  <div className="num mt-1 text-lg font-semibold text-white">{solarModel.systemSizeKw.toLocaleString()} kW</div>
+                </div>
+                <div className="border border-white/10 bg-white/[0.025] p-3">
+                  <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-slate-500">Year 1</div>
+                  <div className="num mt-1 text-lg font-semibold text-white">${solarModel.yearlySavings.toLocaleString()}</div>
+                </div>
+                <div className="border border-white/10 bg-white/[0.025] p-3">
+                  <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-slate-500">Federal ITC</div>
+                  <div className="num mt-1 text-lg font-semibold text-white">${solarModel.federalItc.toLocaleString()}</div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>
