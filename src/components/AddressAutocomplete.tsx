@@ -33,6 +33,8 @@ export default function AddressAutocomplete({
   useEffect(() => {
     // Modern Google Maps Library Loader (2026 Standard)
     const init = async () => {
+      console.log('📍 Initializing Autocomplete...')
+      console.log('🔑 Key Diagnostic (first 5):', (process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'MISSING').substring(0, 5))
       if (!inputRef.current) return
       
       try {
@@ -42,7 +44,7 @@ export default function AddressAutocomplete({
         if (autocompleteRef.current) return
 
         autocompleteRef.current = new Autocomplete(inputRef.current, {
-          types: ['establishment', 'address'],
+          types: ['geocode', 'establishment'],
           fields: ['formatted_address', 'geometry', 'name'],
         })
 
