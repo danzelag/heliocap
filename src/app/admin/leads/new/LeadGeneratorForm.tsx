@@ -61,11 +61,16 @@ export default function LeadGeneratorForm() {
   const pendingSlugRef = useRef<string | null>(null)
   const businessNameRef = useRef<HTMLInputElement>(null)
 
-  async function handlePlaceSelect({ formattedAddress, lat, lng }: PlaceResult) {
+  async function handlePlaceSelect({ formattedAddress, lat, lng, name }: PlaceResult) {
     if (latRef.current) latRef.current.value = String(lat)
     if (lngRef.current) lngRef.current.value = String(lng)
 
-    const businessName = businessNameRef.current?.value?.trim() || formattedAddress
+    // Auto-fill business name if it's empty
+    if (businessNameRef.current && !businessNameRef.current.value && name) {
+      businessNameRef.current.value = name
+    }
+
+    const businessName = businessNameRef.current?.value?.trim() || name || formattedAddress
     const slug = SolarUtils.generateSlug(businessName)
     pendingSlugRef.current = slug
 

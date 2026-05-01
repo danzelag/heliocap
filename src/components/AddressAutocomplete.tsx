@@ -7,6 +7,7 @@ export interface PlaceResult {
   formattedAddress: string
   lat: number
   lng: number
+  name?: string
 }
 
 interface Props {
@@ -43,8 +44,8 @@ export default function AddressAutocomplete({
     if (!window.google?.maps?.places) return
 
     autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
-      types: ['address'],
-      fields: ['formatted_address', 'geometry'],
+      types: ['establishment', 'address'],
+      fields: ['formatted_address', 'geometry', 'name'],
     })
 
     autocompleteRef.current.addListener('place_changed', () => {
@@ -54,9 +55,10 @@ export default function AddressAutocomplete({
       const lat = place.geometry.location.lat()
       const lng = place.geometry.location.lng()
       const formattedAddress = place.formatted_address
+      const name = place.name
 
       setValue(formattedAddress)
-      onPlaceSelect({ formattedAddress, lat, lng })
+      onPlaceSelect({ formattedAddress, lat, lng, name })
     })
   }
 
