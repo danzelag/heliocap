@@ -15,6 +15,7 @@ export interface Lead {
   roof_sqft: number | null;
   utility_rate: number | null;
   notes: string | null;
+  building_type: string | null;
   status: 'draft' | 'published' | 'archived';
   created_at: string;
 }

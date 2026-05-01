@@ -12,7 +12,6 @@ import {
 import { SavingsPanel } from '@/components/site/SavingsPanel'
 import { CtaForm } from '@/components/site/CtaForm'
 import { FloatingPathsBackground } from '@/components/ui/floating-paths-bg'
-import { BGPattern } from '@/components/ui/bg-pattern'
 
 export async function generateMetadata({
   params,
