@@ -173,7 +173,7 @@ export default function LeadGeneratorForm() {
 
       if (error) throw error
 
-      const fullUrl = `${window.location.origin}/site/${slug}`
+      const fullUrl = `${window.location.origin}/proposal/${slug}`
       setSuccessData({ url: fullUrl, slug })
 
     } catch (err) {

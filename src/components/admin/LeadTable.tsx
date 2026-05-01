@@ -180,7 +180,7 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
                     />
                   </td>
                   <td className="px-6 py-4 font-semibold text-primary">{lead.business_name}</td>
-                  <td className="px-6 py-4 text-muted-foreground">/site/{lead.slug}</td>
+                  <td className="px-6 py-4 text-muted-foreground">/proposal/{lead.slug}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-0.5 rounded-[2px] text-[10px] font-bold uppercase tracking-wider ${lead.status === 'published' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
                       {lead.status}
@@ -189,7 +189,7 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
                   <td className="px-6 py-4 font-medium">${lead.estimated_savings?.toLocaleString() ?? 0}</td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end items-center gap-2">
-                      <Link href={`/site/${lead.slug}`} target="_blank">
+                      <Link href={`/proposal/${lead.slug}`} target="_blank">
                         <Button variant="ghost" size="icon-sm" title="View Live">
                           <ExternalLink className="w-4 h-4 text-accent" />
                         </Button>
