@@ -3,13 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
-import { SolarUtils } from '@/lib/solar-utils';
-
-  // AI-Powered Estimation
-  const { savings, payback } = SolarUtils.calculateEstimation(roof_sqft, utility_rate);
-
-  // Auto-generate slug
-  const slug = SolarUtils.generateSlug(business_name);
+import { SolarUtils } from '@/lib/solar-utils'
 
 export async function createLeadAction(formData: FormData) {
   const supabase = await createClient()
@@ -22,10 +16,10 @@ export async function createLeadAction(formData: FormData) {
   const notes = formData.get('notes') as string
   
   // AI-Powered Estimation
-  const { savings, payback } = LeadService.calculateEstimation(roof_sqft, utility_rate)
+  const { savings, payback } = SolarUtils.calculateEstimation(roof_sqft, utility_rate)
   
   // Auto-generate slug
-  const slug = LeadService.generateSlug(business_name)
+  const slug = SolarUtils.generateSlug(business_name)
 
   const { data: lead, error } = await supabase
     .from('leads')
