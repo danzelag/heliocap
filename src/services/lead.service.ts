@@ -25,21 +25,44 @@ export type UpdateLead = Partial<InsertLead>;
 
 export class LeadService {
   /**
-   * Fetches a published lead by its slug for the public landing page.
+   * Fetches a lead by its slug for the public landing page.
+   * Published proposals should work with the anon key/RLS alone; the admin
+   * client is only a fallback for authenticated preview workflows.
    */
   static async getLeadBySlug(slug: string): Promise<Lead | null> {
-    const supabase = await createAdminClient();
-    const { data, error } = await supabase
+    const publicSupabase = await createClient();
+    const { data: publicLead, error: publicError } = await publicSupabase
       .from('leads')
       .select('*')
       .eq('slug', slug)
-      .single();
+      .eq('status', 'published')
+      .maybeSingle();
 
-    if (error) {
-      console.error('Error fetching lead by slug:', error);
+    if (publicError) {
+      console.error('Error fetching published lead by slug:', publicError);
+      throw new Error('Failed to fetch published proposal');
+    }
+
+    if (publicLead) return publicLead;
+
+    try {
+      const adminSupabase = await createAdminClient();
+      const { data: previewLead, error: previewError } = await adminSupabase
+        .from('leads')
+        .select('*')
+        .eq('slug', slug)
+        .maybeSingle();
+
+      if (previewError) {
+        console.error('Error fetching preview lead by slug:', previewError);
+        throw new Error('Failed to fetch proposal preview');
+      }
+
+      return previewLead;
+    } catch (error) {
+      console.error('Error creating Supabase admin client for proposal preview:', error);
       return null;
     }
-    return data;
   }
 
   /**
