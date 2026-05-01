@@ -215,19 +215,24 @@ export default function LeadGeneratorForm() {
           </Button>
         </div>
         <div className="pt-4 flex flex-col gap-3">
-          <Button asChild className="w-full h-14 bg-accent hover:bg-[#065F46] font-bold text-lg tracking-widest">
-            <a href={successData.url} target="_blank">VIEW LIVE PAGE</a>
-          </Button>
+          <a
+            href={successData.url}
+            target="_blank"
+            className="w-full h-14 bg-accent hover:bg-[#065F46] text-white font-bold text-lg tracking-widest rounded-sm flex items-center justify-center transition-colors"
+          >
+            VIEW LIVE PAGE
+          </a>
           <div className="grid grid-cols-2 gap-3">
             <Button variant="outline" onClick={() => window.location.reload()} className="h-12 font-bold tracking-widest uppercase text-[10px]">
               Generate Another
             </Button>
-            <Button asChild variant="outline" className="h-12 font-bold tracking-widest uppercase text-[10px] border-primary text-primary">
-              <Link href="/admin">
-                <LayoutDashboard className="w-3 h-3 mr-2" />
-                Dashboard
-              </Link>
-            </Button>
+            <Link
+              href="/admin"
+              className="h-12 font-bold tracking-widest uppercase text-[10px] border border-primary text-primary rounded-sm flex items-center justify-center gap-2 hover:bg-primary hover:text-white transition-colors"
+            >
+              <LayoutDashboard className="w-3 h-3" />
+              Dashboard
+            </Link>
           </div>
         </div>
       </Card>
