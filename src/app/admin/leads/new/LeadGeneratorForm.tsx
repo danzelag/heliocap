@@ -2,47 +2,39 @@
 
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Check, Copy, Loader2, LayoutDashboard, Upload, Zap, Satellite } from 'lucide-react'
+import { Check, ChevronRight, Copy, ImageUp, LayoutDashboard, Loader2, Satellite, Upload } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { StorageService } from '@/services/storage.service'
 import { SolarUtils } from '@/lib/solar-utils'
 import AddressAutocomplete, { type PlaceResult } from '@/components/AddressAutocomplete'
 import Link from 'next/link'
 
+const inputClass = 'w-full border border-white/10 bg-[#090d12] px-3 py-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-slate-400'
+const labelClass = 'font-mono text-[10px] uppercase tracking-[0.22em] text-slate-500'
+
 export default function LeadGeneratorForm() {
   const [loading, setLoading] = useState(false)
   const [successData, setSuccessData] = useState<{ url: string; slug: string } | null>(null)
   const [copied, setCopied] = useState(false)
-
-  // Roof: can be auto-generated from address or manually uploaded
   const [autoRoofUrl, setAutoRoofUrl] = useState<string | null>(null)
   const [roofGenerating, setRoofGenerating] = useState(false)
   const [manualRoofPreview, setManualRoofPreview] = useState<string | null>(null)
-  const manualRoofFileRef = useRef<HTMLInputElement>(null)
-
-  // Render image
   const [renderPreview, setRenderPreview] = useState<string | null>(null)
 
-  // Geocoords captured from autocomplete
+  const manualRoofFileRef = useRef<HTMLInputElement>(null)
   const latRef = useRef<HTMLInputElement>(null)
   const lngRef = useRef<HTMLInputElement>(null)
-  // Slug generated at address-selection time so we can upload to the right path
   const pendingSlugRef = useRef<string | null>(null)
-
   const businessNameRef = useRef<HTMLInputElement>(null)
 
-  // ── Address autocomplete handler ────────────────────────────────────────────
   async function handlePlaceSelect({ formattedAddress, lat, lng }: PlaceResult) {
     if (latRef.current) latRef.current.value = String(lat)
     if (lngRef.current) lngRef.current.value = String(lng)
 
-    // Derive a slug from business name (if filled) or address
     const businessName = businessNameRef.current?.value?.trim() || formattedAddress
     const slug = SolarUtils.generateSlug(businessName)
     pendingSlugRef.current = slug
 
-    // Auto-generate roof image
     setRoofGenerating(true)
     setAutoRoofUrl(null)
     try {
@@ -52,9 +44,7 @@ export default function LeadGeneratorForm() {
         body: JSON.stringify({ lat, lng, slug, formattedAddress }),
       })
       const data = await res.json()
-      if (data.roof_image_url) {
-        setAutoRoofUrl(data.roof_image_url)
-      }
+      if (data.roof_image_url) setAutoRoofUrl(data.roof_image_url)
     } catch (err) {
       console.error('Roof image generation failed:', err)
     } finally {
@@ -62,14 +52,12 @@ export default function LeadGeneratorForm() {
     }
   }
 
-  // ── Manual file handlers ────────────────────────────────────────────────────
   function handleManualRoofChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
     reader.onloadend = () => setManualRoofPreview(reader.result as string)
     reader.readAsDataURL(file)
-    // Manual upload overrides auto-generated image
     setAutoRoofUrl(null)
   }
 
@@ -81,7 +69,6 @@ export default function LeadGeneratorForm() {
     reader.readAsDataURL(file)
   }
 
-  // ── Form submit ─────────────────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true)
@@ -93,7 +80,6 @@ export default function LeadGeneratorForm() {
       const business_name = formData.get('business_name') as string
       let slug = SolarUtils.generateSlug(business_name)
 
-      // Slug conflict check
       const { data: existingLead } = await supabase
         .from('leads')
         .select('id')
@@ -104,15 +90,12 @@ export default function LeadGeneratorForm() {
         slug = `${slug}-${Math.random().toString(36).substring(2, 6)}`
       }
 
-      // ── Roof image ──────────────────────────────────────────────────────────
       const roofFile = formData.get('roof_image') as File
       let roof_url = autoRoofUrl || ''
 
       if (roofFile?.size > 0) {
-        // Manual upload takes priority
         roof_url = await StorageService.uploadLeadImage(supabase, slug, roofFile, 'roof') || ''
       } else if (autoRoofUrl && pendingSlugRef.current && pendingSlugRef.current !== slug) {
-        // Slug changed (conflict suffix added) — re-fetch image under the new slug
         try {
           const lat = latRef.current?.value
           const lng = lngRef.current?.value
@@ -125,17 +108,17 @@ export default function LeadGeneratorForm() {
             const data = await res.json()
             roof_url = data.roof_image_url || roof_url
           }
-        } catch { /* keep existing URL on failure */ }
+        } catch {
+          // Keep the already generated URL if re-keying the storage path fails.
+        }
       }
 
-      // ── Solar render ────────────────────────────────────────────────────────
       const renderFile = formData.get('render_image') as File
       let render_url = ''
       if (renderFile?.size > 0) {
         render_url = await StorageService.uploadLeadImage(supabase, slug, renderFile, 'render') || ''
       }
 
-      // ── Estimation ──────────────────────────────────────────────────────────
       const building_type = formData.get('building_type') as string
       const manual_savings = formData.get('savings_override') as string
 
@@ -150,8 +133,7 @@ export default function LeadGeneratorForm() {
         estimated_payback = est.payback
       }
 
-      // ── Save lead ───────────────────────────────────────────────────────────
-      const { data: lead, error } = await supabase
+      const { error } = await supabase
         .from('leads')
         .insert([{
           business_name,
@@ -175,7 +157,6 @@ export default function LeadGeneratorForm() {
 
       const fullUrl = `${window.location.origin}/proposal/${slug}`
       setSuccessData({ url: fullUrl, slug })
-
     } catch (err) {
       console.error(err)
       alert('Failed to generate page. Check console.')
@@ -192,228 +173,193 @@ export default function LeadGeneratorForm() {
     }
   }
 
-  // ── Roof panel state ────────────────────────────────────────────────────────
   const roofPreviewSrc = manualRoofPreview || autoRoofUrl
   const roofIsAuto = !manualRoofPreview && !!autoRoofUrl
 
-  // ── Success screen ──────────────────────────────────────────────────────────
   if (successData) {
     return (
-      <Card className="bg-white border-border p-12 text-center space-y-8 animate-in fade-in zoom-in duration-300 shadow-2xl">
-        <div className="w-20 h-20 bg-[#D1FAE5] rounded-full flex items-center justify-center mx-auto">
-          <Check className="text-accent w-10 h-10" />
+      <div className="border border-white/10 bg-[#0b1016] p-8 text-slate-100">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="mb-4 grid h-12 w-12 place-items-center border border-emerald-300/25 bg-emerald-300/10">
+              <Check className="h-6 w-6 text-emerald-200" />
+            </div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">Publication complete</div>
+            <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">Portfolio generated</h2>
+            <p className="mt-2 text-sm text-slate-400">The outreach page for {successData.slug} is live.</p>
+          </div>
+          <Link href="/admin" className="inline-flex h-10 items-center justify-center gap-2 border border-white/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-300 transition-colors hover:border-white/25 hover:text-white">
+            <LayoutDashboard className="h-3.5 w-3.5" />
+            Dashboard
+          </Link>
         </div>
-        <div className="space-y-2">
-          <h2 className="text-3xl font-bold text-primary tracking-tight">Portfolio Generated!</h2>
-          <p className="text-muted-foreground font-medium">The outreach page for {successData.slug} is now live and ready to send.</p>
-        </div>
-        <div className="flex items-center gap-2 p-4 bg-muted rounded-sm border border-border overflow-hidden">
-          <code className="text-sm font-mono flex-1 text-left truncate">{successData.url}</code>
-          <Button onClick={copyToClipboard} size="sm" className="bg-primary hover:bg-secondary shrink-0">
-            {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            <span className="ml-2 font-bold tracking-wider">{copied ? 'COPIED' : 'COPY'}</span>
+
+        <div className="mt-8 flex items-center gap-2 border border-white/10 bg-[#090d12] p-3">
+          <code className="min-w-0 flex-1 truncate font-mono text-xs text-slate-300">{successData.url}</code>
+          <Button onClick={copyToClipboard} size="sm" className="rounded-none bg-slate-100 text-slate-950 hover:bg-white">
+            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            <span className="ml-2 font-mono text-[10px] uppercase tracking-[0.18em]">{copied ? 'Copied' : 'Copy'}</span>
           </Button>
         </div>
-        <div className="pt-4 flex flex-col gap-3">
-          <a
-            href={successData.url}
-            target="_blank"
-            className="w-full h-14 bg-accent hover:bg-[#065F46] text-white font-bold text-lg tracking-widest rounded-sm flex items-center justify-center transition-colors"
-          >
-            VIEW LIVE PAGE
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <a href={successData.url} target="_blank" className="flex h-12 items-center justify-center border border-white/15 bg-white text-sm font-semibold text-slate-950 transition-colors hover:bg-slate-200">
+            View live page
           </a>
-          <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" onClick={() => window.location.reload()} className="h-12 font-bold tracking-widest uppercase text-[10px]">
-              Generate Another
-            </Button>
-            <Link
-              href="/admin"
-              className="h-12 font-bold tracking-widest uppercase text-[10px] border border-primary text-primary rounded-sm flex items-center justify-center gap-2 hover:bg-primary hover:text-white transition-colors"
-            >
-              <LayoutDashboard className="w-3 h-3" />
-              Dashboard
-            </Link>
-          </div>
+          <Button variant="outline" onClick={() => window.location.reload()} className="h-12 rounded-none border-white/15 bg-transparent font-mono text-[10px] uppercase tracking-[0.2em] text-slate-200 hover:bg-white/10">
+            Generate another
+          </Button>
         </div>
-      </Card>
+      </div>
     )
   }
 
-  // ── Form ────────────────────────────────────────────────────────────────────
   return (
-    <form onSubmit={handleSubmit} className="bg-white rounded-sm border border-border shadow-sm p-8 space-y-10">
-      {/* Hidden geocoords — populated by AddressAutocomplete */}
+    <form onSubmit={handleSubmit} className="space-y-5">
       <input type="hidden" name="lat" ref={latRef} />
       <input type="hidden" name="lng" ref={lngRef} />
 
-      {/* Visual Assets */}
-      <div className="grid grid-cols-2 gap-8">
+      <section className="border border-white/10 bg-[#0b1016]">
+        <div className="border-b border-white/10 px-5 py-4">
+          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">01 / Site imagery</div>
+          <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-white">Visual record</h2>
+        </div>
 
-        {/* Roof Image — auto-generated or manual fallback */}
-        <div className="space-y-4">
-          <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-            <Satellite className="w-3 h-3" /> Roof Satellite Image
-          </label>
-          <div className="relative group border-2 border-dashed border-muted hover:border-accent transition-colors rounded-sm aspect-video flex flex-col items-center justify-center bg-muted/30 overflow-hidden">
-            {roofGenerating ? (
-              <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                <Loader2 className="w-6 h-6 animate-spin text-accent" />
-                <p className="text-[10px] font-bold tracking-widest uppercase">Fetching Satellite View…</p>
-              </div>
-            ) : roofPreviewSrc ? (
-              <>
-                <img src={roofPreviewSrc} className="w-full h-full object-cover" alt="Roof preview" />
-                {roofIsAuto && (
-                  <div className="absolute top-2 left-2 bg-accent/90 text-white text-[9px] font-bold tracking-widest px-2 py-0.5 rounded-sm uppercase">
-                    Auto-Generated
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-center space-y-1">
-                <p className="text-xs font-bold text-muted-foreground">SELECT ADDRESS BELOW</p>
-                <p className="text-[10px] text-muted-foreground/50 italic">Satellite view auto-fetched on selection</p>
-              </div>
-            )}
+        <div className="grid gap-5 p-5 lg:grid-cols-2">
+          <div className="space-y-3">
+            <label className={labelClass}>Roof satellite image</label>
+            <div className="relative min-h-64 overflow-hidden border border-white/10 bg-[#090d12]">
+              {roofGenerating ? (
+                <div className="flex h-64 flex-col items-center justify-center gap-3 text-slate-500">
+                  <Loader2 className="h-6 w-6 animate-spin text-slate-300" />
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em]">Fetching satellite view</p>
+                </div>
+              ) : roofPreviewSrc ? (
+                <>
+                  <img src={roofPreviewSrc} className="h-64 w-full object-cover" alt="Roof preview" />
+                  {roofIsAuto && (
+                    <div className="absolute left-3 top-3 border border-white/15 bg-black/65 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.18em] text-white">
+                      Auto-generated
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-slate-500">
+                  <Satellite className="h-7 w-7" />
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em]">Select an address to fetch imagery</p>
+                  <p className="max-w-xs text-xs text-slate-600">Manual upload remains available as a fallback.</p>
+                </div>
+              )}
 
-            {/* Manual upload overlay — always accessible as fallback */}
-            <div
-              className={`absolute inset-0 flex flex-col items-center justify-center gap-1 cursor-pointer transition-opacity
-                ${roofPreviewSrc ? 'opacity-0 group-hover:opacity-100 bg-black/50' : 'opacity-0'}`}
-            >
-              <Upload className="w-5 h-5 text-white" />
-              <p className="text-white text-[10px] font-bold tracking-widest">
-                {roofIsAuto ? 'REPLACE WITH UPLOAD' : 'UPLOAD MANUALLY'}
-              </p>
+              <input
+                ref={manualRoofFileRef}
+                type="file"
+                name="roof_image"
+                accept="image/*"
+                onChange={handleManualRoofChange}
+                className="absolute inset-0 cursor-pointer opacity-0"
+              />
             </div>
-            <input
-              ref={manualRoofFileRef}
-              type="file"
-              name="roof_image"
-              accept="image/*"
-              onChange={handleManualRoofChange}
-              className="absolute inset-0 opacity-0 cursor-pointer z-10"
-            />
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <Upload className="h-3.5 w-3.5" />
+              Click the image area to replace with an uploaded roof asset.
+            </div>
           </div>
-          {roofIsAuto && (
-            <p className="text-[10px] text-muted-foreground/60 italic text-center">
-              Hover the image to upload a manual replacement
-            </p>
-          )}
-        </div>
 
-        {/* Solar Render */}
-        <div className="space-y-4">
-          <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-            <Zap className="w-3 h-3" /> Solar Render
-          </label>
-          <div className="relative group cursor-pointer border-2 border-dashed border-muted hover:border-accent transition-colors rounded-sm aspect-video flex flex-col items-center justify-center bg-muted/30 overflow-hidden">
-            {renderPreview ? (
-              <img src={renderPreview} className="w-full h-full object-cover" alt="Render preview" />
-            ) : (
-              <div className="text-center space-y-1">
-                <p className="text-xs font-bold text-muted-foreground group-hover:text-accent">UPLOAD ASSET</p>
-                <p className="text-[10px] text-muted-foreground/50 italic">Proposed Render (PNG/JPG)</p>
-              </div>
-            )}
-            <input
-              type="file"
-              name="render_image"
-              accept="image/*"
-              required
-              onChange={handleRenderChange}
-              className="absolute inset-0 opacity-0 cursor-pointer z-10"
-            />
-            {renderPreview && (
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <p className="text-white text-[10px] font-bold tracking-widest">CHANGE ASSET</p>
-              </div>
-            )}
+          <div className="space-y-3">
+            <label className={labelClass}>Solar render</label>
+            <div className="relative min-h-64 overflow-hidden border border-white/10 bg-[#090d12]">
+              {renderPreview ? (
+                <img src={renderPreview} className="h-64 w-full object-cover" alt="Render preview" />
+              ) : (
+                <div className="flex h-64 flex-col items-center justify-center gap-2 text-center text-slate-500">
+                  <ImageUp className="h-7 w-7" />
+                  <p className="font-mono text-[10px] uppercase tracking-[0.2em]">Upload proposed render</p>
+                  <p className="text-xs text-slate-600">PNG or JPG required.</p>
+                </div>
+              )}
+              <input
+                type="file"
+                name="render_image"
+                accept="image/*"
+                required
+                onChange={handleRenderChange}
+                className="absolute inset-0 cursor-pointer opacity-0"
+              />
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Core Data */}
-      <div className="grid grid-cols-2 gap-8">
-        <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Business Name</label>
-          <input
-            ref={businessNameRef}
-            name="business_name"
-            required
-            placeholder="e.g. Apex Logistics Center"
-            className="w-full px-3 py-3 border border-border rounded-sm bg-white text-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+      <section className="border border-white/10 bg-[#0b1016]">
+        <div className="border-b border-white/10 px-5 py-4">
+          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">02 / Target dossier</div>
+          <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-white">Business and site details</h2>
         </div>
-        <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Contact Name</label>
-          <input
-            name="contact_name"
-            required
-            placeholder="e.g. John Smith"
-            className="w-full px-3 py-3 border border-border rounded-sm bg-white text-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-8">
-        <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Building Type</label>
-          <select
-            name="building_type"
-            required
-            className="w-full px-3 py-3 border border-border rounded-sm bg-white text-primary focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
-          >
-            <option value="warehouse">Warehouse</option>
-            <option value="factory">Manufacturing/Factory</option>
-            <option value="office">Office Building</option>
-            <option value="cold_storage">Cold Storage</option>
-            <option value="retail">Retail/Big Box</option>
-          </select>
-        </div>
-        <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Business Address</label>
-          <AddressAutocomplete
-            name="address"
-            required
-            placeholder="Start typing an address…"
-            onPlaceSelect={handlePlaceSelect}
-            className="w-full px-3 py-3 border border-border rounded-sm bg-white text-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-      </div>
+        <div className="space-y-5 p-5">
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className={labelClass}>Business name</label>
+              <input ref={businessNameRef} name="business_name" required placeholder="Apex Logistics Center" className={inputClass} />
+            </div>
+            <div className="space-y-2">
+              <label className={labelClass}>Contact name</label>
+              <input name="contact_name" required placeholder="John Smith" className={inputClass} />
+            </div>
+          </div>
 
-      <hr className="border-border" />
-
-      {/* Optional */}
-      <div className="grid grid-cols-2 gap-8">
-        <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground italic opacity-70">Savings Override (Optional)</label>
-          <input
-            name="savings_override"
-            type="number"
-            placeholder="Leave blank for AI estimate"
-            className="w-full px-3 py-3 border border-border border-dashed rounded-sm bg-muted/10 text-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+          <div className="grid gap-5 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className={labelClass}>Building type</label>
+              <select name="building_type" required className={`${inputClass} appearance-none`}>
+                <option value="warehouse">Warehouse</option>
+                <option value="factory">Manufacturing/Factory</option>
+                <option value="office">Office Building</option>
+                <option value="cold_storage">Cold Storage</option>
+                <option value="retail">Retail/Big Box</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className={labelClass}>Business address</label>
+              <AddressAutocomplete
+                name="address"
+                required
+                placeholder="Start typing an address"
+                onPlaceSelect={handlePlaceSelect}
+                className={inputClass}
+              />
+            </div>
+          </div>
         </div>
-        <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground italic opacity-70">Internal Notes</label>
-          <input
-            name="notes"
-            placeholder="Source, referral, etc."
-            className="w-full px-3 py-3 border border-border border-dashed rounded-sm bg-muted/10 text-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
-        </div>
-      </div>
+      </section>
 
-      <div className="pt-4">
+      <section className="border border-white/10 bg-[#0b1016]">
+        <div className="border-b border-white/10 px-5 py-4">
+          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">03 / Economics</div>
+          <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-white">Modeling inputs</h2>
+        </div>
+
+        <div className="grid gap-5 p-5 md:grid-cols-2">
+          <div className="space-y-2">
+            <label className={labelClass}>Savings override</label>
+            <input name="savings_override" type="number" placeholder="Leave blank for modeled estimate" className={inputClass} />
+          </div>
+          <div className="space-y-2">
+            <label className={labelClass}>Internal notes</label>
+            <input name="notes" placeholder="Source, referral, campaign notes" className={inputClass} />
+          </div>
+        </div>
+      </section>
+
+      <div className="border border-white/10 bg-[#0b1016] p-5">
         <Button
           type="submit"
           disabled={loading}
-          className="w-full bg-accent hover:bg-[#065F46] text-white font-bold rounded-sm h-16 text-xl tracking-[0.1em] shadow-lg shadow-accent/20 transition-all"
+          className="h-14 w-full rounded-none bg-slate-100 font-mono text-[11px] font-bold uppercase tracking-[0.22em] text-slate-950 hover:bg-white disabled:opacity-50"
         >
-          {loading ? <Loader2 className="w-6 h-6 animate-spin mr-2" /> : <Zap className="w-5 h-5 mr-3 fill-white" />}
-          {loading ? 'GENERATING PORTFOLIO...' : 'GENERATE CLIENT PAGE'}
+          {loading ? <Loader2 className="mr-3 h-5 w-5 animate-spin" /> : <ChevronRight className="mr-3 h-5 w-5" />}
+          {loading ? 'Publishing portfolio' : 'Generate client page'}
         </Button>
       </div>
     </form>
