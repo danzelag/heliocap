@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import Script from 'next/script'
 
 export interface PlaceResult {
@@ -28,53 +28,65 @@ export default function AddressAutocomplete({
   onPlaceSelect,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null)
-  const [value, setValue] = useState(defaultValue)
+  const autocompleteRef = useRef<any>(null)
 
-  // If script already loaded when this component mounts (e.g. second form on page),
-  // init immediately without waiting for onLoad.
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.google?.maps?.places) {
-      initAutocomplete()
+    // Modern Google Maps Library Loader (2026 Standard)
+    const init = async () => {
+      if (!inputRef.current) return
+      
+      try {
+        // Load the new Places library
+        const { Autocomplete } = await (window as any).google.maps.importLibrary("places")
+        
+        if (autocompleteRef.current) return
+
+        autocompleteRef.current = new Autocomplete(inputRef.current, {
+          types: ['establishment', 'address'],
+          fields: ['formatted_address', 'geometry', 'name'],
+        })
+
+        autocompleteRef.current.addListener('place_changed', () => {
+          const place = autocompleteRef.current.getPlace()
+          if (!place?.geometry?.location || !place.formatted_address) return
+
+          const lat = place.geometry.location.lat()
+          const lng = place.geometry.location.lng()
+          const formattedAddress = place.formatted_address
+          const name = place.name
+
+          if (inputRef.current) {
+            inputRef.current.value = formattedAddress
+          }
+          
+          onPlaceSelect({ formattedAddress, lat, lng, name })
+        })
+      } catch (err) {
+        console.error('Google Maps Autocomplete Error:', err)
+      }
+    }
+
+    if (typeof window !== 'undefined' && (window as any).google?.maps) {
+      init()
+    } else {
+      (window as any).initAutocomplete = init
     }
   }, [])
-
-  function initAutocomplete() {
-    if (!inputRef.current || autocompleteRef.current) return
-    if (!window.google?.maps?.places) return
-
-    autocompleteRef.current = new google.maps.places.Autocomplete(inputRef.current, {
-      types: ['establishment', 'address'],
-      fields: ['formatted_address', 'geometry', 'name'],
-    })
-
-    autocompleteRef.current.addListener('place_changed', () => {
-      const place = autocompleteRef.current?.getPlace()
-      if (!place?.geometry?.location || !place.formatted_address) return
-
-      const lat = place.geometry.location.lat()
-      const lng = place.geometry.location.lng()
-      const formattedAddress = place.formatted_address
-      const name = place.name
-
-      setValue(formattedAddress)
-      onPlaceSelect({ formattedAddress, lat, lng, name })
-    })
-  }
 
   return (
     <>
       <Script
-        id="google-maps-places"
-        src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`}
-        strategy="lazyOnload"
-        onLoad={initAutocomplete}
+        id="google-maps-loader"
+        src={`https://maps.googleapis.com/maps/api/js?key=${(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '').trim()}&libraries=places&v=weekly`}
+        strategy="afterInteractive"
+        onLoad={() => {
+          if ((window as any).initAutocomplete) (window as any).initAutocomplete()
+        }}
       />
       <input
         ref={inputRef}
         name={name}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
+        defaultValue={defaultValue}
         required={required}
         placeholder={placeholder}
         autoComplete="off"
