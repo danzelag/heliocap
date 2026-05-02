@@ -117,9 +117,15 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
 
     try {
       const result = await deleteLeadsAction(idsToDelete)
+      
+      if (!result.success) {
+        setErrorMessage(result.error || 'Failed to delete proposal targets.')
+        return
+      }
+
       setLeads((prev) => prev.filter((lead) => !idsToDelete.includes(lead.id)))
       setSelectedIds((prev) => prev.filter((id) => !idsToDelete.includes(id)))
-      setLastDeleteCount(result.deleted)
+      setLastDeleteCount(result.deleted || 0)
       setDeleteDialogOpen(false)
       setIdToDelete(null)
       setIsBulkDelete(false)

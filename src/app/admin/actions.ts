@@ -7,28 +7,41 @@ export async function deleteLeadsAction(ids: string[]) {
   const leadIds = ids.filter(Boolean)
 
   if (leadIds.length === 0) {
-    throw new Error('No lead IDs were provided')
+    return { success: false, error: 'No lead IDs provided' }
   }
 
-  const supabase = await createAdminClient()
-  
-  const { data, error } = await supabase
-    .from('leads')
-    .delete()
-    .in('id', leadIds)
-    .select('id, slug')
+  try {
+    const supabase = await createAdminClient()
+    
+    const { data, error } = await supabase
+      .from('leads')
+      .delete()
+      .in('id', leadIds)
+      .select('id, slug')
 
-  if (error) {
-    console.error('Failed to delete leads:', error)
-    throw new Error(error.message || 'Failed to delete leads')
+    if (error) {
+      console.error('[deleteLeadsAction] Supabase error:', error)
+      return { success: false, error: `Database error: ${error.message}` }
+    }
+
+    // Revalidate paths to clear cache
+    revalidatePath('/admin')
+    revalidatePath('/admin/leads')
+    
+    if (data && data.length > 0) {
+      data.forEach((lead) => {
+        if (lead.slug) revalidatePath(`/proposal/${lead.slug}`)
+      })
+    }
+
+    return { success: true, deleted: data?.length ?? 0 }
+  } catch (error) {
+    console.error('[deleteLeadsAction] Critical failure:', error)
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'A critical server error occurred' 
+    }
   }
-
-  revalidatePath('/admin')
-  data?.forEach((lead) => {
-    if (lead.slug) revalidatePath(`/proposal/${lead.slug}`)
-  })
-
-  return { success: true, deleted: data?.length ?? 0 }
 }
 
 export async function updateLeadsStatusAction(ids: string[], status: 'draft' | 'published' | 'archived') {
