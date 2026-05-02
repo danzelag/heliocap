@@ -8,13 +8,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <claude-mem-context>
 # Memory Context
 
-# [solar-lead-gen] recent context, 2026-05-01 2:14pm EDT
+# [solar-lead-gen] recent context, 2026-05-02 2:37pm EDT
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (19,091t read) | 666,543t work | 97% savings
+Stats: 50 obs (20,634t read) | 732,849t work | 97% savings
 
 ### Apr 29, 2026
 S83 User asked what the /design-handoff skill does — skill capability explanation provided (Apr 29 at 3:48 PM)
@@ -23,21 +23,7 @@ S67 Add Google Places Autocomplete + auto-satellite roof image generation to lea
 ### Apr 30, 2026
 S84 User asked about "Claude Design" tool — available design skills and options explained (Apr 30 at 7:55 PM)
 S82 User asked what the /design-handoff skill does — skill capability explanation provided (Apr 30 at 7:55 PM)
-133 8:02p 🟣 Next.js App Router Route Created for /proposal Page
-135 8:03p 🟣 npm Dependencies Installed in Worktree and Visual Preview Initiated
-137 " 🔵 Next.js Dev Server Started Successfully on Port 3000
-136 " ✅ Claude Preview launch.json Configured to Run Next.js Dev Server on Port 3000
-138 8:04p 🔵 Claude Preview MCP Lacks preview_navigate — Uses preview_snapshot and preview_eval Instead
-139 " 🔵 Proposal Page Rendered Successfully with Sample Lead Data for Acme Logistics
-140 8:05p 🟣 Commercial Solar Proposal One-Page Web App UI Design
-141 " 🟣 Commercial Solar Proposal UI Built and Rendered in Preview
 ### May 1, 2026
-142 12:12p 🔵 Vercel Build Failing: Missing bg-pattern Component in heliocap
-143 12:13p 🔴 Removed Dead BGPattern Import Blocking Vercel Build
-144 " 🔵 Two Additional TypeScript Errors Found After Initial Fix
-145 " 🔵 Lead Interface Missing building_type Field Used in Both Page Components
-146 " 🔴 Added building_type to Lead Interface in lead.service.ts
-147 " 🔴 Removed Dead BGPattern Import from site/[slug]/page.tsx
 S85 Fix heliocap Vercel build failure caused by TypeScript errors in Next.js 16.2.4 project (May 1 at 12:14 PM)
 148 12:54p 🔵 Proposal Page 404 Bug Reported
 149 " 🔵 Solar Lead Gen Project Structure Mapped
@@ -75,6 +61,21 @@ S85 Fix heliocap Vercel build failure caused by TypeScript errors in Next.js 16.
 181 " 🔵 git index.lock Permission Error Requires Escalated Sandbox Permissions Again
 182 2:09p 🟣 OpenClaw Google Solar Intelligence Committed as 23fc378
 183 " 🟣 OpenClaw Solar Intelligence Pushed to GitHub; Vercel Deploy Triggered
+184 2:14p ⚖️ Lead Generator Form Redesigned for Bot-First Automation Workflow
+### May 2, 2026
+185 2:16p 🔵 OpenClaw Reroof — Full Implementation Plan Reviewed
+186 " 🔵 OpenClaw Reroof — Project File Structure and Dependencies Confirmed
+187 " 🔵 Core API Routes and Service Layer — Implementation Details
+188 2:17p 🔵 Supabase Schema and Lead Generator Form — Complete Implementation Details
+189 " ⚖️ V1 Build Priority — Pipeline First
+190 " 🔵 Production Build Passes Clean — Current Route Map Confirmed
+191 " 🟣 Pipeline Phase 0 — Four New Files Written for Prospects Pipeline Foundation
+192 " ⚖️ Architecture Decisions — n8n Calls App + Shared Secret Auth
+193 " ⚖️ Pipeline-First MVP Plan Submitted to Codex — Auth Renamed to N8N_WEBHOOK_SECRET
+194 2:23p 🔵 Previously Written Pipeline Files Not Present on Disk — Git Status Confirms
+195 " 🟣 Prospects Migration and N8N Auth Helper Written to Disk
+196 2:24p 🟣 N8N Auth Wired Into API Routes — generate-roof-image and leads Hardened
+197 " 🟣 ProspectService and Prospect TypeScript Interface Created
 
-Access 667k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 733k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

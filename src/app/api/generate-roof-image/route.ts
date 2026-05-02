@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
+import { verifyN8nRequest } from '@/lib/n8n-auth'
 import {
   buildSolarModel,
   buildSolarOverlaySvg,
@@ -14,12 +15,21 @@ import {
  * uploads the raw roof image and panel overlay render to Supabase Storage,
  * and returns OpenClaw-ready modeling data.
  *
- * Body: { lat, lng, slug, formattedAddress? }
+ * Body: { lat, lng, slug, formattedAddress?, bucket?: 'leads' | 'prospects' }
  * Response: { roof_image_url, render_image_url, solar_model }
  */
 export async function POST(request: NextRequest) {
   try {
-    const { lat, lng, slug } = await request.json()
+    const { lat, lng, slug, bucket = 'leads' } = await request.json()
+
+    if (bucket !== 'leads' && bucket !== 'prospects') {
+      return NextResponse.json({ error: 'bucket must be leads or prospects' }, { status: 400 })
+    }
+
+    if (bucket === 'prospects') {
+      const authError = verifyN8nRequest(request)
+      if (authError) return authError
+    }
 
     if (lat == null || lng == null) {
       return NextResponse.json({ error: 'lat and lng are required' }, { status: 400 })
@@ -40,6 +50,7 @@ export async function POST(request: NextRequest) {
 
     const roofImageUrl = await uploadLeadAsset({
       supabase,
+      bucket,
       slug,
       fileName: 'roof.png',
       body: imageBuffer,
@@ -56,6 +67,7 @@ export async function POST(request: NextRequest) {
 
     const renderImageUrl = await uploadLeadAsset({
       supabase,
+      bucket,
       slug,
       fileName: 'render.svg',
       body: overlaySvg,

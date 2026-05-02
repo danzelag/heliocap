@@ -35,24 +35,30 @@ export default async function AdminDashboard() {
     .select('*')
     .order('created_at', { ascending: false })
 
+  const { data: prospects } = await supabase
+    .from('prospects')
+    .select('pipeline_stage')
+
   const leadRows = (leads as Lead[]) || []
+  const prospectRows = (prospects as { pipeline_stage: string }[]) || []
   const publishedCount = leadRows.filter((lead) => lead.status === 'published').length
-  const draftCount = leadRows.filter((lead) => lead.status === 'draft').length
   const flaggedSavings = leadRows.reduce((total, lead) => total + (lead.estimated_savings || 0), 0)
   const liveRatio = leadRows.length ? Math.round((publishedCount / leadRows.length) * 100) : 0
   const recentActivity = leadRows.slice(0, 5)
+  const solarFetchedCount = prospectRows.filter((prospect) => prospect.pipeline_stage === 'solar_fetched').length
+  const enrichedCount = prospectRows.filter((prospect) => prospect.pipeline_stage === 'enriched').length
 
   const telemetry = [
-    { label: 'Targets', value: leadRows.length.toLocaleString(), icon: Target, tone: 'text-slate-200' },
+    { label: 'Targets', value: (leadRows.length + prospectRows.length).toLocaleString(), icon: Target, tone: 'text-slate-200' },
     { label: 'Live', value: publishedCount.toLocaleString(), icon: RadioTower, tone: 'text-emerald-300' },
-    { label: 'Draft', value: draftCount.toLocaleString(), icon: Database, tone: 'text-amber-300' },
+    { label: 'Pipeline', value: prospectRows.length.toLocaleString(), icon: Database, tone: 'text-amber-300' },
     { label: 'Savings', value: formatCompactUSD(flaggedSavings), icon: Zap, tone: 'text-slate-200' },
   ]
 
   const workflow = [
-    { label: 'Parcel intake', value: 'Regrid', active: true },
-    { label: 'Solar geometry', value: 'Google Solar', active: true },
-    { label: 'Owner pierce', value: 'OpenClaw', active: false },
+    { label: 'Parcel intake', value: `${prospectRows.length} sourced`, active: prospectRows.length > 0 },
+    { label: 'Solar geometry', value: `${solarFetchedCount} ready`, active: solarFetchedCount > 0 },
+    { label: 'Owner pierce', value: `${enrichedCount} enriched`, active: enrichedCount > 0 },
     { label: 'Microsite deploy', value: 'Vercel', active: publishedCount > 0 },
   ]
 
@@ -80,6 +86,12 @@ export default async function AdminDashboard() {
               <Button className="h-10 rounded-none border border-white/15 bg-slate-100 px-5 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-slate-950 hover:bg-white">
                 <Plus className="mr-2 h-4 w-4" />
                 New Target
+              </Button>
+            </Link>
+            <Link href="/admin/pipeline">
+              <Button variant="outline" className="h-10 rounded-none border-white/15 bg-transparent px-5 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-slate-200 hover:bg-white/10">
+                <RadioTower className="mr-2 h-4 w-4" />
+                Pipeline
               </Button>
             </Link>
           </div>

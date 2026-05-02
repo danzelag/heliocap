@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
+import { createAdminClient } from '@/lib/supabase-server'
+import { verifyN8nRequest } from '@/lib/n8n-auth'
 import { SolarUtils } from '@/lib/solar-utils'
 
 /**
@@ -8,13 +9,25 @@ import { SolarUtils } from '@/lib/solar-utils'
  */
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    
-    // In a real production app, we would verify a secret API Key here
-    // for OpenClaw to use.
-    
+    const authError = verifyN8nRequest(request)
+    if (authError) return authError
+
+    const supabase = await createAdminClient()
     const body = await request.json()
-    const { business_name, contact_name, address, roof_sqft, utility_rate, notes } = body
+    const {
+      business_name,
+      contact_name,
+      address,
+      roof_sqft,
+      utility_rate,
+      notes,
+      roof_image_url,
+      render_image_url,
+      video_url,
+      lat,
+      lng,
+      building_type,
+    } = body
 
     if (!business_name) {
       return NextResponse.json({ error: 'business_name is required' }, { status: 400 })
@@ -30,7 +43,20 @@ export async function POST(request: Request) {
       payback = estimation.payback
     }
 
-    const slug = SolarUtils.generateSlug(business_name)
+    const baseSlug = body.slug ? SolarUtils.generateSlug(String(body.slug)) : SolarUtils.generateSlug(business_name)
+    let slug = baseSlug
+
+    for (let attempt = 1; attempt <= 8; attempt += 1) {
+      const { data: existingLead, error: slugError } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('slug', slug)
+        .maybeSingle()
+
+      if (slugError) throw slugError
+      if (!existingLead) break
+      slug = `${baseSlug}-${attempt + 1}`
+    }
 
     const { data, error } = await supabase
       .from('leads')
@@ -44,6 +70,12 @@ export async function POST(request: Request) {
           utility_rate: utility_rate || 0.12,
           estimated_savings: savings,
           estimated_payback: payback,
+          roof_image_url: roof_image_url || null,
+          render_image_url: render_image_url || roof_image_url || null,
+          video_url: video_url || null,
+          lat: lat ?? null,
+          lng: lng ?? null,
+          building_type: building_type || null,
           notes,
           status: 'published'
         }
@@ -56,6 +88,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ 
       success: true, 
       lead_id: data.id,
+      slug: data.slug,
       url: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/proposal/${data.slug}` 
     })
 

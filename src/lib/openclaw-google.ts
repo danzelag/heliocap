@@ -60,7 +60,7 @@ export type SolarModel = {
 
 type UploadAssetArgs = {
   supabase: SupabaseClient
-  bucket?: string
+  bucket?: 'leads' | 'prospects'
   slug: string
   fileName: string
   body: ArrayBuffer | Buffer | string

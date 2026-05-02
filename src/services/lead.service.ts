@@ -10,10 +10,13 @@ export interface Lead {
   logo_url: string | null;
   roof_image_url: string | null;
   render_image_url: string | null;
+  video_url: string | null;
   estimated_savings: number | null;
   estimated_payback: number | null;
   roof_sqft: number | null;
   utility_rate: number | null;
+  lat: number | null;
+  lng: number | null;
   notes: string | null;
   building_type: string | null;
   status: 'draft' | 'published' | 'archived';

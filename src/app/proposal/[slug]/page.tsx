@@ -65,6 +65,7 @@ export default async function ClientLandingPage({
   const confidenceBasis = "verified roof area + local irradiance + utility rate"
 
   const heroImage = lead.render_image_url || 'https://images.unsplash.com/photo-1508514177221-188b1c77eca2?auto=format&fit=crop&q=80'
+  const heroVideo = lead.video_url
 
   const metrics = [
     { label: "Annual Savings", value: formatUSD(annualSavings), accent: true, sub: "Year 1 net of O&M" },
@@ -126,11 +127,24 @@ export default async function ClientLandingPage({
             <figure className="lg:col-span-7">
               <div className="relative overflow-hidden rounded-lg border border-white/10 bg-dark-secondary">
                 <div className="relative aspect-[4/3] w-full overflow-hidden lg:aspect-[5/4]">
-                  <img
-                    src={heroImage}
-                    alt={`Projected solar installation at ${businessName}, ${address}`}
-                    className="h-full w-full object-cover"
-                  />
+                  {heroVideo ? (
+                    <video
+                      src={heroVideo}
+                      poster={heroImage}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      className="h-full w-full object-cover"
+                      aria-label={`Projected solar installation video at ${businessName}, ${address}`}
+                    />
+                  ) : (
+                    <img
+                      src={heroImage}
+                      alt={`Projected solar installation at ${businessName}, ${address}`}
+                      className="h-full w-full object-cover"
+                    />
+                  )}
                   {/* Engineering grid overlay */}
                   <div className="pointer-events-none absolute inset-0 grid-bg opacity-20 mix-blend-overlay" />
                   {/* Corner crosshairs */}
