@@ -1,8 +1,9 @@
 import { LeadService } from '@/services/lead.service'
-import { AnalyticsService } from '@/services/analytics.service'
 import { notFound } from 'next/navigation'
-import { headers } from 'next/headers'
 import { Metadata } from 'next'
+import { PageViewTracker } from '@/components/site/PageViewTracker'
+
+export const revalidate = 3600
 import {
   ArrowRight, Download, Layers, MapPin,
   Building2, Cpu, TrendingDown,
@@ -47,10 +48,6 @@ export default async function ClientLandingPage({
 
   if (!lead) notFound()
 
-  const headersList = await headers()
-  const userAgent = headersList.get('user-agent') || 'unknown'
-  AnalyticsService.trackPageView(lead.id, slug, userAgent)
-
   // Derived properties for the proposal design
   const businessName = lead.business_name || 'Your Business'
   const address = lead.address || 'Site Address on File'
@@ -82,6 +79,7 @@ export default async function ClientLandingPage({
 
   return (
     <main className="h-screen w-full overflow-y-auto snap-y snap-mandatory scroll-smooth bg-background text-foreground selection:bg-roi/30">
+      <PageViewTracker leadId={lead.id} slug={slug} />
       <h1 className="sr-only">Commercial solar proposal for {businessName}</h1>
 
       {/* ── HERO ──────────────────────────────────────────────────────── */}

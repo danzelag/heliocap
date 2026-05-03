@@ -4,6 +4,8 @@ import React from "react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
+const PATH_DURATIONS = Array.from({ length: 12 }, () => 20 + Math.random() * 10);
+
 export function FloatingPathsBackground({
   position,
   children,
@@ -13,7 +15,7 @@ export function FloatingPathsBackground({
   className?: string;
   children?: React.ReactNode;
 }) {
-  const paths = Array.from({ length: 36 }, (_, i) => ({
+  const paths = Array.from({ length: 12 }, (_, i) => ({
     id: i,
     d: `M-${380 - i * 5 * position} -${189 + i * 6}C-${
       380 - i * 5 * position
@@ -48,7 +50,7 @@ export function FloatingPathsBackground({
                 pathOffset: [0, 1, 0],
               }}
               transition={{
-                duration: 20 + Math.random() * 10,
+                duration: PATH_DURATIONS[path.id],
                 repeat: Number.POSITIVE_INFINITY,
                 ease: "linear",
               }}

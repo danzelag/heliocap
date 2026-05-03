@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { createClient, createAdminClient } from '@/lib/supabase-server';
 import { SolarUtils } from '@/lib/solar-utils';
 
@@ -34,7 +35,7 @@ export class LeadService {
    * Published proposals should work with the anon key/RLS alone; the admin
    * client is only a fallback for authenticated preview workflows.
    */
-  static async getLeadBySlug(slug: string): Promise<Lead | null> {
+  static getLeadBySlug = cache(async (slug: string): Promise<Lead | null> => {
     const publicSupabase = await createClient();
     const { data: publicLead, error: publicError } = await publicSupabase
       .from('leads')
@@ -68,7 +69,7 @@ export class LeadService {
       console.error('Error creating Supabase admin client for proposal preview:', error);
       return null;
     }
-  }
+  });
 
   /**
    * Fetches any lead by ID for the admin dashboard.
