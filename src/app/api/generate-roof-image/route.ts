@@ -57,8 +57,9 @@ export async function POST(request: NextRequest) {
       contentType: 'image/png',
     })
 
+    const satelliteBase64 = `data:image/png;base64,${Buffer.from(imageBuffer).toString('base64')}`
     const overlaySvg = buildSolarOverlaySvg({
-      satelliteUrl: roofImageUrl,
+      satelliteUrl: satelliteBase64,
       insights: solarInsights,
       lat: Number(lat),
       lng: Number(lng),
