@@ -8,7 +8,7 @@ This is the full tech stack. If you follow it top to bottom you'll have a workin
 
 ## What you're building
 A workflow that:
-1. Pulls commercial buildings from county parcel records
+1. Pulls commercial buildings from countywdym parcel records
 2. Filters by year built (aging roof window)
 3. Fetches real roof geometry + panel placements from Google Solar API
 4. Pierces the LLC on the deed to find the real human owner

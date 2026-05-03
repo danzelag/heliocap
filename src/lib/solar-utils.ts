@@ -8,12 +8,12 @@ export class SolarUtils {
    * AI-Powered Estimation Logic (V1)
    * Calculates potential solar savings and ROI based on roof area.
    */
-  static calculateEstimation(roofSqft: number, rate: number = 0.12) {
+  static calculateEstimation(roofSqft: number, rate: number = 0.18) {
     // 1. System Size (kW): Avg 1 panel (400W) per 25 sqft
     const systemSizeKW = (roofSqft / 25) * 0.4;
-    
-    // 2. Annual Production (kWh): Avg 1450 sun-hours per year
-    const annualProductionKWh = systemSizeKW * 1450;
+
+    // 2. Annual Production (kWh): GTA ~1,300 peak sun-hours/year
+    const annualProductionKWh = systemSizeKW * 1300;
     
     // 3. Annual Savings ($): Production * Utility Rate
     const annualSavings = annualProductionKWh * rate;
@@ -45,14 +45,15 @@ export class SolarUtils {
    * Returns a suggested utility rate based on building type.
    */
   static getRateByBuildingType(type: string): number {
+    // Ontario all-in rates (electricity + Global Adjustment + delivery ~$0.18–0.22/kWh)
     const rates: Record<string, number> = {
-      warehouse: 0.12,
-      factory: 0.16,
-      office: 0.14,
-      cold_storage: 0.22,
-      retail: 0.14
+      warehouse: 0.18,
+      factory: 0.20,
+      office: 0.18,
+      cold_storage: 0.24,
+      retail: 0.19
     };
-    return rates[type] || 0.12;
+    return rates[type] || 0.18;
   }
   
   /**

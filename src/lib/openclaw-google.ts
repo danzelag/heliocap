@@ -8,7 +8,7 @@ const PANEL_HEIGHT_METERS = 1.879
 const PANEL_WATTS = 400
 const COMMERCIAL_COST_PER_WATT = 1.8
 const FEDERAL_ITC_RATE = 0.3
-const DEFAULT_UTILITY_RATE = 0.14
+const DEFAULT_UTILITY_RATE = 0.18 // Ontario all-in commercial rate (electricity + Global Adjustment + delivery)
 const DEPLOYABLE_PANEL_RATIO = 0.7
 
 type GoogleLatLng = {

@@ -126,22 +126,27 @@ n8n will be at `http://localhost:5678`. For production, deploy to Railway or Ren
 ---
 
 ## Phase 1 — Parcel Sourcing Pipeline
-*Goal: fill the `prospects` table with real buildings.*
+*Goal: fill the `prospects` table with real GTA commercial buildings.*
 
-### 1a. n8n workflow: Regrid → Supabase
+### 1a. n8n workflow: Google Places Nearby Search → Supabase
 🔨 **Build:** Create an n8n workflow with these nodes:
 
 1. **Trigger:** Manual / Cron (weekly, Sunday 2am)
-2. **HTTP Request** → Regrid API, filter by metro + use_code + sqft + year_built
-3. **Code Node** → normalize parcel fields, generate a UUID
-4. **Supabase Node** → upsert into `prospects` (on conflict: parcel_id do nothing)
+2. **HTTP Request** → Google Places Nearby Search API
+   - Search types: `type:warehouse` OR `type:industrial_complex` OR `type:storage`
+   - Center: GTA cities (Toronto, Mississauga, Brampton, Vaughan, Markham, Oakville, Burlington)
+   - Radius: 5km per search
+   - pagetoken loop for pagination (60 results per city ≈ 400/week)
+3. **Code Node** → normalize: `place_id`, `name`, `lat`, `lng`, `address`, `type`
+4. **Supabase Node** → upsert into `prospects` (on conflict: `place_id` do nothing)
 
-🛠️ **Use Gemini Flash** to write this n8n workflow JSON. Paste the Regrid API docs + the `prospects` schema and ask:
-> "Write an n8n workflow JSON that queries Regrid for commercial parcels in Maricopa County with use_code in [industrial, warehouse, manufacturing], min_sqft 50000, year_built 1995–2005. Normalize the response and upsert into Supabase table `prospects`. Handle pagination."
+🛠️ **Use Codex** to write this n8n workflow JSON (straightforward API pagination, no logic needed).
 
-**Cost:** ~$0.01/parcel from Regrid. Start with 500 prospects for v1.
+**Cost:** Google Places = ~$0.0003/prospect. Free tier if <1,000 calls/month. Start with 200 prospects/week for v1.
 
-👤 **You do:** In n8n, create a new workflow → import the generated JSON → add your Regrid API key credential → test with limit=10 → run it.
+👤 **You do:** In n8n, create a new workflow → import the generated JSON → add your Google Maps API key credential → test with 1 search (e.g., warehouses in Toronto) → run it.
+
+**Note:** You're targeting **tenants** (who pay the electric bill), not parcel owners. This is correct for Ontario commercial solar pitch.
 
 ### 1b. Solar geometry sub-workflow (wire into existing API)
 The `/api/generate-roof-image` route already does everything for Step 3 in the guide. You just need n8n to call it for each new prospect.
@@ -335,28 +340,28 @@ Display counts per stage, table of records in each stage, stage transition butto
 
 ---
 
-## Build Order (V1 MVP — "50 Emails in 9 Days")
+## Build Order (V1 MVP — "200 Emails to GTA Commercial")
 
 | Day | Task | AI for Code | You Do |
 | :--- | :--- | :--- | :--- |
 | 1 | Phase 0: create `prospects` table + buckets | — | Run SQL migration |
-| 1 | Phase 0: get API keys | — | Sign up for Regrid, Apollo, MillionVerifier |
+| 1 | Phase 0: get API keys | — | Google Maps API (already have), Apollo, MillionVerifier, Instantly |
 | 1 | Phase 0: spin up n8n | — | `npx n8n` or Railway deploy |
-| 2 | Phase 1a: Regrid → Supabase n8n workflow | Gemini Flash | Import JSON to n8n, test with 10 records |
+| 2 | Phase 1a: Google Places Nearby Search → Supabase n8n workflow | Codex | Import JSON to n8n, test with Toronto warehouses |
 | 2 | Phase 1b: wire `/api/generate-roof-image` into n8n | Codex | Add HTTP + Supabase nodes |
-| 3 | Phase 2a: OpenCorporates + Apollo enrichment workflow | Gemini Pro | Add credentials to n8n, test on 5 prospects |
-| 4 | Phase 4a: wire `/api/leads` into n8n (microsite deploy) | — | Run end-to-end test with 1 prospect |
-| 4 | Phase 4b: add future-compatible `video_url` to `leads` table + proposal hero | Haiku | Run SQL migration |
+| 3 | Phase 2a: Apollo enrichment workflow (owner → email) | Gemini Pro | Add Apollo credential to n8n, test on 5 prospects |
+| 4 | Phase 4a: wire `/api/leads` into n8n (microsite deploy) | — | Run end-to-end test: Places → Solar → Lead |
+| 4 | Phase 4b: video_url already compatible | — | Nothing to do; skip the SQL |
 | 5 | Phase 5a: Gemini Flash email copy generation | Gemini Flash | — |
-| 5 | Phase 5b: Instantly campaign + n8n send node | Codex | Set up Instantly campaign, verify sending domain |
+| 5 | Phase 5b: Instantly campaign + n8n send node | Codex | Set up Instantly, warm 5 inboxes for 30 days |
 | 5 | Phase 5c: Day 3 follow-up cron workflow | Codex | Schedule in n8n |
-| 6 | Phase 6a: reply classification workflow | Gemini Flash | Configure Instantly webhook URL |
-| 6 | Phase 6b: Cal.com booking link | — | Create Cal.com event, paste URL into Instantly template |
+| 6 | Phase 6a: reply classification workflow | Gemini Flash | Configure Instantly webhook URL to n8n |
+| 6 | Phase 6b: Cal.com booking link | — | Create Cal.com event, paste URL into template |
 | 7 | Phase 7a: `/admin/pipeline` page | Sonnet | — |
-| 9 | End-to-end test: 5 prospects, all stages | — | Verify, tune |
-| 9 | Send first 50 real emails | — | Pull trigger in Instantly |
+| 8 | End-to-end test: 20 prospects, full pipeline | — | Verify, tune |
+| 8 | Send first 200 real emails to GTA | — | Pull trigger in Instantly |
 
-**Skip for v1:** Veo/Fal video, FFmpeg compositing (Phase 3b), subdomains (Phase 4c), SMS/direct mail.
+**Skip for v1:** Veo/Fal video (wait for reply rate validation), FFmpeg, subdomains, SMS/direct mail, LLC piercing.
 
 ---
 
@@ -364,7 +369,7 @@ Display counts per stage, table of records in each stage, stage transition butto
 
 | Task | Model | Why |
 | :--- | :--- | :--- |
-| n8n workflow JSON (Regrid, API wiring) | **Codex** | Boilerplate JSON config, no reasoning needed |
+| n8n workflow JSON (Google Places, API wiring) | **Codex** | Boilerplate JSON config, pagination, no reasoning |
 | Enrichment orchestration logic | **Gemini Pro** | Cross-referencing API responses, ranking logic |
 | Simple UI additions (future video tag, Realtime) | **Haiku** | Mechanical JSX changes |
 | Multi-file features (pipeline page) | **Sonnet** | Touches routes, services, actions, and UI |
