@@ -1,10 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Lead } from '@/services/lead.service'
+import type { Lead, LeadStatus } from '@/services/lead.service'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Archive, Crosshair, Edit, ExternalLink, Eye, EyeOff, MoreHorizontal, Radar, Trash, TriangleAlert } from 'lucide-react'
+import { Archive, CalendarCheck, Crosshair, Edit, ExternalLink, Mail, MessageSquare, MoreHorizontal, PhoneCall, Radar, Send, Trash, TriangleAlert } from 'lucide-react'
 import Link from 'next/link'
 import { deleteLeadsAction, updateLeadsStatusAction } from '@/app/admin/actions'
 import {
@@ -20,21 +20,36 @@ interface LeadTableProps {
   initialLeads: Lead[]
 }
 
-const filters = ['all', 'published', 'draft', 'archived'] as const
+const filters = ['all', 'published', 'contacted', 'emailed', 'replied', 'booked', 'archived'] as const
 
 type StatusFilter = (typeof filters)[number]
 
 function statusClass(status: Lead['status']) {
   if (status === 'published') return 'border-emerald-300/30 bg-emerald-300/10 text-emerald-200'
+  if (status === 'contacted') return 'border-cyan-300/30 bg-cyan-300/10 text-cyan-100'
+  if (status === 'emailed') return 'border-blue-300/30 bg-blue-300/10 text-blue-100'
+  if (status === 'replied') return 'border-amber-300/30 bg-amber-300/10 text-amber-100'
+  if (status === 'booked') return 'border-roi/35 bg-roi/10 text-roi'
   if (status === 'archived') return 'border-slate-500/30 bg-slate-500/10 text-slate-400'
-  return 'border-amber-300/30 bg-amber-300/10 text-amber-200'
+  return 'border-white/20 bg-white/5 text-slate-200'
 }
 
 function statusDot(status: Lead['status']) {
   if (status === 'published') return 'bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.65)]'
+  if (status === 'contacted') return 'bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.5)]'
+  if (status === 'emailed') return 'bg-blue-300 shadow-[0_0_18px_rgba(147,197,253,0.45)]'
+  if (status === 'replied') return 'bg-amber-300 shadow-[0_0_18px_rgba(252,211,77,0.45)]'
+  if (status === 'booked') return 'bg-roi shadow-[0_0_18px_rgba(16,185,129,0.6)]'
   if (status === 'archived') return 'bg-slate-500'
-  return 'bg-amber-300 shadow-[0_0_18px_rgba(252,211,77,0.45)]'
+  return 'bg-slate-300'
 }
+
+const statusActions: Array<{ status: LeadStatus; label: string; icon: typeof PhoneCall }> = [
+  { status: 'contacted', label: 'Mark Contacted', icon: PhoneCall },
+  { status: 'emailed', label: 'Mark Emailed', icon: Mail },
+  { status: 'replied', label: 'Mark Replied', icon: MessageSquare },
+  { status: 'booked', label: 'Mark Booked', icon: CalendarCheck },
+]
 
 function formatUSD(value: number | null) {
   return new Intl.NumberFormat('en-US', {
@@ -59,7 +74,10 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
   const counts = useMemo(() => ({
     all: leads.length,
     published: leads.filter((lead) => lead.status === 'published').length,
-    draft: leads.filter((lead) => lead.status === 'draft').length,
+    contacted: leads.filter((lead) => lead.status === 'contacted').length,
+    emailed: leads.filter((lead) => lead.status === 'emailed').length,
+    replied: leads.filter((lead) => lead.status === 'replied').length,
+    booked: leads.filter((lead) => lead.status === 'booked').length,
     archived: leads.filter((lead) => lead.status === 'archived').length,
   }), [leads])
 
@@ -137,7 +155,7 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
     }
   }
 
-  const handleStatusChange = async (ids: string[], status: 'draft' | 'published' | 'archived') => {
+  const handleStatusChange = async (ids: string[], status: LeadStatus) => {
     if (ids.length === 0) return
 
     setLoading(true)
@@ -202,10 +220,19 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
           {selectedIds.length > 0 && (
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="xs" className="rounded-none border-emerald-300/25 bg-emerald-300/5 font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-100 hover:bg-emerald-300/10" onClick={() => handleStatusChange(selectedIds, 'published')} disabled={loading}>
-                Publish
+                Published
               </Button>
-              <Button variant="outline" size="xs" className="rounded-none border-amber-300/25 bg-amber-300/5 font-mono text-[10px] uppercase tracking-[0.2em] text-amber-100 hover:bg-amber-300/10" onClick={() => handleStatusChange(selectedIds, 'draft')} disabled={loading}>
-                Draft
+              <Button variant="outline" size="xs" className="rounded-none border-cyan-300/25 bg-cyan-300/5 font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100 hover:bg-cyan-300/10" onClick={() => handleStatusChange(selectedIds, 'contacted')} disabled={loading}>
+                Contacted
+              </Button>
+              <Button variant="outline" size="xs" className="rounded-none border-blue-300/25 bg-blue-300/5 font-mono text-[10px] uppercase tracking-[0.2em] text-blue-100 hover:bg-blue-300/10" onClick={() => handleStatusChange(selectedIds, 'emailed')} disabled={loading}>
+                Emailed
+              </Button>
+              <Button variant="outline" size="xs" className="rounded-none border-amber-300/25 bg-amber-300/5 font-mono text-[10px] uppercase tracking-[0.2em] text-amber-100 hover:bg-amber-300/10" onClick={() => handleStatusChange(selectedIds, 'replied')} disabled={loading}>
+                Replied
+              </Button>
+              <Button variant="outline" size="xs" className="rounded-none border-roi/25 bg-roi/5 font-mono text-[10px] uppercase tracking-[0.2em] text-roi hover:bg-roi/10" onClick={() => handleStatusChange(selectedIds, 'booked')} disabled={loading}>
+                Booked
               </Button>
               <Button variant="destructive" size="xs" className="rounded-none border-red-300/25 bg-red-500/10 font-mono text-[10px] uppercase tracking-[0.2em] text-red-100 hover:bg-red-500/20" onClick={() => openDeleteDialog(selectedIds, true)} disabled={loading}>
                 Delete
@@ -301,30 +328,34 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
                               <Edit className="mr-2 h-3.5 w-3.5 text-cyan-200" /> Edit target file
                             </Link>
 
-                            {lead.status !== 'published' ? (
-                              <button
-                                type="button"
-                                onClick={() => handleStatusChange([lead.id], 'published')}
-                                className="flex w-full items-center px-4 py-2.5 text-sm text-slate-200 hover:bg-emerald-300/10"
-                              >
-                                <Eye className="mr-2 h-3.5 w-3.5 text-emerald-200" /> Push live
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handleStatusChange([lead.id], 'draft')}
-                                className="flex w-full items-center px-4 py-2.5 text-sm text-slate-200 hover:bg-amber-300/10"
-                              >
-                                <EyeOff className="mr-2 h-3.5 w-3.5 text-amber-200" /> Pull to draft
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleStatusChange([lead.id], 'published')}
+                              className="flex w-full items-center px-4 py-2.5 text-sm text-slate-200 hover:bg-emerald-300/10"
+                            >
+                              <Send className="mr-2 h-3.5 w-3.5 text-emerald-200" /> Set Published
+                            </button>
+
+                            {statusActions.map((action) => {
+                              const Icon = action.icon
+                              return (
+                                <button
+                                  key={action.status}
+                                  type="button"
+                                  onClick={() => handleStatusChange([lead.id], action.status)}
+                                  className="flex w-full items-center px-4 py-2.5 text-sm text-slate-200 hover:bg-cyan-200/10"
+                                >
+                                  <Icon className="mr-2 h-3.5 w-3.5 text-cyan-100" /> {action.label}
+                                </button>
+                              )
+                            })}
 
                             <button
                               type="button"
                               onClick={() => handleStatusChange([lead.id], 'archived')}
                               className="flex w-full items-center px-4 py-2.5 text-sm text-slate-200 hover:bg-white/10"
                             >
-                              <Archive className="mr-2 h-3.5 w-3.5 text-slate-400" /> Archive signal
+                              <Archive className="mr-2 h-3.5 w-3.5 text-slate-400" /> Archive
                             </button>
 
                             <div className="my-1 h-px bg-white/10" />

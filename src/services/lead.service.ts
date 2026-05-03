@@ -1,6 +1,8 @@
 import { createClient, createAdminClient } from '@/lib/supabase-server';
 import { SolarUtils } from '@/lib/solar-utils';
 
+export type LeadStatus = 'published' | 'contacted' | 'emailed' | 'replied' | 'booked' | 'archived';
+
 export interface Lead {
   id: string;
   business_name: string;
@@ -19,7 +21,7 @@ export interface Lead {
   lng: number | null;
   notes: string | null;
   building_type: string | null;
-  status: 'draft' | 'published' | 'archived';
+  status: LeadStatus;
   created_at: string;
 }
 

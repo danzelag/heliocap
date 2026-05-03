@@ -3,6 +3,9 @@
 import { createAdminClient } from '@/lib/supabase-server'
 import { revalidatePath } from 'next/cache'
 
+const leadStatuses = ['published', 'contacted', 'emailed', 'replied', 'booked', 'archived'] as const
+type LeadStatus = (typeof leadStatuses)[number]
+
 export async function deleteLeadsAction(ids: string[]) {
   const leadIds = ids.filter(Boolean)
 
@@ -66,7 +69,11 @@ export async function deleteLeadsAction(ids: string[]) {
   }
 }
 
-export async function updateLeadsStatusAction(ids: string[], status: 'draft' | 'published' | 'archived') {
+export async function updateLeadsStatusAction(ids: string[], status: LeadStatus) {
+  if (!leadStatuses.includes(status)) {
+    throw new Error('Invalid lead status')
+  }
+
   const supabase = await createAdminClient()
 
   const { error } = await supabase

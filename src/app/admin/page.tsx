@@ -22,6 +22,15 @@ function formatTime(value: string) {
   }).format(new Date(value))
 }
 
+function leadStatusClass(status: Lead['status']) {
+  if (status === 'published') return 'border-emerald-300/25 text-emerald-200'
+  if (status === 'contacted') return 'border-cyan-300/25 text-cyan-100'
+  if (status === 'emailed') return 'border-blue-300/25 text-blue-100'
+  if (status === 'replied') return 'border-amber-300/25 text-amber-100'
+  if (status === 'booked') return 'border-roi/30 text-roi'
+  return 'border-slate-500/30 text-slate-500'
+}
+
 export default async function AdminDashboard() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -125,7 +134,7 @@ export default async function AdminDashboard() {
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold text-white">{lead.business_name}</span>
-                        <span className={`border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.18em] ${lead.status === 'published' ? 'border-emerald-300/25 text-emerald-200' : lead.status === 'draft' ? 'border-amber-300/25 text-amber-200' : 'border-slate-500/30 text-slate-500'}`}>
+                        <span className={`border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.18em] ${leadStatusClass(lead.status)}`}>
                           {lead.status}
                         </span>
                       </div>

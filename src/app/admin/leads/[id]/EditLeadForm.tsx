@@ -13,7 +13,7 @@ interface Lead {
   address: string | null
   estimated_savings: number | null
   notes: string | null
-  status: string
+  status: 'published' | 'contacted' | 'emailed' | 'replied' | 'booked' | 'archived'
   roof_image_url: string | null
 }
 
@@ -84,8 +84,11 @@ export default function EditLeadForm({ lead }: { lead: Lead }) {
             defaultValue={lead.status}
             className="w-full px-3 py-3 border border-border rounded-sm bg-white text-primary focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
           >
-            <option value="draft">Draft</option>
             <option value="published">Published</option>
+            <option value="contacted">Contacted</option>
+            <option value="emailed">Emailed</option>
+            <option value="replied">Replied</option>
+            <option value="booked">Booked</option>
             <option value="archived">Archived</option>
           </select>
         </div>

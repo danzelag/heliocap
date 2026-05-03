@@ -4,6 +4,8 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase-server'
 
+const leadStatuses = ['published', 'contacted', 'emailed', 'replied', 'booked', 'archived'] as const
+
 export async function updateLeadAction(formData: FormData) {
   const supabase = await createClient()
 
@@ -14,6 +16,10 @@ export async function updateLeadAction(formData: FormData) {
   const estimated_savings = parseFloat(formData.get('estimated_savings') as string)
   const notes = formData.get('notes') as string
   const status = formData.get('status') as string
+
+  if (!leadStatuses.includes(status as (typeof leadStatuses)[number])) {
+    redirect(`/admin/leads/${id}?error=invalid-status`)
+  }
 
   const rawLat = formData.get('lat') as string
   const rawLng = formData.get('lng') as string
