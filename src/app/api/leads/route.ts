@@ -2,6 +2,13 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
 import { verifyN8nRequest } from '@/lib/n8n-auth'
 import { SolarUtils } from '@/lib/solar-utils'
+import {
+  buildSolarModel,
+  buildSolarOverlaySvg,
+  fetchSolarInsights,
+  fetchStaticSatelliteImage,
+  uploadLeadAsset,
+} from '@/lib/openclaw-google'
 
 /**
  * Automation Hook for external AIs like OpenClaw.
@@ -58,6 +65,49 @@ export async function POST(request: Request) {
       slug = `${baseSlug}-${attempt + 1}`
     }
 
+    let finalRoofImageUrl = roof_image_url || null
+    let finalRenderImageUrl = render_image_url || roof_image_url || null
+
+    if (!finalRoofImageUrl && !finalRenderImageUrl && lat != null && lng != null) {
+      const [imageBuffer, solarInsights] = await Promise.all([
+        fetchStaticSatelliteImage(Number(lat), Number(lng)),
+        fetchSolarInsights(Number(lat), Number(lng)).catch((error) => {
+          console.error('[api/leads] Google Solar fallback:', error)
+          return null
+        }),
+      ])
+      const solarModel = buildSolarModel(solarInsights)
+
+      finalRoofImageUrl = await uploadLeadAsset({
+        supabase,
+        bucket: 'leads',
+        slug,
+        fileName: 'roof.png',
+        body: imageBuffer,
+        contentType: 'image/png',
+      })
+
+      const overlaySvg = buildSolarOverlaySvg({
+        satelliteUrl: finalRoofImageUrl,
+        insights: solarInsights,
+        lat: Number(lat),
+        lng: Number(lng),
+        model: solarModel,
+      })
+
+      finalRenderImageUrl = await uploadLeadAsset({
+        supabase,
+        bucket: 'leads',
+        slug,
+        fileName: 'render.svg',
+        body: overlaySvg,
+        contentType: 'image/svg+xml',
+      })
+
+      savings = savings || solarModel.yearlySavings
+      payback = payback || solarModel.estimatedPayback
+    }
+
     const { data, error } = await supabase
       .from('leads')
       .insert([
@@ -70,8 +120,8 @@ export async function POST(request: Request) {
           utility_rate: utility_rate || 0.12,
           estimated_savings: savings,
           estimated_payback: payback,
-          roof_image_url: roof_image_url || null,
-          render_image_url: render_image_url || roof_image_url || null,
+          roof_image_url: finalRoofImageUrl,
+          render_image_url: finalRenderImageUrl,
           video_url: video_url || null,
           lat: lat ?? null,
           lng: lng ?? null,

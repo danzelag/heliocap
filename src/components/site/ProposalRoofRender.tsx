@@ -5,30 +5,21 @@ type ProposalRoofRenderProps = {
   alt: string
 }
 
-function isOverlayOnlyRender(url: string | null) {
-  if (!url) return false
-  const normalized = url.toLowerCase()
-  return normalized.includes('overlay') || normalized.includes('panels-only')
-}
-
 export function ProposalRoofRender({
   roofImageUrl,
   renderImageUrl,
   videoUrl,
   alt,
 }: ProposalRoofRenderProps) {
-  const renderIsOverlay = isOverlayOnlyRender(renderImageUrl)
-  const compositeRenderUrl = renderImageUrl && !renderIsOverlay ? renderImageUrl : null
-  const baseImageUrl = compositeRenderUrl || roofImageUrl
-  const hasImage = Boolean(baseImageUrl || renderImageUrl)
+  const imageUrl = renderImageUrl || roofImageUrl
 
   return (
     <div className="relative aspect-video w-full overflow-hidden bg-slate-950">
       <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
-        {videoUrl && baseImageUrl ? (
+        {videoUrl && imageUrl ? (
           <video
             src={videoUrl}
-            poster={baseImageUrl}
+            poster={imageUrl}
             autoPlay
             muted
             loop
@@ -36,9 +27,9 @@ export function ProposalRoofRender({
             className="h-full w-full object-contain"
             aria-label={alt}
           />
-        ) : baseImageUrl ? (
+        ) : imageUrl ? (
           <img
-            src={baseImageUrl}
+            src={imageUrl}
             alt={alt}
             className="h-full w-full object-contain"
           />
@@ -48,16 +39,7 @@ export function ProposalRoofRender({
           </div>
         )}
 
-        {renderIsOverlay && roofImageUrl && renderImageUrl && (
-          <img
-            src={renderImageUrl}
-            alt=""
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 h-full w-full object-contain"
-          />
-        )}
-
-        {!hasImage && (
+        {!imageUrl && (
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(20,184,166,0.14),transparent_45%)]" />
         )}
       </div>

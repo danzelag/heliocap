@@ -43,6 +43,13 @@ function buildNotes(notes: string, model: SolarModel | null) {
   return notes ? `${notes}\n\n${modelSummary}` : modelSummary
 }
 
+type RoofGenerationResult = {
+  roof_image_url?: string
+  render_image_url?: string
+  solar_model?: SolarModel
+  error?: string
+}
+
 export default function LeadGeneratorForm() {
   const [loading, setLoading] = useState(false)
   const [successData, setSuccessData] = useState<{ url: string; slug: string } | null>(null)
@@ -60,6 +67,44 @@ export default function LeadGeneratorForm() {
   const lngRef = useRef<HTMLInputElement>(null)
   const pendingSlugRef = useRef<string | null>(null)
   const businessNameRef = useRef<HTMLInputElement>(null)
+
+  async function generateRoofIntelligence({
+    lat,
+    lng,
+    slug,
+    formattedAddress,
+  }: {
+    lat: number
+    lng: number
+    slug: string
+    formattedAddress?: string
+  }) {
+    const res = await fetch('/api/generate-roof-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat, lng, slug, formattedAddress }),
+    })
+    const data = await res.json() as RoofGenerationResult
+    if (!res.ok) throw new Error(data.error || 'Failed to fetch site intelligence')
+    return data
+  }
+
+  async function geocodeAddress(address: string) {
+    const google = (window as any).google
+    if (!google?.maps?.Geocoder) return null
+
+    const geocoder = new google.maps.Geocoder()
+    const response = await geocoder.geocode({ address })
+    const result = response.results?.[0]
+    const location = result?.geometry?.location
+    if (!location) return null
+
+    return {
+      formattedAddress: result.formatted_address || address,
+      lat: location.lat(),
+      lng: location.lng(),
+    }
+  }
 
   async function handlePlaceSelect({ formattedAddress, lat, lng, name }: PlaceResult) {
     if (latRef.current) latRef.current.value = String(lat)
@@ -80,13 +125,7 @@ export default function LeadGeneratorForm() {
     setSolarModel(null)
     setIntelligenceError(null)
     try {
-      const res = await fetch('/api/generate-roof-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lat, lng, slug, formattedAddress }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to fetch site intelligence')
+      const data = await generateRoofIntelligence({ lat, lng, slug, formattedAddress })
       if (data.roof_image_url) setAutoRoofUrl(data.roof_image_url)
       if (data.render_image_url) {
         setAutoRenderUrl(data.render_image_url)
@@ -142,22 +181,20 @@ export default function LeadGeneratorForm() {
 
       const roofFile = formData.get('roof_image') as File
       let roof_url = autoRoofUrl || ''
+      let render_url = autoRenderUrl || ''
+      const address = formData.get('address') as string
+      let lat = latRef.current?.value ? parseFloat(latRef.current.value) : null
+      let lng = lngRef.current?.value ? parseFloat(lngRef.current.value) : null
 
       if (roofFile?.size > 0) {
         roof_url = await StorageService.uploadLeadImage(supabase, slug, roofFile, 'roof') || ''
       } else if (autoRoofUrl && pendingSlugRef.current && pendingSlugRef.current !== slug) {
         try {
-          const lat = latRef.current?.value
-          const lng = lngRef.current?.value
           if (lat && lng) {
-            const res = await fetch('/api/generate-roof-image', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ lat: parseFloat(lat), lng: parseFloat(lng), slug }),
-            })
-            const data = await res.json()
+            const data = await generateRoofIntelligence({ lat, lng, slug, formattedAddress: address })
             roof_url = data.roof_image_url || roof_url
             if (data.render_image_url) {
+              render_url = data.render_image_url
               setAutoRenderUrl(data.render_image_url)
               setRenderPreview(data.render_image_url)
             }
@@ -166,10 +203,29 @@ export default function LeadGeneratorForm() {
         } catch {
           // Keep the already generated URL if re-keying the storage path fails.
         }
+      } else if (!roof_url && !autoRenderUrl && address) {
+        const geocoded = await geocodeAddress(address)
+        if (geocoded) {
+          lat = geocoded.lat
+          lng = geocoded.lng
+          if (latRef.current) latRef.current.value = String(lat)
+          if (lngRef.current) lngRef.current.value = String(lng)
+
+          const data = await generateRoofIntelligence({
+            lat: geocoded.lat,
+            lng: geocoded.lng,
+            slug,
+            formattedAddress: geocoded.formattedAddress,
+          })
+          roof_url = data.roof_image_url || ''
+          render_url = data.render_image_url || ''
+          if (data.roof_image_url) setAutoRoofUrl(data.roof_image_url)
+          if (data.render_image_url) setAutoRenderUrl(data.render_image_url)
+          if (data.solar_model) setSolarModel(data.solar_model)
+        }
       }
 
       const renderFile = formData.get('render_image') as File
-      let render_url = autoRenderUrl || ''
       if (renderFile?.size > 0) {
         render_url = await StorageService.uploadLeadImage(supabase, slug, renderFile, 'render') || ''
       }
@@ -196,9 +252,9 @@ export default function LeadGeneratorForm() {
         .insert([{
           business_name,
           contact_name: formData.get('contact_name'),
-          address: formData.get('address'),
-          lat: latRef.current?.value ? parseFloat(latRef.current.value) : null,
-          lng: lngRef.current?.value ? parseFloat(lngRef.current.value) : null,
+          address,
+          lat,
+          lng,
           building_type,
           slug,
           roof_image_url: roof_url || null,
