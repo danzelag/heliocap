@@ -33,6 +33,7 @@ export interface Prospect {
   payback_years: number | null
   satellite_url: string | null
   render_url: string | null
+  render_preview_url: string | null
   solar_quality: 'google_solar' | 'fallback' | null
   owner_name: string | null
   owner_title: string | null

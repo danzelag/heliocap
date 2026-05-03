@@ -29,7 +29,7 @@ export async function generateMetadata({
     title: `Solar Proposal · ${lead.business_name} | Helio Cap`,
     description: `Custom solar deployment proposal for ${lead.business_name}. Estimated $${lead.estimated_savings?.toLocaleString()} in annual savings.`,
     openGraph: {
-      images: [lead.render_image_url || lead.roof_image_url || ''],
+      images: [lead.render_preview_url || lead.roof_image_url || lead.render_image_url || ''],
     },
   }
 }
@@ -126,6 +126,7 @@ export default async function ClientLandingPage({
                   <ProposalRoofRender
                     roofImageUrl={lead.roof_image_url}
                     renderImageUrl={lead.render_image_url}
+                    renderPreviewUrl={lead.render_preview_url}
                     videoUrl={lead.video_url}
                     alt={`Projected solar installation at ${businessName}, ${address}`}
                   />

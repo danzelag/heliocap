@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
+import sharp from 'sharp'
 
 const STATIC_MAP_WIDTH = 1280
 const STATIC_MAP_HEIGHT = 720
@@ -92,6 +93,19 @@ export async function uploadLeadAsset({
 
   const { data } = supabase.storage.from(bucket).getPublicUrl(filePath)
   return data.publicUrl
+}
+
+export async function buildRasterRenderPreview(renderSvg: string) {
+  return sharp(Buffer.from(renderSvg))
+    .resize(1280, 720, {
+      fit: 'inside',
+      withoutEnlargement: true,
+    })
+    .webp({
+      quality: 78,
+      effort: 4,
+    })
+    .toBuffer()
 }
 
 export async function fetchStaticSatelliteImage(lat: number, lng: number) {

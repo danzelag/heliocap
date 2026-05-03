@@ -46,6 +46,7 @@ function buildNotes(notes: string, model: SolarModel | null) {
 type RoofGenerationResult = {
   roof_image_url?: string
   render_image_url?: string
+  render_preview_url?: string
   solar_model?: SolarModel
   error?: string
 }
@@ -59,6 +60,7 @@ export default function LeadGeneratorForm() {
   const [manualRoofPreview, setManualRoofPreview] = useState<string | null>(null)
   const [renderPreview, setRenderPreview] = useState<string | null>(null)
   const [autoRenderUrl, setAutoRenderUrl] = useState<string | null>(null)
+  const [autoRenderPreviewUrl, setAutoRenderPreviewUrl] = useState<string | null>(null)
   const [solarModel, setSolarModel] = useState<SolarModel | null>(null)
   const [intelligenceError, setIntelligenceError] = useState<string | null>(null)
 
@@ -122,6 +124,7 @@ export default function LeadGeneratorForm() {
     setRoofGenerating(true)
     setAutoRoofUrl(null)
     setAutoRenderUrl(null)
+    setAutoRenderPreviewUrl(null)
     setSolarModel(null)
     setIntelligenceError(null)
     try {
@@ -129,6 +132,11 @@ export default function LeadGeneratorForm() {
       if (data.roof_image_url) setAutoRoofUrl(data.roof_image_url)
       if (data.render_image_url) {
         setAutoRenderUrl(data.render_image_url)
+      }
+      if (data.render_preview_url) {
+        setAutoRenderPreviewUrl(data.render_preview_url)
+        setRenderPreview(data.render_preview_url)
+      } else if (data.render_image_url) {
         setRenderPreview(data.render_image_url)
       }
       if (data.solar_model) setSolarModel(data.solar_model)
@@ -156,6 +164,7 @@ export default function LeadGeneratorForm() {
     reader.onloadend = () => setRenderPreview(reader.result as string)
     reader.readAsDataURL(file)
     setAutoRenderUrl(null)
+    setAutoRenderPreviewUrl(null)
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -182,6 +191,7 @@ export default function LeadGeneratorForm() {
       const roofFile = formData.get('roof_image') as File
       let roof_url = autoRoofUrl || ''
       let render_url = autoRenderUrl || ''
+      let render_preview_url = autoRenderPreviewUrl || ''
       const address = formData.get('address') as string
       let lat = latRef.current?.value ? parseFloat(latRef.current.value) : null
       let lng = lngRef.current?.value ? parseFloat(lngRef.current.value) : null
@@ -196,6 +206,12 @@ export default function LeadGeneratorForm() {
             if (data.render_image_url) {
               render_url = data.render_image_url
               setAutoRenderUrl(data.render_image_url)
+            }
+            if (data.render_preview_url) {
+              render_preview_url = data.render_preview_url
+              setAutoRenderPreviewUrl(data.render_preview_url)
+              setRenderPreview(data.render_preview_url)
+            } else if (data.render_image_url) {
               setRenderPreview(data.render_image_url)
             }
             if (data.solar_model) setSolarModel(data.solar_model)
@@ -219,8 +235,10 @@ export default function LeadGeneratorForm() {
           })
           roof_url = data.roof_image_url || ''
           render_url = data.render_image_url || ''
+          render_preview_url = data.render_preview_url || ''
           if (data.roof_image_url) setAutoRoofUrl(data.roof_image_url)
           if (data.render_image_url) setAutoRenderUrl(data.render_image_url)
+          if (data.render_preview_url) setAutoRenderPreviewUrl(data.render_preview_url)
           if (data.solar_model) setSolarModel(data.solar_model)
         }
       }
@@ -228,6 +246,7 @@ export default function LeadGeneratorForm() {
       const renderFile = formData.get('render_image') as File
       if (renderFile?.size > 0) {
         render_url = await StorageService.uploadLeadImage(supabase, slug, renderFile, 'render') || ''
+        render_preview_url = ''
       }
 
       const building_type = formData.get('building_type') as string
@@ -259,6 +278,7 @@ export default function LeadGeneratorForm() {
           slug,
           roof_image_url: roof_url || null,
           render_image_url: render_url || roof_url || null,
+          render_preview_url: render_preview_url || null,
           estimated_savings,
           estimated_payback,
           roof_sqft: solarModel?.usableRoofAreaSqft || null,

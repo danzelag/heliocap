@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase-server'
 import { verifyN8nRequest } from '@/lib/n8n-auth'
 import { SolarUtils } from '@/lib/solar-utils'
 import {
+  buildRasterRenderPreview,
   buildSolarModel,
   buildSolarOverlaySvg,
   fetchSolarInsights,
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
       notes,
       roof_image_url,
       render_image_url,
+      render_preview_url,
       video_url,
       lat,
       lng,
@@ -67,6 +69,7 @@ export async function POST(request: Request) {
 
     let finalRoofImageUrl = roof_image_url || null
     let finalRenderImageUrl = render_image_url || roof_image_url || null
+    let finalRenderPreviewUrl = render_preview_url || null
 
     if (!finalRoofImageUrl && !finalRenderImageUrl && lat != null && lng != null) {
       const [imageBuffer, solarInsights] = await Promise.all([
@@ -105,6 +108,16 @@ export async function POST(request: Request) {
         contentType: 'image/svg+xml',
       })
 
+      const renderPreviewBuffer = await buildRasterRenderPreview(overlaySvg)
+      finalRenderPreviewUrl = await uploadLeadAsset({
+        supabase,
+        bucket: 'leads',
+        slug,
+        fileName: 'render_preview.webp',
+        body: renderPreviewBuffer,
+        contentType: 'image/webp',
+      })
+
       savings = savings || solarModel.yearlySavings
       payback = payback || solarModel.estimatedPayback
     }
@@ -123,6 +136,7 @@ export async function POST(request: Request) {
           estimated_payback: payback,
           roof_image_url: finalRoofImageUrl,
           render_image_url: finalRenderImageUrl,
+          render_preview_url: finalRenderPreviewUrl,
           video_url: video_url || null,
           lat: lat ?? null,
           lng: lng ?? null,
@@ -140,6 +154,7 @@ export async function POST(request: Request) {
       success: true, 
       lead_id: data.id,
       slug: data.slug,
+      render_preview_url: data.render_preview_url,
       url: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/proposal/${data.slug}` 
     })
 

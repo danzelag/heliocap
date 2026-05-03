@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
 import { verifyN8nRequest } from '@/lib/n8n-auth'
 import {
+  buildRasterRenderPreview,
   buildSolarModel,
   buildSolarOverlaySvg,
   fetchSolarInsights,
@@ -16,7 +17,7 @@ import {
  * and returns OpenClaw-ready modeling data.
  *
  * Body: { lat, lng, slug, formattedAddress?, bucket?: 'leads' | 'prospects' }
- * Response: { roof_image_url, render_image_url, solar_model }
+ * Response: { roof_image_url, render_image_url, render_preview_url, solar_model }
  */
 export async function POST(request: NextRequest) {
   try {
@@ -75,9 +76,20 @@ export async function POST(request: NextRequest) {
       contentType: 'image/svg+xml',
     })
 
+    const renderPreviewBuffer = await buildRasterRenderPreview(overlaySvg)
+    const renderPreviewUrl = await uploadLeadAsset({
+      supabase,
+      bucket,
+      slug,
+      fileName: 'render_preview.webp',
+      body: renderPreviewBuffer,
+      contentType: 'image/webp',
+    })
+
     return NextResponse.json({
       roof_image_url: roofImageUrl,
       render_image_url: renderImageUrl,
+      render_preview_url: renderPreviewUrl,
       solar_model: solarModel,
       solar_insights_available: Boolean(solarInsights),
     })

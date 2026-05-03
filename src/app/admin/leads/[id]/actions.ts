@@ -24,6 +24,7 @@ export async function updateLeadAction(formData: FormData) {
   const rawLat = formData.get('lat') as string
   const rawLng = formData.get('lng') as string
   const roof_image_url = (formData.get('roof_image_url') as string) || undefined
+  const render_preview_url = (formData.get('render_preview_url') as string) || undefined
 
   const update: Record<string, unknown> = {
     business_name,
@@ -40,6 +41,9 @@ export async function updateLeadAction(formData: FormData) {
   }
   if (roof_image_url) {
     update.roof_image_url = roof_image_url
+  }
+  if (render_preview_url) {
+    update.render_preview_url = render_preview_url
   }
 
   const { error } = await supabase

@@ -91,6 +91,7 @@ export async function publishProspectAction(id: string) {
       slug,
       roof_image_url: prospect.satellite_url,
       render_image_url: prospect.render_url || prospect.satellite_url,
+      render_preview_url: prospect.render_preview_url,
       video_url: prospect.video_url,
       estimated_savings: savings,
       estimated_payback: payback,

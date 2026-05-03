@@ -1,6 +1,7 @@
 type ProposalRoofRenderProps = {
   roofImageUrl: string | null
   renderImageUrl: string | null
+  renderPreviewUrl?: string | null
   videoUrl?: string | null
   alt: string
 }
@@ -8,12 +9,11 @@ type ProposalRoofRenderProps = {
 export function ProposalRoofRender({
   roofImageUrl,
   renderImageUrl,
+  renderPreviewUrl,
   videoUrl,
   alt,
 }: ProposalRoofRenderProps) {
-  // render_image_url is a composite SVG (satellite + panels baked in) — show it when available,
-  // otherwise fall back to the clean satellite PNG.
-  const displayUrl = renderImageUrl || roofImageUrl
+  const displayUrl = renderPreviewUrl || roofImageUrl || renderImageUrl
 
   return (
     <div className="relative aspect-video w-full overflow-hidden bg-slate-950">

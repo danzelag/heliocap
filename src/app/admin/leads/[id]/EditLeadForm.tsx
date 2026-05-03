@@ -15,12 +15,14 @@ interface Lead {
   notes: string | null
   status: 'published' | 'contacted' | 'emailed' | 'replied' | 'booked' | 'archived'
   roof_image_url: string | null
+  render_preview_url: string | null
 }
 
 export default function EditLeadForm({ lead }: { lead: Lead }) {
   const latRef = useRef<HTMLInputElement>(null)
   const lngRef = useRef<HTMLInputElement>(null)
   const roofImageUrlRef = useRef<HTMLInputElement>(null)
+  const renderPreviewUrlRef = useRef<HTMLInputElement>(null)
 
   const [roofPreview, setRoofPreview] = useState<string | null>(lead.roof_image_url)
   const [roofGenerating, setRoofGenerating] = useState(false)
@@ -48,6 +50,9 @@ export default function EditLeadForm({ lead }: { lead: Lead }) {
         setRoofPreview(data.roof_image_url)
         if (roofImageUrlRef.current) roofImageUrlRef.current.value = data.roof_image_url
       }
+      if (data.render_preview_url && renderPreviewUrlRef.current) {
+        renderPreviewUrlRef.current.value = data.render_preview_url
+      }
     } catch (err) {
       console.error('Roof image generation failed:', err)
     } finally {
@@ -66,6 +71,7 @@ export default function EditLeadForm({ lead }: { lead: Lead }) {
       <input type="hidden" name="lat" ref={latRef} />
       <input type="hidden" name="lng" ref={lngRef} />
       <input type="hidden" name="roof_image_url" ref={roofImageUrlRef} defaultValue={lead.roof_image_url || ''} />
+      <input type="hidden" name="render_preview_url" ref={renderPreviewUrlRef} defaultValue={lead.render_preview_url || ''} />
 
       <div className="grid grid-cols-2 gap-8">
         <div className="space-y-2">
