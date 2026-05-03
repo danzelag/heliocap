@@ -84,6 +84,9 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
   const filteredLeads = leads.filter((lead) =>
     statusFilter === 'all' ? true : lead.status === statusFilter
   )
+  const filteredLeadIds = filteredLeads.map((lead) => lead.id)
+  const selectedVisibleCount = selectedIds.filter((id) => filteredLeadIds.includes(id)).length
+  const allVisibleSelected = filteredLeads.length > 0 && selectedVisibleCount === filteredLeads.length
 
   const targetDeleteIds = isBulkDelete ? selectedIds : idToDelete ? [idToDelete] : []
   const targetDeleteNames = leads
@@ -91,10 +94,10 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
     .map((lead) => lead.business_name)
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === filteredLeads.length) {
-      setSelectedIds([])
+    if (allVisibleSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !filteredLeadIds.includes(id)))
     } else {
-      setSelectedIds(filteredLeads.map((lead) => lead.id))
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...filteredLeadIds])))
     }
   }
 
@@ -219,23 +222,29 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
 
           {selectedIds.length > 0 && (
             <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="xs" className="rounded-none border-white/15 bg-white/[0.03] font-mono text-[10px] uppercase tracking-[0.2em] text-slate-200 hover:bg-white/10" onClick={() => setSelectedIds([])} disabled={loading}>
+                Clear Selection
+              </Button>
               <Button variant="outline" size="xs" className="rounded-none border-emerald-300/25 bg-emerald-300/5 font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-100 hover:bg-emerald-300/10" onClick={() => handleStatusChange(selectedIds, 'published')} disabled={loading}>
-                Published
+                Mark Published
               </Button>
               <Button variant="outline" size="xs" className="rounded-none border-cyan-300/25 bg-cyan-300/5 font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100 hover:bg-cyan-300/10" onClick={() => handleStatusChange(selectedIds, 'contacted')} disabled={loading}>
-                Contacted
+                Mark Contacted
               </Button>
               <Button variant="outline" size="xs" className="rounded-none border-blue-300/25 bg-blue-300/5 font-mono text-[10px] uppercase tracking-[0.2em] text-blue-100 hover:bg-blue-300/10" onClick={() => handleStatusChange(selectedIds, 'emailed')} disabled={loading}>
-                Emailed
+                Mark Emailed
               </Button>
               <Button variant="outline" size="xs" className="rounded-none border-amber-300/25 bg-amber-300/5 font-mono text-[10px] uppercase tracking-[0.2em] text-amber-100 hover:bg-amber-300/10" onClick={() => handleStatusChange(selectedIds, 'replied')} disabled={loading}>
-                Replied
+                Mark Replied
               </Button>
               <Button variant="outline" size="xs" className="rounded-none border-roi/25 bg-roi/5 font-mono text-[10px] uppercase tracking-[0.2em] text-roi hover:bg-roi/10" onClick={() => handleStatusChange(selectedIds, 'booked')} disabled={loading}>
-                Booked
+                Mark Booked
+              </Button>
+              <Button variant="outline" size="xs" className="rounded-none border-slate-400/25 bg-slate-400/5 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-200 hover:bg-white/10" onClick={() => handleStatusChange(selectedIds, 'archived')} disabled={loading}>
+                Archive Selected
               </Button>
               <Button variant="destructive" size="xs" className="rounded-none border-red-300/25 bg-red-500/10 font-mono text-[10px] uppercase tracking-[0.2em] text-red-100 hover:bg-red-500/20" onClick={() => openDeleteDialog(selectedIds, true)} disabled={loading}>
-                Delete
+                Delete Selected
               </Button>
             </div>
           )}
@@ -248,8 +257,11 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
             <tr className="border-b border-white/10 bg-white/[0.025] font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">
               <th className="w-12 px-5 py-4">
                 <Checkbox
-                  checked={selectedIds.length === filteredLeads.length && filteredLeads.length > 0}
+                  checked={allVisibleSelected}
                   onCheckedChange={toggleSelectAll}
+                  className="border-cyan-200/40 bg-white/[0.03] text-slate-950 data-[state=checked]:border-cyan-100 data-[state=checked]:bg-cyan-100"
+                  aria-label={allVisibleSelected ? 'Deselect visible proposals' : 'Select visible proposals'}
+                  title={allVisibleSelected ? 'Deselect visible proposals' : 'Select visible proposals'}
                 />
               </th>
               <th className="px-5 py-4">Target</th>
@@ -277,6 +289,9 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
                     <Checkbox
                       checked={selectedIds.includes(lead.id)}
                       onCheckedChange={() => toggleSelect(lead.id)}
+                      className="border-cyan-200/35 bg-white/[0.03] text-slate-950 data-[state=checked]:border-cyan-100 data-[state=checked]:bg-cyan-100"
+                      aria-label={`Select ${lead.business_name}`}
+                      title={`Select ${lead.business_name}`}
                     />
                   </td>
                   <td className="px-5 py-5">
