@@ -43,7 +43,7 @@ export default async function AdminDashboard() {
     .from('proposal_job_events')
     .select('id, job_id, business_name, status, step, progress_percent, proposal_url, error_message, created_at')
     .order('created_at', { ascending: false })
-    .limit(25)
+    .limit(100)
 
   const leadRows = (leads as Lead[]) || []
   const prospectRows = (prospects as { pipeline_stage: string }[]) || []

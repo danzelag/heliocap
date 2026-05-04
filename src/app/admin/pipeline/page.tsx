@@ -36,7 +36,7 @@ export default async function PipelinePage() {
     .from('proposal_job_events')
     .select('id, job_id, business_name, status, step, progress_percent, proposal_url, error_message, created_at')
     .order('created_at', { ascending: false })
-    .limit(25)
+    .limit(100)
 
   const solarFetched = prospects.filter((prospect) => prospect.pipeline_stage === 'solar_fetched').length
   const enriched = prospects.filter((prospect) => prospect.pipeline_stage === 'enriched').length

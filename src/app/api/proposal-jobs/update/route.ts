@@ -7,14 +7,23 @@ const allowedStatuses = ['queued', 'running', 'completed', 'failed'] as const
 
 type UpdateProposalJobPayload = {
   job_id?: string
+  jobId?: string
   status?: ProposalJobStatus
   current_step?: string
   step?: string
+  message?: string
+  node_name?: string
+  nodeName?: string
+  execution_id?: string
+  executionId?: string
   progress_percent?: number
   progress?: number
   proposal_url?: string | null
+  proposalUrl?: string | null
   lead_id?: string | null
+  leadId?: string | null
   error_message?: string | null
+  errorMessage?: string | null
   receipt?: Record<string, unknown> | null
 }
 
@@ -24,7 +33,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json()) as UpdateProposalJobPayload
-    const jobId = body.job_id
+    const jobId = body.job_id || body.jobId
 
     if (!jobId) {
       return NextResponse.json({ error: 'job_id is required' }, { status: 400 })
@@ -35,9 +44,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid job status' }, { status: 400 })
     }
 
-    const currentStep = (body.current_step || body.step || '').trim()
+    const currentStep = (body.current_step || body.step || body.message || body.node_name || body.nodeName || '').trim()
     if (!currentStep) {
-      return NextResponse.json({ error: 'current_step or step is required' }, { status: 400 })
+      return NextResponse.json({ error: 'current_step, step, message, or node_name is required' }, { status: 400 })
     }
 
     const progressPercent = Number(body.progress_percent ?? body.progress ?? 0)
@@ -51,10 +60,21 @@ export async function POST(request: NextRequest) {
       current_step: currentStep,
       progress_percent: Math.round(progressPercent),
     }
-    if ('proposal_url' in body) update.proposal_url = body.proposal_url
-    if ('lead_id' in body) update.lead_id = body.lead_id
-    if ('error_message' in body) update.error_message = body.error_message
-    if ('receipt' in body) update.receipt = body.receipt
+    const proposalUrl = body.proposal_url ?? body.proposalUrl ?? null
+    const leadId = body.lead_id ?? body.leadId ?? null
+    const errorMessage = body.error_message ?? body.errorMessage ?? null
+    const receipt = body.receipt || {}
+    if (body.execution_id || body.executionId) {
+      receipt.execution_id = body.execution_id || body.executionId
+    }
+    if (body.node_name || body.nodeName) {
+      receipt.node_name = body.node_name || body.nodeName
+    }
+
+    if ('proposal_url' in body || 'proposalUrl' in body) update.proposal_url = proposalUrl
+    if ('lead_id' in body || 'leadId' in body) update.lead_id = leadId
+    if ('error_message' in body || 'errorMessage' in body) update.error_message = errorMessage
+    if ('receipt' in body || body.execution_id || body.executionId || body.node_name || body.nodeName) update.receipt = receipt
 
     const { data: job, error } = await supabase
       .from('proposal_jobs')
@@ -72,8 +92,8 @@ export async function POST(request: NextRequest) {
       status,
       step: currentStep,
       progressPercent,
-      proposalUrl: body.proposal_url || null,
-      errorMessage: body.error_message || null,
+      proposalUrl,
+      errorMessage,
     })
 
     return NextResponse.json({ success: true, job })

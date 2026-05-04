@@ -203,7 +203,16 @@ Veo 3 takes an image prompt + motion prompt and outputs video. Fal.ai wraps it w
 const result = await fal.subscribe("fal-ai/veo-3", {
   input: {
     image_url: satelliteImageUrl,
-    prompt: `aerial drone footage pulling up and over a large commercial ${industry} building in ${city}, slow cinematic reveal from low oblique angle to top-down view, photorealistic, 4K, golden hour lighting, subtle atmospheric haze, smooth camera motion`,
+    prompt: `Create a realistic aerial view of a commercial building with a rooftop solar installation.
+
+Use the provided satellite image as the base.
+Add dark blue solar panels aligned cleanly and evenly across the usable roof area.
+Panels should be grouped in clean rows, not scattered.
+Avoid edges, HVAC units, and irregular shapes.
+Keep the building structure unchanged and recognizable.
+Do not add text, labels, or UI elements.
+Lighting should be natural and realistic.
+The result should look like a professional solar installation render used in a commercial proposal.`,
     duration: 12,
     aspect_ratio: "16:9"
   }
