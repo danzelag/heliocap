@@ -5,6 +5,8 @@ import { createAdminClient } from '@/lib/supabase-server'
 import { SolarUtils } from '@/lib/solar-utils'
 import { prospectStages, type ProspectStage } from '@/lib/prospect'
 
+const DEFAULT_SITE_URL = 'https://heliocap.vercel.app'
+
 function isProspectStage(value: string): value is ProspectStage {
   return prospectStages.includes(value as ProspectStage)
 }
@@ -46,7 +48,7 @@ export async function updateProspectStageAction(id: string, stage: ProspectStage
   return { success: true }
 }
 
-export async function publishProspectAction(id: string) {
+export async function promoteProspectToLeadAction(id: string) {
   if (!id) return { success: false, error: 'Missing prospect ID' }
 
   const supabase = await createAdminClient()
@@ -64,55 +66,56 @@ export async function publishProspectAction(id: string) {
       success: true,
       lead_id: prospect.lead_id,
       slug: prospect.microsite_slug,
-      url: `/proposal/${prospect.microsite_slug}`,
+      url: `${DEFAULT_SITE_URL}/proposal/${prospect.microsite_slug}`,
     }
   }
 
   const businessName = prospect.owner_llc || prospect.owner_name || prospect.address.split(',')[0] || 'OpenClaw Prospect'
   const slug = await getUniqueSlug(businessName)
-  const savings = prospect.annual_savings
-  const payback = prospect.payback_years
 
-  const notes = [
-    'OpenClaw prospect pipeline publish',
-    prospect.parcel_id ? `parcel_id=${prospect.parcel_id}` : null,
-    prospect.solar_quality ? `solar_quality=${prospect.solar_quality}` : null,
-    prospect.panel_count ? `panels=${prospect.panel_count}` : null,
-    prospect.federal_itc ? `federal_itc=${prospect.federal_itc}` : null,
-    prospect.owner_email ? `owner_email=${prospect.owner_email}` : null,
-  ].filter(Boolean).join('; ')
+  if (prospect.lat == null || prospect.lng == null) {
+    return { success: false, error: 'Prospect needs lat/lng before it can be promoted.' }
+  }
 
-  const { data: lead, error: leadError } = await supabase
-    .from('leads')
-    .insert([{
+  const webhookUrl = process.env.N8N_CREATE_PROPOSAL_WEBHOOK_URL
+  if (!webhookUrl) {
+    return { success: false, error: 'N8N_CREATE_PROPOSAL_WEBHOOK_URL is not configured' }
+  }
+
+  const response = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
       business_name: businessName,
-      contact_name: prospect.owner_name,
       address: prospect.address,
-      slug,
-      roof_image_url: prospect.satellite_url,
-      render_image_url: prospect.render_url || prospect.satellite_url,
-      render_preview_url: prospect.render_preview_url,
-      video_url: prospect.video_url,
-      estimated_savings: savings,
-      estimated_payback: payback,
-      roof_sqft: prospect.sqft,
-      utility_rate: 0.14,
       lat: prospect.lat,
       lng: prospect.lng,
-      building_type: prospect.use_code || 'warehouse',
-      notes,
-      status: 'published',
-    }])
-    .select('id, slug')
-    .single()
+      slug,
+      prospect_id: prospect.id,
+    }),
+    cache: 'no-store',
+  })
 
-  if (leadError) return { success: false, error: leadError.message }
+  const receiptText = await response.text()
+  const receipt = parseJsonReceipt(receiptText)
+
+  if (!response.ok) {
+    return {
+      success: false,
+      error: getReceiptMessage(receipt) || `n8n returned ${response.status}`,
+    }
+  }
+
+  const receiptSlug = typeof receipt?.slug === 'string' ? receipt.slug : slug
+  const leadId = typeof receipt?.lead_id === 'string' ? receipt.lead_id : null
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL).replace(/\/$/, '')
+  const url = getReceiptUrl(receipt) || `${siteUrl}/proposal/${receiptSlug}`
 
   const { error: updateError } = await supabase
     .from('prospects')
     .update({
-      lead_id: lead.id,
-      microsite_slug: lead.slug,
+      lead_id: leadId,
+      microsite_slug: receiptSlug,
       pipeline_stage: 'microsite_live',
     })
     .eq('id', id)
@@ -121,13 +124,13 @@ export async function publishProspectAction(id: string) {
 
   revalidatePath('/admin')
   revalidatePath('/admin/pipeline')
-  revalidatePath(`/proposal/${lead.slug}`)
+  revalidatePath(`/proposal/${receiptSlug}`)
 
   return {
     success: true,
-    lead_id: lead.id,
-    slug: lead.slug,
-    url: `/proposal/${lead.slug}`,
+    lead_id: leadId,
+    slug: receiptSlug,
+    url,
   }
 }
 
@@ -158,4 +161,32 @@ export async function triggerProspectEnrichmentAction(id: string) {
   }
 
   return { success: true }
+}
+
+function parseJsonReceipt(value: string): Record<string, unknown> | null {
+  if (!value) return null
+
+  try {
+    return JSON.parse(value) as Record<string, unknown>
+  } catch {
+    return { message: value }
+  }
+}
+
+function getReceiptUrl(receipt: Record<string, unknown> | null) {
+  if (!receipt) return null
+
+  const candidates = [receipt.url, receipt.proposal_url, receipt.proposalUrl]
+  const url = candidates.find((value): value is string => typeof value === 'string' && value.length > 0)
+
+  return url || null
+}
+
+function getReceiptMessage(receipt: Record<string, unknown> | null) {
+  if (!receipt) return null
+
+  const candidates = [receipt.error, receipt.message]
+  const message = candidates.find((value): value is string => typeof value === 'string' && value.length > 0)
+
+  return message || null
 }

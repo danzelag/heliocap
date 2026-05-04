@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { ArrowLeft, Database, RadioTower, ShieldCheck, Sun, Target, Zap } from 'lucide-react'
 import { createClient } from '@/lib/supabase-server'
 import { ProspectPipelineTable } from '@/components/admin/ProspectPipelineTable'
+import { SourceLeadsForm } from '@/components/admin/SourceLeadsForm'
 import { prospectStages } from '@/lib/prospect'
 import { ProspectService } from '@/services/prospect.service'
 
@@ -57,6 +58,14 @@ export default async function PipelinePage() {
             <ArrowLeft className="h-3.5 w-3.5" />
             Command Center
           </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/admin" className="inline-flex h-10 items-center justify-center border border-white/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-300 transition-colors hover:border-white/25 hover:text-white">
+              Proposals
+            </Link>
+            <Link href="/admin/pipeline" className="inline-flex h-10 items-center justify-center border border-cyan-200/30 bg-cyan-200/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100">
+              Prospects
+            </Link>
+          </div>
         </div>
       </nav>
 
@@ -98,6 +107,8 @@ export default async function PipelinePage() {
             ))}
           </div>
         </section>
+
+        <SourceLeadsForm />
 
         <ProspectPipelineTable initialProspects={prospects} />
       </main>

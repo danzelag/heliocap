@@ -91,16 +91,21 @@ export default async function AdminDashboard() {
             <div className="border border-white/10 bg-white/[0.03] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-400">
               Operator {user.email}
             </div>
-            <Link href="/admin/leads/new">
-              <Button className="h-10 rounded-none border border-white/15 bg-slate-100 px-5 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-slate-950 hover:bg-white">
-                <Plus className="mr-2 h-4 w-4" />
-                New Target
+            <Link href="/admin">
+              <Button variant="outline" className="h-10 rounded-none border-cyan-200/30 bg-cyan-200/10 px-5 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-100 hover:bg-cyan-200/15">
+                Proposals
               </Button>
             </Link>
             <Link href="/admin/pipeline">
               <Button variant="outline" className="h-10 rounded-none border-white/15 bg-transparent px-5 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-slate-200 hover:bg-white/10">
                 <RadioTower className="mr-2 h-4 w-4" />
-                Pipeline
+                Prospects
+              </Button>
+            </Link>
+            <Link href="/admin/leads/new">
+              <Button className="h-10 rounded-none border border-white/15 bg-slate-100 px-5 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-slate-950 hover:bg-white">
+                <Plus className="mr-2 h-4 w-4" />
+                New Target
               </Button>
             </Link>
           </div>

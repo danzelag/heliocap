@@ -6,7 +6,7 @@ import { ExternalLink, Loader2, RadioTower, Rocket, Send, TriangleAlert, Wand2 }
 import { Button } from '@/components/ui/button'
 import { type Prospect, type ProspectStage, prospectStages } from '@/lib/prospect'
 import {
-  publishProspectAction,
+  promoteProspectToLeadAction,
   triggerProspectEnrichmentAction,
   updateProspectStageAction,
 } from '@/app/admin/pipeline/actions'
@@ -82,13 +82,13 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
     })
   }
 
-  const handlePublish = (id: string) => {
+  const handlePromote = (id: string) => {
     setMessage(null)
     setActiveId(id)
     startTransition(async () => {
-      const result = await publishProspectAction(id)
+      const result = await promoteProspectToLeadAction(id)
       if (!result.success) {
-        setMessage(result.error || 'Failed to publish prospect.')
+        setMessage(result.error || 'Failed to promote prospect.')
       } else {
         setProspects((prev) => prev.map((prospect) => (
           prospect.id === id
@@ -100,7 +100,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
               }
             : prospect
         )))
-        setMessage(`Published /proposal/${result.slug}`)
+        setMessage(`Promoted to ${result.url || `/proposal/${result.slug}`}`)
       }
       setActiveId(null)
     })
@@ -256,7 +256,8 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                           size="sm"
                           className="rounded-none bg-slate-100 text-slate-950 hover:bg-white"
                           disabled={busy || prospect.pipeline_stage === 'dead'}
-                          onClick={() => handlePublish(prospect.id)}
+                          onClick={() => handlePromote(prospect.id)}
+                          title="Promote prospect to proposal worker"
                         >
                           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                         </Button>
