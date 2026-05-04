@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
 import { verifyN8nRequest } from '@/lib/n8n-auth'
+import { updateProposalJobProgress } from '@/lib/proposal-job-events'
 import {
   buildRasterRenderPreview,
   buildSolarModel,
@@ -22,7 +23,7 @@ import {
  */
 export async function POST(request: NextRequest) {
   try {
-    const { lat, lng, slug, bucket = 'leads' } = await request.json()
+    const { lat, lng, slug, bucket = 'leads', job_id, business_name } = await request.json()
 
     if (bucket !== 'leads' && bucket !== 'prospects') {
       return NextResponse.json({ error: 'bucket must be leads or prospects' }, { status: 400 })
@@ -41,6 +42,14 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createAdminClient()
+    await updateProposalJobProgress(supabase, {
+      jobId: job_id,
+      businessName: business_name,
+      status: 'running',
+      step: 'Grabbing map roof image',
+      progressPercent: 20,
+    })
+
     const solarInsights = await fetchSolarInsights(Number(lat), Number(lng)).catch((error) => {
       console.error('[generate-roof-image] Google Solar fallback:', error)
       return null
@@ -85,6 +94,13 @@ export async function POST(request: NextRequest) {
       fileName: 'render_preview.webp',
       body: renderPreviewBuffer,
       contentType: 'image/webp',
+    })
+    await updateProposalJobProgress(supabase, {
+      jobId: job_id,
+      businessName: business_name,
+      status: 'running',
+      step: 'Roof image and solar geometry ready',
+      progressPercent: 45,
     })
 
     return NextResponse.json({

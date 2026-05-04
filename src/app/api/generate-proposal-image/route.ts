@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import sharp from 'sharp'
 import { createAdminClient } from '@/lib/supabase-server'
 import { SolarUtils } from '@/lib/solar-utils'
+import { updateProposalJobProgress } from '@/lib/proposal-job-events'
 
 const PREVIEW_WIDTH = 1280
 const PREVIEW_HEIGHT = 720
@@ -13,6 +14,7 @@ type GenerateProposalImageBody = {
   business_name?: string
   address?: string
   solar_model?: Record<string, unknown>
+  job_id?: string
 }
 
 type PanelRect = {
@@ -27,7 +29,7 @@ type PanelRect = {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as GenerateProposalImageBody
-    const { roof_image_url, render_image_url, business_name, address } = body
+    const { roof_image_url, render_image_url, business_name, address, job_id } = body
 
     if (!roof_image_url) {
       return NextResponse.json({ error: 'roof_image_url is required' }, { status: 400 })
@@ -35,6 +37,15 @@ export async function POST(request: NextRequest) {
     if (!render_image_url) {
       return NextResponse.json({ error: 'render_image_url is required' }, { status: 400 })
     }
+
+    const supabase = await createAdminClient()
+    await updateProposalJobProgress(supabase, {
+      jobId: job_id,
+      businessName: business_name,
+      status: 'running',
+      step: 'Creating proposal preview image',
+      progressPercent: 70,
+    })
 
     const slug = SolarUtils.generateSlug(business_name || address || crypto.randomUUID())
     const [roofBuffer, renderSvg] = await Promise.all([
@@ -57,7 +68,6 @@ export async function POST(request: NextRequest) {
       .webp({ quality: 82, effort: 4 })
       .toBuffer()
 
-    const supabase = await createAdminClient()
     const filePath = `${slug}/preview.webp`
     const { error } = await supabase.storage
       .from(PROPOSALS_BUCKET)
@@ -69,6 +79,13 @@ export async function POST(request: NextRequest) {
     if (error) throw error
 
     const { data } = supabase.storage.from(PROPOSALS_BUCKET).getPublicUrl(filePath)
+    await updateProposalJobProgress(supabase, {
+      jobId: job_id,
+      businessName: business_name,
+      status: 'running',
+      step: 'Proposal preview image ready',
+      progressPercent: 85,
+    })
 
     return NextResponse.json({
       render_preview_url: data.publicUrl,

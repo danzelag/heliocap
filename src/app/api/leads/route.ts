@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
 import { verifyN8nRequest } from '@/lib/n8n-auth'
 import { SolarUtils } from '@/lib/solar-utils'
-import { recordProposalJobEvent } from '@/lib/proposal-job-events'
+import { recordProposalJobEvent, updateProposalJobProgress } from '@/lib/proposal-job-events'
 import {
   buildRasterRenderPreview,
   buildSolarModel,
@@ -45,6 +45,13 @@ export async function POST(request: Request) {
     if (!business_name) {
       return NextResponse.json({ error: 'business_name is required' }, { status: 400 })
     }
+    await updateProposalJobProgress(supabase, {
+      jobId: job_id,
+      businessName: business_name,
+      status: 'running',
+      step: 'Publishing proposal page',
+      progressPercent: 95,
+    })
 
     // AI-Powered Estimation if roof_sqft is provided
     let savings = body.estimated_savings

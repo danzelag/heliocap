@@ -164,7 +164,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,0.85fr)_minmax(520px,1.15fr)]">
         <div className="space-y-3">
           <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-500">Active jobs</div>
           {jobs.length === 0 ? (
@@ -221,12 +221,12 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
           )}
         </div>
 
-        <div className="overflow-hidden border border-white/10 bg-[#090d12]">
+        <div className="min-w-0 overflow-hidden border border-white/10 bg-[#090d12]">
           <div className="border-b border-white/10 px-4 py-3 font-mono text-[10px] uppercase tracking-[0.22em] text-slate-500">
             Last 25 workflow actions
           </div>
           <div className="max-h-[560px] overflow-y-auto">
-            <table className="w-full min-w-[620px] text-left text-sm">
+            <table className="w-full min-w-[560px] text-left text-sm">
               <thead className="sticky top-0 bg-[#090d12]">
                 <tr className="border-b border-white/10 font-mono text-[9px] uppercase tracking-[0.2em] text-slate-600">
                   <th className="px-4 py-3">Time</th>
@@ -248,7 +248,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
                       <td className="px-4 py-3 align-top font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
                         {formatTime(event.created_at)}
                       </td>
-                      <td className="max-w-[11rem] px-4 py-3 align-top">
+                      <td className="max-w-[13rem] px-4 py-3 align-top">
                         <div className="truncate font-medium text-white">{event.business_name}</div>
                         <div className={`mt-1 inline-flex border px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.14em] ${statusClass(event.status)}`}>
                           {event.status}
