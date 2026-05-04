@@ -36,6 +36,7 @@ export async function POST(request: Request) {
       lat,
       lng,
       building_type,
+      job_id,
     } = body
 
     if (!business_name) {
@@ -149,6 +150,22 @@ export async function POST(request: Request) {
       .single()
 
     if (error) throw error
+
+    if (job_id) {
+      const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://heliocap.vercel.app').replace(/\/$/, '')
+      const proposalUrl = `${siteUrl}/proposal/${data.slug}`
+
+      await supabase
+        .from('proposal_jobs')
+        .update({
+          status: 'completed',
+          current_step: 'Proposal live',
+          progress_percent: 100,
+          proposal_url: proposalUrl,
+          lead_id: data.id,
+        })
+        .eq('id', job_id)
+    }
 
     return NextResponse.json({ 
       success: true, 

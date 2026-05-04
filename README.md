@@ -8,6 +8,8 @@ Set `N8N_CREATE_PROPOSAL_WEBHOOK_URL` in Vercel/server env vars. This is server-
 
 Set `N8N_SOURCE_LEADS_WEBHOOK_URL` in Vercel/server env vars. This is server-only and is used by `POST /api/source-leads` to ask n8n to source prospects into the `prospects` table without publishing proposal pages.
 
+The proposal worker receives `job_id` and should update `public.proposal_jobs` during each n8n step with `current_step`, `progress_percent`, and finally `proposal_url`. If n8n passes `job_id` to `POST /api/leads`, the app will mark that job complete automatically.
+
 First, run the development server:
 
 ```bash

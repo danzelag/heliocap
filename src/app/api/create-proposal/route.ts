@@ -10,8 +10,6 @@ type CreateProposalPayload = {
   slug?: string
 }
 
-const DEFAULT_SITE_URL = 'https://heliocap.vercel.app'
-
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -60,12 +58,33 @@ export async function POST(request: NextRequest) {
       lng,
       slug,
     }
-    const requestedAt = new Date(Date.now() - 5000).toISOString()
+
+    const adminSupabase = await createAdminClient()
+    const { data: job, error: jobError } = await adminSupabase
+      .from('proposal_jobs')
+      .insert([{
+        business_name: businessName,
+        address,
+        lat,
+        lng,
+        slug,
+        status: 'queued',
+        current_step: 'Queued in Helio Cap',
+        progress_percent: 2,
+        created_by: user.id,
+      }])
+      .select('id, status, current_step, progress_percent, proposal_url, slug, error_message')
+      .single()
+
+    if (jobError) throw jobError
 
     const n8nResponse = await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        job_id: job.id,
+      }),
       cache: 'no-store',
     })
 
@@ -73,48 +92,44 @@ export async function POST(request: NextRequest) {
     const receipt = parseJsonReceipt(responseText)
 
     if (!n8nResponse.ok) {
+      await adminSupabase
+        .from('proposal_jobs')
+        .update({
+          status: 'failed',
+          current_step: 'n8n rejected the job',
+          progress_percent: 100,
+          error_message: getReceiptMessage(receipt) || `n8n returned ${n8nResponse.status}`,
+          receipt,
+        })
+        .eq('id', job.id)
+
       return NextResponse.json(
         {
-          error: receipt?.error || receipt?.message || `n8n returned ${n8nResponse.status}`,
+          error: getReceiptMessage(receipt) || `n8n returned ${n8nResponse.status}`,
+          job_id: job.id,
           receipt,
         },
         { status: 502 }
       )
     }
 
-    const receiptSlug = typeof receipt?.slug === 'string' ? receipt.slug : slug
-    const lead = await waitForCreatedLead({
-      slug: receiptSlug,
-      requestedSlug: slug,
-      businessName,
-      address,
-      requestedAt,
-    })
-
-    if (!lead) {
-      return NextResponse.json(
-        {
-          success: false,
-          pending: true,
-          error: 'n8n accepted the request, but the proposal lead is not live yet. Check the workflow run and try the dashboard again in a moment.',
-          slug: receiptSlug,
-          receipt,
-        },
-        { status: 202 }
-      )
-    }
-
-    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL).replace(/\/$/, '')
-    const proposalUrl = `${siteUrl}/proposal/${lead.slug}`
+    await adminSupabase
+      .from('proposal_jobs')
+      .update({
+        status: 'running',
+        current_step: 'n8n workflow started',
+        progress_percent: 8,
+        receipt,
+      })
+      .eq('id', job.id)
 
     return NextResponse.json({
       success: true,
-      lead_id: lead.id,
-      slug: lead.slug,
-      url: proposalUrl,
-      proposal_url: proposalUrl,
+      job_id: job.id,
+      job,
+      slug,
       receipt,
-    })
+    }, { status: 202 })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     console.error('[create-proposal]', message)
@@ -146,56 +161,11 @@ function normalizeReceipt(value: unknown): Record<string, unknown> | null {
   return record
 }
 
-async function waitForCreatedLead({
-  slug,
-  requestedSlug,
-  businessName,
-  address,
-  requestedAt,
-}: {
-  slug: string
-  requestedSlug: string
-  businessName: string
-  address: string
-  requestedAt: string
-}) {
-  const supabase = await createAdminClient()
-  const deadline = Date.now() + 12000
+function getReceiptMessage(receipt: Record<string, unknown> | null) {
+  if (!receipt) return null
 
-  while (Date.now() < deadline) {
-    const exact = await findLeadBySlug(supabase, slug)
-    if (exact) return exact
+  const candidates = [receipt.error, receipt.message]
+  const message = candidates.find((value): value is string => typeof value === 'string' && value.length > 0)
 
-    const requested = requestedSlug !== slug ? await findLeadBySlug(supabase, requestedSlug) : null
-    if (requested) return requested
-
-    const { data: recentLead } = await supabase
-      .from('leads')
-      .select('id, slug')
-      .eq('business_name', businessName)
-      .eq('address', address)
-      .gte('created_at', requestedAt)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-
-    if (recentLead?.slug) return recentLead
-
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-  }
-
-  return null
-}
-
-async function findLeadBySlug(
-  supabase: Awaited<ReturnType<typeof createAdminClient>>,
-  slug: string,
-) {
-  const { data } = await supabase
-    .from('leads')
-    .select('id, slug')
-    .eq('slug', slug)
-    .maybeSingle()
-
-  return data
+  return message || null
 }
