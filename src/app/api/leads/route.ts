@@ -8,6 +8,7 @@ import {
   buildSolarOverlaySvg,
   fetchSolarInsights,
   fetchStaticSatelliteImage,
+  selectStaticMapZoom,
   uploadLeadAsset,
 } from '@/lib/openclaw-google'
 
@@ -73,14 +74,13 @@ export async function POST(request: Request) {
     let finalRenderPreviewUrl = render_preview_url || null
 
     if (!finalRoofImageUrl && !finalRenderImageUrl && lat != null && lng != null) {
-      const [imageBuffer, solarInsights] = await Promise.all([
-        fetchStaticSatelliteImage(Number(lat), Number(lng)),
-        fetchSolarInsights(Number(lat), Number(lng)).catch((error) => {
-          console.error('[api/leads] Google Solar fallback:', error)
-          return null
-        }),
-      ])
+      const solarInsights = await fetchSolarInsights(Number(lat), Number(lng)).catch((error) => {
+        console.error('[api/leads] Google Solar fallback:', error)
+        return null
+      })
       const solarModel = buildSolarModel(solarInsights)
+      const mapZoom = selectStaticMapZoom(solarModel)
+      const imageBuffer = await fetchStaticSatelliteImage(Number(lat), Number(lng), mapZoom)
 
       finalRoofImageUrl = await uploadLeadAsset({
         supabase,
@@ -98,6 +98,7 @@ export async function POST(request: Request) {
         lat: Number(lat),
         lng: Number(lng),
         model: solarModel,
+        zoom: mapZoom,
       })
 
       finalRenderImageUrl = await uploadLeadAsset({

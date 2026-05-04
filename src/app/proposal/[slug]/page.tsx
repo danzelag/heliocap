@@ -29,7 +29,7 @@ export async function generateMetadata({
     title: `Solar Proposal · ${lead.business_name} | Helio Cap`,
     description: `Custom solar deployment proposal for ${lead.business_name}. Estimated $${lead.estimated_savings?.toLocaleString()} in annual savings.`,
     openGraph: {
-      images: [lead.render_preview_url || lead.roof_image_url || lead.render_image_url || ''],
+      images: [lead.roof_image_url || lead.render_preview_url || lead.render_image_url || ''],
     },
   }
 }
@@ -151,9 +151,28 @@ export default async function ClientLandingPage({
                 </div>
               </div>
               <figcaption className="mt-3 flex items-center justify-between text-[11px] text-white/45">
-                <span className="font-mono uppercase tracking-[0.16em]">Render · commercial-grade solar modeling</span>
+                <span className="font-mono uppercase tracking-[0.16em]">Satellite roof photo · commercial-grade solar modeling</span>
                 <span className="font-mono">Coordinates on file</span>
               </figcaption>
+              {lead.render_preview_url && lead.roof_image_url ? (
+                <div className="mt-4 grid gap-3 rounded-md border border-white/10 bg-white/[0.03] p-3 sm:grid-cols-[160px_1fr]">
+                  <div className="aspect-video overflow-hidden rounded-sm bg-primary">
+                    <img
+                      src={lead.render_preview_url}
+                      alt={`Solar layout preview for ${businessName}`}
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                  <div className="flex flex-col justify-center">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-white/45">
+                      Solar layout preview
+                    </span>
+                    <p className="mt-1 text-xs leading-5 text-white/55">
+                      Modeled module placement over verified satellite imagery.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
             </figure>
 
             {/* RIGHT — Info */}

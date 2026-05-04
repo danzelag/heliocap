@@ -1,9 +1,12 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import sharp from 'sharp'
 
-const STATIC_MAP_WIDTH = 1280
-const STATIC_MAP_HEIGHT = 1280
-const STATIC_MAP_ZOOM = 20
+const STATIC_MAP_REQUEST_WIDTH = 640
+const STATIC_MAP_REQUEST_HEIGHT = 640
+const STATIC_MAP_SCALE = 2
+const STATIC_MAP_WIDTH = STATIC_MAP_REQUEST_WIDTH * STATIC_MAP_SCALE
+const STATIC_MAP_HEIGHT = STATIC_MAP_REQUEST_HEIGHT * STATIC_MAP_SCALE
+const DEFAULT_STATIC_MAP_ZOOM = 19
 const PANEL_WIDTH_METERS = 1.045
 const PANEL_HEIGHT_METERS = 1.879
 const PANEL_WATTS = 400
@@ -108,7 +111,15 @@ export async function buildRasterRenderPreview(renderSvg: string) {
     .toBuffer()
 }
 
-export async function fetchStaticSatelliteImage(lat: number, lng: number) {
+export function selectStaticMapZoom(model: Pick<SolarModel, 'panelCount'> | null) {
+  const panelCount = model?.panelCount || 0
+
+  if (panelCount > 500) return 18
+  if (panelCount > 150) return 19
+  return 20
+}
+
+export async function fetchStaticSatelliteImage(lat: number, lng: number, zoom = DEFAULT_STATIC_MAP_ZOOM) {
   const apiKey = getGoogleMapsApiKey()
   if (!apiKey) {
     throw new Error('GOOGLE_MAPS_API_KEY is not configured')
@@ -116,10 +127,10 @@ export async function fetchStaticSatelliteImage(lat: number, lng: number) {
 
   const url = new URL('https://maps.googleapis.com/maps/api/staticmap')
   url.searchParams.set('center', `${lat},${lng}`)
-  url.searchParams.set('zoom', String(STATIC_MAP_ZOOM))
-  url.searchParams.set('size', `${STATIC_MAP_WIDTH}x${STATIC_MAP_HEIGHT}`)
+  url.searchParams.set('zoom', String(zoom))
+  url.searchParams.set('size', `${STATIC_MAP_REQUEST_WIDTH}x${STATIC_MAP_REQUEST_HEIGHT}`)
   url.searchParams.set('maptype', 'satellite')
-  url.searchParams.set('scale', '2')
+  url.searchParams.set('scale', String(STATIC_MAP_SCALE))
   url.searchParams.set('key', apiKey)
 
   const response = await fetch(url)
@@ -196,19 +207,21 @@ export function buildSolarOverlaySvg({
   lat,
   lng,
   model,
+  zoom = selectStaticMapZoom(model),
 }: {
   satelliteUrl: string
   insights: GoogleSolarInsights | null
   lat: number
   lng: number
   model: SolarModel
+  zoom?: number
 }) {
   const panels = [...(insights?.solarPotential?.solarPanels || [])]
     .sort((a, b) => (b.yearlyEnergyDcKwh || 0) - (a.yearlyEnergyDcKwh || 0))
     .slice(0, model.panelCount)
 
   const metersPerPixel =
-    (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, STATIC_MAP_ZOOM)
+    (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom) / STATIC_MAP_SCALE
   const panelWidthPx = Math.max(4, PANEL_WIDTH_METERS / metersPerPixel)
   const panelHeightPx = Math.max(7, PANEL_HEIGHT_METERS / metersPerPixel)
 
@@ -220,9 +233,10 @@ export function buildSolarOverlaySvg({
         panel.center.longitude,
         lat,
         lng,
-        STATIC_MAP_ZOOM,
+        zoom,
         STATIC_MAP_WIDTH,
-        STATIC_MAP_HEIGHT
+        STATIC_MAP_HEIGHT,
+        STATIC_MAP_SCALE
       )
       const segment = panel.segmentIndex != null
         ? insights?.solarPotential?.roofSegmentStats?.[panel.segmentIndex]
@@ -263,7 +277,8 @@ function latLngToPixel(
   centerLng: number,
   zoom: number,
   width: number,
-  height: number
+  height: number,
+  pixelScale = 1
 ) {
   const scale = 256 * Math.pow(2, zoom)
   const worldX = ((lng + 180) / 360) * scale
@@ -282,8 +297,8 @@ function latLngToPixel(
     scale
 
   return {
-    x: width / 2 + (worldX - centerWorldX),
-    y: height / 2 + (worldY - centerWorldY),
+    x: width / 2 + (worldX - centerWorldX) * pixelScale,
+    y: height / 2 + (worldY - centerWorldY) * pixelScale,
   }
 }
 

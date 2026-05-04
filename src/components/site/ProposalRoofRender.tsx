@@ -13,7 +13,7 @@ export function ProposalRoofRender({
   videoUrl,
   alt,
 }: ProposalRoofRenderProps) {
-  const displayUrl = renderPreviewUrl || roofImageUrl || renderImageUrl
+  const displayUrl = roofImageUrl || renderPreviewUrl || renderImageUrl
 
   return (
     <div className="relative aspect-video w-full overflow-hidden bg-slate-950">
