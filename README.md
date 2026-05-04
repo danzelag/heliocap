@@ -2,6 +2,10 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+## Server Environment
+
+Set `N8N_CREATE_PROPOSAL_WEBHOOK_URL` in Vercel/server env vars. This is server-only and is used by `POST /api/create-proposal` to hand one admin-selected target to the n8n proposal worker.
+
 First, run the development server:
 
 ```bash
