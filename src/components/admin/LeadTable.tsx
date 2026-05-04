@@ -3,8 +3,7 @@
 import { useMemo, useState } from 'react'
 import type { Lead, LeadStatus } from '@/services/lead.service'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Archive, CalendarCheck, Crosshair, Edit, ExternalLink, Mail, MessageSquare, MoreHorizontal, PhoneCall, Radar, Send, Trash, TriangleAlert } from 'lucide-react'
+import { Archive, CalendarCheck, Check, Crosshair, Edit, ExternalLink, Mail, MessageSquare, MoreHorizontal, PhoneCall, Radar, Send, Trash, TriangleAlert } from 'lucide-react'
 import Link from 'next/link'
 import { deleteLeadsAction, updateLeadsStatusAction } from '@/app/admin/actions'
 import {
@@ -57,6 +56,34 @@ function formatUSD(value: number | null) {
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(value || 0)
+}
+
+function RowSelector({
+  checked,
+  label,
+  onToggle,
+}: {
+  checked: boolean
+  label: string
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      title={label}
+      onClick={onToggle}
+      className={`grid h-5 w-5 place-items-center border transition-colors ${
+        checked
+          ? 'border-cyan-100 bg-cyan-100 text-slate-950 shadow-[0_0_18px_rgba(103,232,249,0.28)]'
+          : 'border-cyan-200/45 bg-cyan-200/[0.06] text-transparent hover:border-cyan-100 hover:bg-cyan-200/15'
+      }`}
+    >
+      <Check className="h-3.5 w-3.5" />
+    </button>
+  )
 }
 
 export function LeadTable({ initialLeads }: LeadTableProps) {
@@ -256,12 +283,10 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
           <thead>
             <tr className="border-b border-white/10 bg-white/[0.025] font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">
               <th className="w-12 px-5 py-4">
-                <Checkbox
+                <RowSelector
                   checked={allVisibleSelected}
-                  onCheckedChange={toggleSelectAll}
-                  className="border-cyan-200/40 bg-white/[0.03] text-slate-950 data-[state=checked]:border-cyan-100 data-[state=checked]:bg-cyan-100"
-                  aria-label={allVisibleSelected ? 'Deselect visible proposals' : 'Select visible proposals'}
-                  title={allVisibleSelected ? 'Deselect visible proposals' : 'Select visible proposals'}
+                  onToggle={toggleSelectAll}
+                  label={allVisibleSelected ? 'Deselect visible proposals' : 'Select visible proposals'}
                 />
               </th>
               <th className="px-5 py-4">Target</th>
@@ -286,12 +311,10 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
               filteredLeads.map((lead, index) => (
                 <tr key={lead.id} className={`group transition-colors hover:bg-cyan-200/[0.035] ${selectedIds.includes(lead.id) ? 'bg-cyan-200/[0.06]' : ''}`}>
                   <td className="px-5 py-5 align-middle">
-                    <Checkbox
+                    <RowSelector
                       checked={selectedIds.includes(lead.id)}
-                      onCheckedChange={() => toggleSelect(lead.id)}
-                      className="border-cyan-200/35 bg-white/[0.03] text-slate-950 data-[state=checked]:border-cyan-100 data-[state=checked]:bg-cyan-100"
-                      aria-label={`Select ${lead.business_name}`}
-                      title={`Select ${lead.business_name}`}
+                      onToggle={() => toggleSelect(lead.id)}
+                      label={`Select ${lead.business_name}`}
                     />
                   </td>
                   <td className="px-5 py-5">
