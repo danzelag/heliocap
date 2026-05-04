@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 
 type SourceLeadsPayload = {
-  metro?: string
-  query?: string
-  limit?: number
+  location?: string
+  category?: string
+  max_results?: number
+  keywords?: string
 }
 
 export async function POST(request: NextRequest) {
@@ -25,18 +26,19 @@ export async function POST(request: NextRequest) {
     }
 
     const body = (await request.json()) as SourceLeadsPayload
-    const metro = body.metro?.trim()
-    const query = body.query?.trim()
-    const limit = Number(body.limit || 25)
+    const location = body.location?.trim()
+    const category = body.category?.trim()
+    const keywords = body.keywords?.trim()
+    const maxResults = Number(body.max_results)
 
-    if (!metro) {
-      return NextResponse.json({ error: 'metro is required' }, { status: 400 })
+    if (!location) {
+      return NextResponse.json({ error: 'location is required' }, { status: 400 })
     }
-    if (!query) {
-      return NextResponse.json({ error: 'query is required' }, { status: 400 })
+    if (!category) {
+      return NextResponse.json({ error: 'category is required' }, { status: 400 })
     }
-    if (!Number.isFinite(limit) || limit < 1 || limit > 250) {
-      return NextResponse.json({ error: 'limit must be between 1 and 250' }, { status: 400 })
+    if (!Number.isFinite(maxResults) || maxResults < 1 || maxResults > 250) {
+      return NextResponse.json({ error: 'max_results must be between 1 and 250' }, { status: 400 })
     }
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -48,9 +50,10 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        metro,
-        query,
-        limit,
+        location,
+        category,
+        max_results: maxResults,
+        ...(keywords ? { keywords } : {}),
         source: 'heliocap-admin',
       }),
       cache: 'no-store',

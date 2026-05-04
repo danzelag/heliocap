@@ -31,9 +31,10 @@ export function SourceLeadsForm() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          metro: String(formData.get('metro') || '').trim(),
-          query: String(formData.get('query') || '').trim(),
-          limit: Number(formData.get('limit') || 25),
+          location: String(formData.get('location') || '').trim(),
+          category: String(formData.get('category') || '').trim(),
+          max_results: Number(formData.get('max_results') || 25),
+          keywords: String(formData.get('keywords') || '').trim(),
         }),
       })
 
@@ -71,19 +72,35 @@ export function SourceLeadsForm() {
         </Button>
       </div>
 
-      <div className="mt-5 grid gap-4 md:grid-cols-[1fr_1.25fr_8rem]">
+      <div className="mt-5 grid gap-4 md:grid-cols-[1fr_1fr_8rem]">
         <div className="space-y-2">
-          <label className={labelClass}>Metro</label>
-          <input name="metro" required defaultValue="Brampton, ON" placeholder="Brampton, ON" className={inputClass} />
+          <label className={labelClass}>Location</label>
+          <input name="location" required defaultValue="Brampton, ON" placeholder="Brampton, ON" className={inputClass} />
         </div>
         <div className="space-y-2">
-          <label className={labelClass}>Search query</label>
-          <input name="query" required defaultValue="warehouse OR distribution center" placeholder="warehouse OR distribution center" className={inputClass} />
+          <label className={labelClass}>Category</label>
+          <select name="category" required defaultValue="warehouse" className={inputClass}>
+            <option value="warehouse">Warehouse</option>
+            <option value="distribution center">Distribution center</option>
+            <option value="manufacturing">Manufacturing</option>
+            <option value="industrial">Industrial</option>
+            <option value="commercial building">Commercial building</option>
+          </select>
         </div>
         <div className="space-y-2">
-          <label className={labelClass}>Limit</label>
-          <input name="limit" required type="number" min="1" max="250" defaultValue="25" className={inputClass} />
+          <label className={labelClass}>Max results</label>
+          <input name="max_results" required type="number" min="1" max="250" defaultValue="25" className={inputClass} />
         </div>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <label className={labelClass}>Keywords</label>
+        <input
+          name="keywords"
+          defaultValue="warehouse OR distribution center"
+          placeholder="Optional search modifiers"
+          className={inputClass}
+        />
       </div>
 
       {(message || error) && (
