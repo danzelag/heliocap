@@ -6,6 +6,7 @@ import { ExternalLink, Loader2, RadioTower, Rocket, Send, TriangleAlert, Wand2 }
 import { Button } from '@/components/ui/button'
 import { type Prospect, type ProspectStage, prospectStages } from '@/lib/prospect'
 import {
+  bulkPromoteProspectsToLeadsAction,
   promoteProspectToLeadAction,
   triggerProspectEnrichmentAction,
   updateProspectStageAction,
@@ -51,6 +52,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
   const [prospects, setProspects] = useState(initialProspects)
   const [activeStage, setActiveStage] = useState<ProspectStage | 'all'>('all')
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [message, setMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -65,6 +67,9 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
   const filteredProspects = activeStage === 'all'
     ? prospects
     : prospects.filter((prospect) => prospect.pipeline_stage === activeStage)
+  const filteredIds = filteredProspects.map((prospect) => prospect.id)
+  const selectedInView = selectedIds.filter((id) => filteredIds.includes(id))
+  const allVisibleSelected = filteredIds.length > 0 && selectedInView.length === filteredIds.length
 
   const handleStageChange = (id: string, stage: ProspectStage) => {
     setMessage(null)
@@ -90,19 +95,49 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
       if (!result.success) {
         setMessage(result.error || 'Failed to promote prospect.')
       } else {
-        setProspects((prev) => prev.map((prospect) => (
-          prospect.id === id
-            ? {
-                ...prospect,
-                lead_id: result.lead_id || prospect.lead_id,
-                microsite_slug: result.slug || prospect.microsite_slug,
-                pipeline_stage: 'microsite_live',
-              }
-            : prospect
-        )))
-        setMessage(`Promoted to ${result.url || `/proposal/${result.slug}`}`)
+        const slug = 'slug' in result ? result.slug : 'prospect'
+        const url = 'url' in result ? result.url : null
+        const alreadyLive = 'already_live' in result && result.already_live
+
+        if (alreadyLive) {
+          setMessage(`Already live at ${url || `/proposal/${slug}`}`)
+        } else {
+          setMessage(`Proposal job queued for ${slug}. Watch the live production queue for completion.`)
+        }
       }
       setActiveId(null)
+    })
+  }
+
+  const handleToggleSelection = (id: string) => {
+    setSelectedIds((prev) => (
+      prev.includes(id) ? prev.filter((selectedId) => selectedId !== id) : [...prev, id]
+    ))
+  }
+
+  const handleToggleVisibleSelection = () => {
+    setSelectedIds((prev) => {
+      if (allVisibleSelected) {
+        return prev.filter((id) => !filteredIds.includes(id))
+      }
+
+      return [...new Set([...prev, ...filteredIds])]
+    })
+  }
+
+  const handleBulkPromote = () => {
+    setMessage(null)
+    startTransition(async () => {
+      const result = await bulkPromoteProspectsToLeadsAction(selectedIds)
+      if (!result.success) {
+        setMessage(result.error || 'Failed to queue proposal jobs.')
+      } else {
+        setSelectedIds([])
+        const queued = 'queued' in result ? result.queued : 0
+        const failed = 'failed' in result ? result.failed : 0
+        const failedText = failed ? ` ${failed} failed or missing.` : ''
+        setMessage(`${queued} proposal job${queued === 1 ? '' : 's'} queued.${failedText} Watch the live production queue for completion.`)
+      }
     })
   }
 
@@ -128,6 +163,15 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            disabled={isPending || selectedIds.length === 0}
+            onClick={handleBulkPromote}
+            className="h-9 rounded-none bg-slate-100 px-3 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-slate-950 hover:bg-white disabled:opacity-50"
+          >
+            {isPending && !activeId ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-2 h-3.5 w-3.5" />}
+            Create selected <span className="text-slate-500">{selectedIds.length}</span>
+          </Button>
           <button
             type="button"
             className={`border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${activeStage === 'all' ? 'border-cyan-200/40 bg-cyan-200/10 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-slate-500 hover:border-cyan-200/20 hover:text-slate-200'}`}
@@ -159,6 +203,15 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
         <table className="w-full min-w-[1180px] text-left text-sm">
           <thead>
             <tr className="border-b border-white/10 bg-white/[0.025] font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">
+              <th className="w-12 px-5 py-4">
+                <input
+                  type="checkbox"
+                  aria-label="Select all visible prospects"
+                  checked={allVisibleSelected}
+                  onChange={handleToggleVisibleSelection}
+                  className="h-4 w-4 rounded-sm border-white/20 bg-transparent accent-cyan-200"
+                />
+              </th>
               <th className="px-5 py-4">Prospect</th>
               <th className="px-5 py-4">Parcel</th>
               <th className="px-5 py-4">Solar Signal</th>
@@ -170,7 +223,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
           <tbody className="divide-y divide-white/10">
             {filteredProspects.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-5 py-16 text-center">
+                <td colSpan={7} className="px-5 py-16 text-center">
                   <div className="mx-auto max-w-sm border border-dashed border-white/15 bg-white/[0.025] p-8">
                     <Rocket className="mx-auto h-8 w-8 text-slate-600" />
                     <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">No prospects in this lane</div>
@@ -184,14 +237,23 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                 return (
                   <tr key={prospect.id} className="transition-colors hover:bg-cyan-200/[0.035]">
                     <td className="px-5 py-5 align-top">
-                      <div className="font-semibold text-white">{prospect.address.split(',')[0]}</div>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${prospect.business_name || prospect.address}`}
+                        checked={selectedIds.includes(prospect.id)}
+                        onChange={() => handleToggleSelection(prospect.id)}
+                        className="h-4 w-4 rounded-sm border-white/20 bg-transparent accent-cyan-200"
+                      />
+                    </td>
+                    <td className="px-5 py-5 align-top">
+                      <div className="font-semibold text-white">{prospect.business_name || prospect.address.split(',')[0]}</div>
                       <div className="mt-1 max-w-xs text-xs text-slate-500">{prospect.address}</div>
                       <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-slate-600">
                         {prospect.metro || 'Metro pending'} · {prospect.county || 'County pending'}
                       </div>
                     </td>
                     <td className="px-5 py-5 align-top">
-                      <div className="font-mono text-xs text-slate-300">{prospect.parcel_id || 'No parcel ID'}</div>
+                      <div className="font-mono text-xs text-slate-300">{prospect.place_id || prospect.parcel_id || 'No ID'}</div>
                       <div className="mt-1 text-xs text-slate-500">
                         {formatNumber(prospect.sqft)} sqft · {prospect.year_built || 'Year unknown'}
                       </div>

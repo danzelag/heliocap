@@ -6,6 +6,7 @@ import { SolarUtils } from '@/lib/solar-utils'
 import { prospectStages, type ProspectStage } from '@/lib/prospect'
 
 const DEFAULT_SITE_URL = 'https://heliocap.vercel.app'
+const BULK_PROPOSAL_LIMIT = 25
 
 function isProspectStage(value: string): value is ProspectStage {
   return prospectStages.includes(value as ProspectStage)
@@ -61,12 +62,55 @@ export async function promoteProspectToLeadAction(id: string) {
   if (prospectError) return { success: false, error: prospectError.message }
   if (!prospect) return { success: false, error: 'Prospect not found' }
 
+  const result = await queueProposalForProspect(supabase, prospect)
+
+  revalidatePath('/admin')
+  revalidatePath('/admin/pipeline')
+
+  return result
+}
+
+export async function bulkPromoteProspectsToLeadsAction(ids: string[]) {
+  const uniqueIds = [...new Set(ids)].filter(Boolean).slice(0, BULK_PROPOSAL_LIMIT)
+
+  if (uniqueIds.length === 0) return { success: false, error: 'Select at least one prospect.' }
+  if (ids.length > BULK_PROPOSAL_LIMIT) {
+    return { success: false, error: `Select ${BULK_PROPOSAL_LIMIT} or fewer prospects at a time.` }
+  }
+
+  const supabase = await createAdminClient()
+  const { data: prospects, error } = await supabase
+    .from('prospects')
+    .select('*')
+    .in('id', uniqueIds)
+
+  if (error) return { success: false, error: error.message }
+
+  const results = await Promise.all((prospects || []).map((prospect) => queueProposalForProspect(supabase, prospect)))
+  const queued = results.filter((result) => result.success).length
+  const failed = results.length - queued
+  const missing = uniqueIds.length - results.length
+
+  revalidatePath('/admin')
+  revalidatePath('/admin/pipeline')
+
+  return {
+    success: queued > 0,
+    queued,
+    failed: failed + missing,
+    results,
+    error: queued === 0 ? 'No proposal jobs were queued.' : undefined,
+  }
+}
+
+async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof createAdminClient>>, prospect: any) {
   if (prospect.lead_id && prospect.microsite_slug) {
     return {
       success: true,
       lead_id: prospect.lead_id,
       slug: prospect.microsite_slug,
       url: `${DEFAULT_SITE_URL}/proposal/${prospect.microsite_slug}`,
+      already_live: true,
     }
   }
 
@@ -82,6 +126,23 @@ export async function promoteProspectToLeadAction(id: string) {
     return { success: false, error: 'N8N_CREATE_PROPOSAL_WEBHOOK_URL is not configured' }
   }
 
+  const { data: job, error: jobError } = await supabase
+    .from('proposal_jobs')
+    .insert([{
+      business_name: businessName,
+      address: prospect.address,
+      lat: prospect.lat,
+      lng: prospect.lng,
+      slug,
+      status: 'queued',
+      current_step: 'Queued from prospect table',
+      progress_percent: 2,
+    }])
+    .select('id')
+    .single()
+
+  if (jobError) return { success: false, error: jobError.message }
+
   const response = await fetch(webhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -92,6 +153,7 @@ export async function promoteProspectToLeadAction(id: string) {
       lng: prospect.lng,
       slug,
       prospect_id: prospect.id,
+      job_id: job.id,
     }),
     cache: 'no-store',
   })
@@ -100,37 +162,38 @@ export async function promoteProspectToLeadAction(id: string) {
   const receipt = parseJsonReceipt(receiptText)
 
   if (!response.ok) {
+    await supabase
+      .from('proposal_jobs')
+      .update({
+        status: 'failed',
+        current_step: 'n8n rejected the prospect job',
+        progress_percent: 100,
+        error_message: getReceiptMessage(receipt) || `n8n returned ${response.status}`,
+        receipt,
+      })
+      .eq('id', job.id)
+
     return {
       success: false,
       error: getReceiptMessage(receipt) || `n8n returned ${response.status}`,
     }
   }
 
-  const receiptSlug = typeof receipt?.slug === 'string' ? receipt.slug : slug
-  const leadId = typeof receipt?.lead_id === 'string' ? receipt.lead_id : null
-  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL).replace(/\/$/, '')
-  const url = getReceiptUrl(receipt) || `${siteUrl}/proposal/${receiptSlug}`
-
-  const { error: updateError } = await supabase
-    .from('prospects')
+  await supabase
+    .from('proposal_jobs')
     .update({
-      lead_id: leadId,
-      microsite_slug: receiptSlug,
-      pipeline_stage: 'microsite_live',
+      status: 'running',
+      current_step: 'n8n workflow started',
+      progress_percent: 8,
+      receipt,
     })
-    .eq('id', id)
-
-  if (updateError) return { success: false, error: updateError.message }
-
-  revalidatePath('/admin')
-  revalidatePath('/admin/pipeline')
-  revalidatePath(`/proposal/${receiptSlug}`)
+    .eq('id', job.id)
 
   return {
     success: true,
-    lead_id: leadId,
-    slug: receiptSlug,
-    url,
+    job_id: job.id,
+    slug,
+    queued: true,
   }
 }
 

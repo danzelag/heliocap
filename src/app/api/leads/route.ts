@@ -38,6 +38,7 @@ export async function POST(request: Request) {
       lng,
       building_type,
       job_id,
+      prospect_id,
     } = body
 
     if (!business_name) {
@@ -166,6 +167,17 @@ export async function POST(request: Request) {
           lead_id: data.id,
         })
         .eq('id', job_id)
+    }
+
+    if (prospect_id) {
+      await supabase
+        .from('prospects')
+        .update({
+          lead_id: data.id,
+          microsite_slug: data.slug,
+          pipeline_stage: 'microsite_live',
+        })
+        .eq('id', prospect_id)
     }
 
     return NextResponse.json({ 

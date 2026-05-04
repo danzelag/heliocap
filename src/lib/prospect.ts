@@ -18,6 +18,11 @@ export interface Prospect {
   lat: number | null
   lng: number | null
   parcel_id: string | null
+  place_id: string | null
+  business_name: string | null
+  category: string | null
+  location: string | null
+  source: string | null
   owner_llc: string | null
   sqft: number | null
   year_built: number | null
