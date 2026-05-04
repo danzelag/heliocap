@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { ArrowLeft, Database, RadioTower, ShieldCheck, Sun, Target, Zap } from 'lucide-react'
 import { createClient } from '@/lib/supabase-server'
 import { ProspectPipelineTable } from '@/components/admin/ProspectPipelineTable'
-import { ProposalJobsQueue, type ProposalJob } from '@/components/admin/ProposalJobsQueue'
+import { ProposalJobsQueue, type ProposalJob, type ProposalJobEvent } from '@/components/admin/ProposalJobsQueue'
 import { SourceLeadsForm } from '@/components/admin/SourceLeadsForm'
 import { prospectStages } from '@/lib/prospect'
 import { ProspectService } from '@/services/prospect.service'
@@ -31,6 +31,12 @@ export default async function PipelinePage() {
     .select('id, business_name, address, slug, status, current_step, progress_percent, proposal_url, error_message, created_at, updated_at')
     .order('created_at', { ascending: false })
     .limit(12)
+
+  const { data: jobEvents } = await supabase
+    .from('proposal_job_events')
+    .select('id, job_id, business_name, status, step, progress_percent, proposal_url, error_message, created_at')
+    .order('created_at', { ascending: false })
+    .limit(25)
 
   const solarFetched = prospects.filter((prospect) => prospect.pipeline_stage === 'solar_fetched').length
   const enriched = prospects.filter((prospect) => prospect.pipeline_stage === 'enriched').length
@@ -117,7 +123,10 @@ export default async function PipelinePage() {
 
         <SourceLeadsForm />
 
-        <ProposalJobsQueue initialJobs={(jobs as ProposalJob[]) || []} />
+        <ProposalJobsQueue
+          initialJobs={(jobs as ProposalJob[]) || []}
+          initialEvents={(jobEvents as ProposalJobEvent[]) || []}
+        />
 
         <ProspectPipelineTable initialProspects={prospects} />
       </main>

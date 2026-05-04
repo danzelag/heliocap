@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Database, Plus, RadioTower, ShieldCheck, Sun, Target, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { LeadTable } from '@/components/admin/LeadTable'
-import { ProposalJobsQueue, type ProposalJob } from '@/components/admin/ProposalJobsQueue'
+import { ProposalJobsQueue, type ProposalJob, type ProposalJobEvent } from '@/components/admin/ProposalJobsQueue'
 import { Lead } from '@/services/lead.service'
 
 function formatCompactUSD(value: number) {
@@ -39,9 +39,16 @@ export default async function AdminDashboard() {
     .order('created_at', { ascending: false })
     .limit(12)
 
+  const { data: jobEvents } = await supabase
+    .from('proposal_job_events')
+    .select('id, job_id, business_name, status, step, progress_percent, proposal_url, error_message, created_at')
+    .order('created_at', { ascending: false })
+    .limit(25)
+
   const leadRows = (leads as Lead[]) || []
   const prospectRows = (prospects as { pipeline_stage: string }[]) || []
   const jobRows = (jobs as ProposalJob[]) || []
+  const jobEventRows = (jobEvents as ProposalJobEvent[]) || []
   const publishedCount = leadRows.filter((lead) => lead.status === 'published').length
   const flaggedSavings = leadRows.reduce((total, lead) => total + (lead.estimated_savings || 0), 0)
   const solarFetchedCount = prospectRows.filter((prospect) => prospect.pipeline_stage === 'solar_fetched').length
@@ -104,7 +111,7 @@ export default async function AdminDashboard() {
 
       <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-6 py-8 lg:px-10">
         <section className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-          <ProposalJobsQueue initialJobs={jobRows} />
+          <ProposalJobsQueue initialJobs={jobRows} initialEvents={jobEventRows} />
 
           <div className="space-y-4">
             <div className="border border-white/10 bg-[#0b1016]/90 p-4">

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase-server'
 import { SolarUtils } from '@/lib/solar-utils'
 import { prospectStages, type ProspectStage } from '@/lib/prospect'
+import { recordProposalJobEvent } from '@/lib/proposal-job-events'
 
 const DEFAULT_SITE_URL = 'https://heliocap.vercel.app'
 const BULK_PROPOSAL_LIMIT = 25
@@ -142,6 +143,13 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
     .single()
 
   if (jobError) return { success: false, error: jobError.message }
+  await recordProposalJobEvent(supabase, {
+    jobId: job.id,
+    businessName,
+    status: 'queued',
+    step: 'Queued from prospect table',
+    progressPercent: 2,
+  })
 
   const response = await fetch(webhookUrl, {
     method: 'POST',
@@ -172,6 +180,14 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
         receipt,
       })
       .eq('id', job.id)
+    await recordProposalJobEvent(supabase, {
+      jobId: job.id,
+      businessName,
+      status: 'failed',
+      step: 'n8n rejected the prospect job',
+      progressPercent: 100,
+      errorMessage: getReceiptMessage(receipt) || `n8n returned ${response.status}`,
+    })
 
     return {
       success: false,
@@ -188,6 +204,13 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
       receipt,
     })
     .eq('id', job.id)
+  await recordProposalJobEvent(supabase, {
+    jobId: job.id,
+    businessName,
+    status: 'running',
+    step: 'n8n workflow started',
+    progressPercent: 8,
+  })
 
   return {
     success: true,

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
 import { verifyN8nRequest } from '@/lib/n8n-auth'
 import { SolarUtils } from '@/lib/solar-utils'
+import { recordProposalJobEvent } from '@/lib/proposal-job-events'
 import {
   buildRasterRenderPreview,
   buildSolarModel,
@@ -167,6 +168,14 @@ export async function POST(request: Request) {
           lead_id: data.id,
         })
         .eq('id', job_id)
+      await recordProposalJobEvent(supabase, {
+        jobId: job_id,
+        businessName: data.business_name,
+        status: 'completed',
+        step: 'Proposal live',
+        progressPercent: 100,
+        proposalUrl,
+      })
     }
 
     if (prospect_id) {

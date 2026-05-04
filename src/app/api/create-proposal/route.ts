@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient, createClient } from '@/lib/supabase-server'
 import { SolarUtils } from '@/lib/solar-utils'
+import { recordProposalJobEvent } from '@/lib/proposal-job-events'
 
 type CreateProposalPayload = {
   business_name?: string
@@ -77,6 +78,13 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (jobError) throw jobError
+    await recordProposalJobEvent(adminSupabase, {
+      jobId: job.id,
+      businessName: businessName,
+      status: 'queued',
+      step: 'Queued in Helio Cap',
+      progressPercent: 2,
+    })
 
     const n8nResponse = await fetch(webhookUrl, {
       method: 'POST',
@@ -102,6 +110,14 @@ export async function POST(request: NextRequest) {
           receipt,
         })
         .eq('id', job.id)
+      await recordProposalJobEvent(adminSupabase, {
+        jobId: job.id,
+        businessName: businessName,
+        status: 'failed',
+        step: 'n8n rejected the job',
+        progressPercent: 100,
+        errorMessage: getReceiptMessage(receipt) || `n8n returned ${n8nResponse.status}`,
+      })
 
       return NextResponse.json(
         {
@@ -122,6 +138,13 @@ export async function POST(request: NextRequest) {
         receipt,
       })
       .eq('id', job.id)
+    await recordProposalJobEvent(adminSupabase, {
+      jobId: job.id,
+      businessName: businessName,
+      status: 'running',
+      step: 'n8n workflow started',
+      progressPercent: 8,
+    })
 
     return NextResponse.json({
       success: true,
