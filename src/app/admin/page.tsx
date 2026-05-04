@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Activity, Clock3, Database, Plus, RadioTower, ShieldCheck, Sun, Target, Zap } from 'lucide-react'
+import { Database, Plus, RadioTower, ShieldCheck, Sun, Target, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { LeadTable } from '@/components/admin/LeadTable'
+import { ProposalJobsQueue, type ProposalJob } from '@/components/admin/ProposalJobsQueue'
 import { Lead } from '@/services/lead.service'
 
 function formatCompactUSD(value: number) {
@@ -13,22 +14,6 @@ function formatCompactUSD(value: number) {
     maximumFractionDigits: 0,
     notation: 'compact',
   }).format(value)
-}
-
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value))
-}
-
-function leadStatusClass(status: Lead['status']) {
-  if (status === 'published') return 'border-emerald-300/25 text-emerald-200'
-  if (status === 'contacted') return 'border-cyan-300/25 text-cyan-100'
-  if (status === 'emailed') return 'border-blue-300/25 text-blue-100'
-  if (status === 'replied') return 'border-amber-300/25 text-amber-100'
-  if (status === 'booked') return 'border-roi/30 text-roi'
-  return 'border-slate-500/30 text-slate-500'
 }
 
 export default async function AdminDashboard() {
@@ -48,12 +33,17 @@ export default async function AdminDashboard() {
     .from('prospects')
     .select('pipeline_stage')
 
+  const { data: jobs } = await supabase
+    .from('proposal_jobs')
+    .select('id, business_name, address, slug, status, current_step, progress_percent, proposal_url, error_message, created_at, updated_at')
+    .order('created_at', { ascending: false })
+    .limit(12)
+
   const leadRows = (leads as Lead[]) || []
   const prospectRows = (prospects as { pipeline_stage: string }[]) || []
+  const jobRows = (jobs as ProposalJob[]) || []
   const publishedCount = leadRows.filter((lead) => lead.status === 'published').length
   const flaggedSavings = leadRows.reduce((total, lead) => total + (lead.estimated_savings || 0), 0)
-  const liveRatio = leadRows.length ? Math.round((publishedCount / leadRows.length) * 100) : 0
-  const recentActivity = leadRows.slice(0, 5)
   const solarFetchedCount = prospectRows.filter((prospect) => prospect.pipeline_stage === 'solar_fetched').length
   const enrichedCount = prospectRows.filter((prospect) => prospect.pipeline_stage === 'enriched').length
 
@@ -114,48 +104,7 @@ export default async function AdminDashboard() {
 
       <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-6 py-8 lg:px-10">
         <section className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-          <div className="border border-white/10 bg-[#0b1016]/90 p-5 lg:p-6">
-            <div className="mb-5 flex flex-col gap-3 border-b border-white/10 pb-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.26em] text-slate-500">
-                  <Activity className="h-4 w-4 text-slate-400" />
-                  Activity board
-                </div>
-                <h1 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">Live production queue</h1>
-              </div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">
-                System live ratio {liveRatio}%
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {recentActivity.length === 0 ? (
-                <div className="border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-slate-500">
-                  No proposal activity yet. New targets will appear here when they are created.
-                </div>
-              ) : (
-                recentActivity.map((lead) => (
-                  <div key={lead.id} className="grid gap-3 border border-white/10 bg-white/[0.025] p-4 md:grid-cols-[1fr_auto] md:items-center">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-white">{lead.business_name}</span>
-                        <span className={`border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.18em] ${leadStatusClass(lead.status)}`}>
-                          {lead.status}
-                        </span>
-                      </div>
-                      <div className="mt-1 font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                        /proposal/{lead.slug}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                      <Clock3 className="h-3.5 w-3.5" />
-                      {formatTime(lead.created_at)}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+          <ProposalJobsQueue initialJobs={jobRows} />
 
           <div className="space-y-4">
             <div className="border border-white/10 bg-[#0b1016]/90 p-4">

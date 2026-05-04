@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { ArrowLeft, Database, RadioTower, ShieldCheck, Sun, Target, Zap } from 'lucide-react'
 import { createClient } from '@/lib/supabase-server'
 import { ProspectPipelineTable } from '@/components/admin/ProspectPipelineTable'
+import { ProposalJobsQueue, type ProposalJob } from '@/components/admin/ProposalJobsQueue'
 import { SourceLeadsForm } from '@/components/admin/SourceLeadsForm'
 import { prospectStages } from '@/lib/prospect'
 import { ProspectService } from '@/services/prospect.service'
@@ -25,6 +26,12 @@ export default async function PipelinePage() {
   }
 
   const prospects = await ProspectService.listProspects()
+  const { data: jobs } = await supabase
+    .from('proposal_jobs')
+    .select('id, business_name, address, slug, status, current_step, progress_percent, proposal_url, error_message, created_at, updated_at')
+    .order('created_at', { ascending: false })
+    .limit(12)
+
   const solarFetched = prospects.filter((prospect) => prospect.pipeline_stage === 'solar_fetched').length
   const enriched = prospects.filter((prospect) => prospect.pipeline_stage === 'enriched').length
   const live = prospects.filter((prospect) => prospect.pipeline_stage === 'microsite_live').length
@@ -109,6 +116,8 @@ export default async function PipelinePage() {
         </section>
 
         <SourceLeadsForm />
+
+        <ProposalJobsQueue initialJobs={(jobs as ProposalJob[]) || []} />
 
         <ProspectPipelineTable initialProspects={prospects} />
       </main>
