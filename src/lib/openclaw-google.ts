@@ -2,8 +2,8 @@ import { SupabaseClient } from '@supabase/supabase-js'
 import sharp from 'sharp'
 
 const STATIC_MAP_WIDTH = 1280
-const STATIC_MAP_HEIGHT = 720
-const STATIC_MAP_ZOOM = 18
+const STATIC_MAP_HEIGHT = 1280
+const STATIC_MAP_ZOOM = 20
 const PANEL_WIDTH_METERS = 1.045
 const PANEL_HEIGHT_METERS = 1.879
 const PANEL_WATTS = 400
@@ -119,7 +119,7 @@ export async function fetchStaticSatelliteImage(lat: number, lng: number) {
   url.searchParams.set('zoom', String(STATIC_MAP_ZOOM))
   url.searchParams.set('size', `${STATIC_MAP_WIDTH}x${STATIC_MAP_HEIGHT}`)
   url.searchParams.set('maptype', 'satellite')
-  url.searchParams.set('scale', '1')
+  url.searchParams.set('scale', '2')
   url.searchParams.set('key', apiKey)
 
   const response = await fetch(url)
