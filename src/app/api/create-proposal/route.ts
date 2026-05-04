@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
+import { createAdminClient, createClient } from '@/lib/supabase-server'
 import { SolarUtils } from '@/lib/solar-utils'
 
 type CreateProposalPayload = {
@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
       lng,
       slug,
     }
+    const requestedAt = new Date(Date.now() - 5000).toISOString()
 
     const n8nResponse = await fetch(webhookUrl, {
       method: 'POST',
@@ -82,12 +83,34 @@ export async function POST(request: NextRequest) {
     }
 
     const receiptSlug = typeof receipt?.slug === 'string' ? receipt.slug : slug
+    const lead = await waitForCreatedLead({
+      slug: receiptSlug,
+      requestedSlug: slug,
+      businessName,
+      address,
+      requestedAt,
+    })
+
+    if (!lead) {
+      return NextResponse.json(
+        {
+          success: false,
+          pending: true,
+          error: 'n8n accepted the request, but the proposal lead is not live yet. Check the workflow run and try the dashboard again in a moment.',
+          slug: receiptSlug,
+          receipt,
+        },
+        { status: 202 }
+      )
+    }
+
     const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL).replace(/\/$/, '')
-    const proposalUrl = getReceiptUrl(receipt) || `${siteUrl}/proposal/${receiptSlug}`
+    const proposalUrl = `${siteUrl}/proposal/${lead.slug}`
 
     return NextResponse.json({
       success: true,
-      slug: receiptSlug,
+      lead_id: lead.id,
+      slug: lead.slug,
       url: proposalUrl,
       proposal_url: proposalUrl,
       receipt,
@@ -99,21 +122,80 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function parseJsonReceipt(value: string) {
+function parseJsonReceipt(value: string): Record<string, unknown> | null {
   if (!value) return null
 
   try {
-    return JSON.parse(value) as Record<string, unknown>
+    return normalizeReceipt(JSON.parse(value))
   } catch {
     return { message: value }
   }
 }
 
-function getReceiptUrl(receipt: Record<string, unknown> | null) {
-  if (!receipt) return null
+function normalizeReceipt(value: unknown): Record<string, unknown> | null {
+  if (Array.isArray(value)) {
+    return normalizeReceipt(value[0])
+  }
 
-  const candidates = [receipt.url, receipt.proposal_url, receipt.proposalUrl]
-  const url = candidates.find((value): value is string => typeof value === 'string' && value.length > 0)
+  if (!value || typeof value !== 'object') return null
 
-  return url || null
+  const record = value as Record<string, unknown>
+  if (record.json && typeof record.json === 'object') return normalizeReceipt(record.json)
+  if (record.body && typeof record.body === 'object') return normalizeReceipt(record.body)
+
+  return record
+}
+
+async function waitForCreatedLead({
+  slug,
+  requestedSlug,
+  businessName,
+  address,
+  requestedAt,
+}: {
+  slug: string
+  requestedSlug: string
+  businessName: string
+  address: string
+  requestedAt: string
+}) {
+  const supabase = await createAdminClient()
+  const deadline = Date.now() + 12000
+
+  while (Date.now() < deadline) {
+    const exact = await findLeadBySlug(supabase, slug)
+    if (exact) return exact
+
+    const requested = requestedSlug !== slug ? await findLeadBySlug(supabase, requestedSlug) : null
+    if (requested) return requested
+
+    const { data: recentLead } = await supabase
+      .from('leads')
+      .select('id, slug')
+      .eq('business_name', businessName)
+      .eq('address', address)
+      .gte('created_at', requestedAt)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (recentLead?.slug) return recentLead
+
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+
+  return null
+}
+
+async function findLeadBySlug(
+  supabase: Awaited<ReturnType<typeof createAdminClient>>,
+  slug: string,
+) {
+  const { data } = await supabase
+    .from('leads')
+    .select('id, slug')
+    .eq('slug', slug)
+    .maybeSingle()
+
+  return data
 }

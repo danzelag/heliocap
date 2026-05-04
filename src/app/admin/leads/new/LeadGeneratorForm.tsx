@@ -12,6 +12,7 @@ const labelClass = 'font-mono text-[10px] uppercase tracking-[0.22em] text-slate
 
 type CreateProposalResponse = {
   success?: boolean
+  pending?: boolean
   slug?: string
   url?: string
   proposal_url?: string
@@ -21,6 +22,7 @@ type CreateProposalResponse = {
 export default function LeadGeneratorForm() {
   const [loading, setLoading] = useState(false)
   const [successData, setSuccessData] = useState<{ url: string; slug: string } | null>(null)
+  const [pendingData, setPendingData] = useState<{ slug: string; message: string } | null>(null)
   const [copied, setCopied] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -58,6 +60,7 @@ export default function LeadGeneratorForm() {
     e.preventDefault()
     setLoading(true)
     setErrorMessage(null)
+    setPendingData(null)
 
     const formData = new FormData(e.currentTarget)
     const businessName = String(formData.get('business_name') || '').trim()
@@ -96,6 +99,14 @@ export default function LeadGeneratorForm() {
       })
 
       const data = (await res.json()) as CreateProposalResponse
+      if (res.status === 202 && data.pending) {
+        setPendingData({
+          slug: data.slug || slug,
+          message: data.error || 'n8n accepted the request, but the lead is not live yet.',
+        })
+        return
+      }
+
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'n8n failed to create the proposal.')
       }
@@ -148,6 +159,39 @@ export default function LeadGeneratorForm() {
           <a href={successData.url} target="_blank" className="flex h-12 items-center justify-center border border-white/15 bg-white text-sm font-semibold text-slate-950 transition-colors hover:bg-slate-200">
             View live page
           </a>
+          <Button variant="outline" onClick={() => window.location.reload()} className="h-12 rounded-none border-white/15 bg-transparent font-mono text-[10px] uppercase tracking-[0.2em] text-slate-200 hover:bg-white/10">
+            Create another
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (pendingData) {
+    return (
+      <div className="border border-amber-300/20 bg-[#0b1016] p-8 text-slate-100">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="mb-4 grid h-12 w-12 place-items-center border border-amber-300/25 bg-amber-300/10">
+              <Loader2 className="h-6 w-6 animate-spin text-amber-200" />
+            </div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">n8n worker still running</div>
+            <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-white">Proposal is queued</h2>
+            <p className="mt-2 max-w-xl text-sm text-slate-400">{pendingData.message}</p>
+            <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+              Expected slug: {pendingData.slug}
+            </p>
+          </div>
+          <Link href="/admin" className="inline-flex h-10 items-center justify-center gap-2 border border-white/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-300 transition-colors hover:border-white/25 hover:text-white">
+            <LayoutDashboard className="h-3.5 w-3.5" />
+            Dashboard
+          </Link>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <Link href="/admin" className="flex h-12 items-center justify-center border border-white/15 bg-white text-sm font-semibold text-slate-950 transition-colors hover:bg-slate-200">
+            Check dashboard
+          </Link>
           <Button variant="outline" onClick={() => window.location.reload()} className="h-12 rounded-none border-white/15 bg-transparent font-mono text-[10px] uppercase tracking-[0.2em] text-slate-200 hover:bg-white/10">
             Create another
           </Button>
