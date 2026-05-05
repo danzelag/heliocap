@@ -5,7 +5,7 @@ import { SolarUtils } from '@/lib/solar-utils'
 import { updateProposalJobProgress } from '@/lib/proposal-job-events'
 
 const PROPOSALS_BUCKET = 'proposals'
-const GEMINI_IMAGE_MODEL = 'gemini-2.0-flash'
+const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image'
 const SOLAR_RENDER_PROMPT = `Create a realistic aerial view of a commercial building with a rooftop solar installation.
 
 Use the provided satellite image as the base.
