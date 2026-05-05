@@ -5,7 +5,7 @@ import { SolarUtils } from '@/lib/solar-utils'
 import { updateProposalJobProgress } from '@/lib/proposal-job-events'
 
 const PROPOSALS_BUCKET = 'proposals'
-const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image'
+const GEMINI_IMAGE_MODEL = 'gemini-2.0-flash'
 const SOLAR_RENDER_PROMPT = `Create a realistic aerial view of a commercial building with a rooftop solar installation.
 
 Use the provided satellite image as the base.
@@ -105,6 +105,7 @@ export async function POST(request: NextRequest) {
     const roofAsset = await fetchImageAsset(roof_image_url)
 
     try {
+      console.log(`[generate-proposal-image] Calling Gemini (${GEMINI_IMAGE_MODEL}) for AI solar render: ${slug}`)
       await updateProposalJobProgress(supabase, {
         jobId: job_id,
         businessName: business_name,
@@ -117,6 +118,7 @@ export async function POST(request: NextRequest) {
       const previewBuffer = await sharp(aiRender.buffer)
         .webp({ quality: 86, effort: 4 })
         .toBuffer()
+      
       const filePath = `${slug}/preview.webp`
       const { error } = await supabase.storage
         .from(PROPOSALS_BUCKET)
@@ -128,6 +130,7 @@ export async function POST(request: NextRequest) {
       if (error) throw error
 
       const { data } = supabase.storage.from(PROPOSALS_BUCKET).getPublicUrl(filePath)
+      
       await updateProposalJobProgress(supabase, {
         jobId: job_id,
         businessName: business_name,
@@ -136,11 +139,13 @@ export async function POST(request: NextRequest) {
         progressPercent: 85,
       })
 
+      console.log('[generate-proposal-image] Result: ai_generated')
       return NextResponse.json({
         render_preview_url: data.publicUrl,
+        source: 'ai_generated',
       })
     } catch (error) {
-      console.error('[generate-proposal-image] Gemini render failed, returning roof image:', error)
+      console.error('[generate-proposal-image] Gemini render failed, falling back to roof image:', error)
       await updateProposalJobProgress(supabase, {
         jobId: job_id,
         businessName: business_name,
@@ -149,8 +154,10 @@ export async function POST(request: NextRequest) {
         progressPercent: 85,
       })
 
+      console.log('[generate-proposal-image] Result: fallback_roof_image')
       return NextResponse.json({
         render_preview_url: roof_image_url,
+        source: 'fallback_roof_image',
       })
     }
   } catch (error: unknown) {
@@ -222,10 +229,13 @@ async function generateAiSolarRender(roofAsset: ImageAsset): Promise<ImageAsset>
 }
 
 function getGoogleImageApiKey() {
-  const key = process.env.GOOGLE_MAPS_API_KEY
+  const key =
+    process.env.GOOGLE_MAPS_API_KEY ||
+    process.env.GOOGLE_MAPS_STATIC_API_KEY ||
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
   if (!key) {
-    throw new Error('GOOGLE_MAPS_API_KEY is not configured')
+    throw new Error('Google API key (GOOGLE_MAPS_API_KEY or similar) is not configured')
   }
 
   return key
