@@ -145,21 +145,19 @@ export async function POST(request: NextRequest) {
         source: 'ai_generated',
       })
     } catch (error) {
-      console.error('[CRITICAL DEBUG] Gemini render failed:', error)
-      
-      // Fallback is still here but we're throwing in generateAiSolarRender so this will log the error
+      console.error('[generate-proposal-image] Gemini render failed, falling back to roof image:', error)
       await updateProposalJobProgress(supabase, {
         jobId: job_id,
         businessName: business_name,
-        status: 'failed',
-        step: `Gemini Error: ${error instanceof Error ? error.message : 'Unknown'}`,
+        status: 'running',
+        step: 'AI render unavailable, using satellite roof image',
         progressPercent: 85,
       })
 
       return NextResponse.json({
-        error: error instanceof Error ? error.message : 'Unknown Gemini error',
-        source: 'failed',
-      }, { status: 500 })
+        render_preview_url: roof_image_url,
+        source: 'fallback_roof_image',
+      })
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error'
@@ -184,28 +182,6 @@ async function fetchImageAsset(url: string): Promise<ImageAsset> {
 async function generateAiSolarRender(roofAsset: ImageAsset): Promise<ImageAsset> {
   const apiKey = getGoogleImageApiKey()
   
-  const payload = {
-    contents: [{
-      parts: [
-        { text: SOLAR_RENDER_PROMPT },
-        {
-          inline_data: {
-            mime_type: roofAsset.mimeType,
-            data: roofAsset.buffer.toString('base64'),
-          },
-        },
-      ],
-    }],
-  }
-
-  console.log('[DEBUG] Gemini Request Model:', GEMINI_IMAGE_MODEL)
-  console.log('[DEBUG] Gemini Request Payload:', JSON.stringify({
-    ...payload,
-    contents: payload.contents.map(c => ({
-      parts: c.parts.map(p => p.inline_data ? { ...p, inline_data: { ...p.inline_data, data: `[BASE64_DATA_LENGTH_${p.inline_data.data.length}]` } } : p)
-    }))
-  }, null, 2))
-
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`,
     {
@@ -214,37 +190,36 @@ async function generateAiSolarRender(roofAsset: ImageAsset): Promise<ImageAsset>
         'Content-Type': 'application/json',
         'x-goog-api-key': apiKey,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: SOLAR_RENDER_PROMPT },
+            {
+              inline_data: {
+                mime_type: roofAsset.mimeType,
+                data: roofAsset.buffer.toString('base64'),
+              },
+            },
+          ],
+        }],
+      }),
       cache: 'no-store',
     },
   )
 
   const responseText = await response.text()
-  console.log('[DEBUG] Gemini Response Status:', response.status)
-  
-  let jsonResponse
-  try {
-    jsonResponse = JSON.parse(responseText)
-    console.log('[DEBUG] Gemini Response Structure:', JSON.stringify(jsonResponse, (key, value) => {
-      if (key === 'data' && typeof value === 'string' && value.length > 100) return `[BASE64_DATA_LENGTH_${value.length}]`
-      return value
-    }, 2))
-  } catch {
-    console.log('[DEBUG] Gemini Response Text (Not JSON):', responseText)
-  }
-
   if (!response.ok) {
-    throw new Error(`Gemini API Error (${response.status}): ${responseText}`)
+    throw new Error(`Gemini image generation failed: ${response.status} ${responseText.slice(0, 240)}`)
   }
 
-  const payload_response = jsonResponse as GeminiGenerateContentResponse
-  const parts = payload_response.candidates?.flatMap((candidate) => candidate.content?.parts || []) || []
+  const payload = JSON.parse(responseText) as GeminiGenerateContentResponse
+  const parts = payload.candidates?.flatMap((candidate) => candidate.content?.parts || []) || []
   const imagePart = parts.find((part) => part.inlineData?.data || part.inline_data?.data)
   const inlineData = imagePart?.inlineData || imagePart?.inline_data
 
   if (!inlineData?.data) {
     const text = parts.map((part) => part.text).filter(Boolean).join(' ')
-    throw new Error(`Gemini did not return image data. Text response: ${text || 'None'}`)
+    throw new Error(`Gemini did not return image data${text ? `: ${text.slice(0, 240)}` : ''}`)
   }
 
   return {
@@ -254,22 +229,10 @@ async function generateAiSolarRender(roofAsset: ImageAsset): Promise<ImageAsset>
 }
 
 function getGoogleImageApiKey() {
-  const geminiKey = process.env.GEMINI_API_KEY
-  const googleMapsKey = process.env.GOOGLE_MAPS_API_KEY
-  const staticMapsKey = process.env.GOOGLE_MAPS_STATIC_API_KEY
-  const publicMapsKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
-
-  console.log('[DEBUG] API Key Check:', {
-    GEMINI_API_KEY: geminiKey ? 'EXISTS' : 'MISSING',
-    GOOGLE_MAPS_API_KEY: googleMapsKey ? 'EXISTS' : 'MISSING',
-    GOOGLE_MAPS_STATIC_API_KEY: staticMapsKey ? 'EXISTS' : 'MISSING',
-    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: publicMapsKey ? 'EXISTS' : 'MISSING',
-  })
-
-  const key = geminiKey || googleMapsKey || staticMapsKey || publicMapsKey
+  const key = process.env.GEMINI_API_KEY
 
   if (!key) {
-    throw new Error('No valid Google/Gemini API key found in environment variables')
+    throw new Error('GEMINI_API_KEY is not configured')
   }
 
   return key
