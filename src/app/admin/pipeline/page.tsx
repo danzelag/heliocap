@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { ArrowLeft, Database, RadioTower, ShieldCheck, Sun, Target, Zap } from 'lucide-react'
+import { AdminRoutePrefetcher } from '@/components/admin/AdminRoutePrefetcher'
 import { createClient } from '@/lib/supabase-server'
 import { ProspectPipelineTable } from '@/components/admin/ProspectPipelineTable'
 import { ProposalJobsQueue, type ProposalJob, type ProposalJobEvent } from '@/components/admin/ProposalJobsQueue'
@@ -53,6 +54,7 @@ export default async function PipelinePage() {
 
   return (
     <div className="min-h-screen bg-[#07090c] text-slate-100">
+      <AdminRoutePrefetcher />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(30,41,59,0.75),transparent_32%),linear-gradient(135deg,#07090c_0%,#0d1117_52%,#050608_100%)]" />
 
       <nav className="relative z-10 border-b border-white/10 bg-[#090d12]/95 px-6 py-4 lg:px-10">
@@ -67,15 +69,15 @@ export default async function PipelinePage() {
             </div>
           </div>
 
-          <Link href="/admin" className="inline-flex h-10 items-center justify-center gap-2 border border-white/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-300 transition-colors hover:border-white/25 hover:text-white">
+          <Link href="/admin" prefetch className="inline-flex h-10 items-center justify-center gap-2 border border-white/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-300 transition-colors hover:border-white/25 hover:text-white">
             <ArrowLeft className="h-3.5 w-3.5" />
             Command Center
           </Link>
           <div className="flex flex-wrap gap-2">
-            <Link href="/admin" className="inline-flex h-10 items-center justify-center border border-white/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-300 transition-colors hover:border-white/25 hover:text-white">
+            <Link href="/admin" prefetch className="inline-flex h-10 items-center justify-center border border-white/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-300 transition-colors hover:border-white/25 hover:text-white">
               Proposals
             </Link>
-            <Link href="/admin/pipeline" className="inline-flex h-10 items-center justify-center border border-cyan-200/30 bg-cyan-200/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100">
+            <Link href="/admin/pipeline" prefetch className="inline-flex h-10 items-center justify-center border border-cyan-200/30 bg-cyan-200/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100">
               Prospects
             </Link>
           </div>

@@ -1,16 +1,18 @@
 import { ChevronLeft, FilePlus2 } from 'lucide-react'
 import Link from 'next/link'
+import { AdminRoutePrefetcher } from '@/components/admin/AdminRoutePrefetcher'
 import LeadGeneratorForm from './LeadGeneratorForm'
 
 export default function NewLeadPage() {
   return (
     <div className="min-h-screen bg-[#07090c] text-slate-100">
+      <AdminRoutePrefetcher />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(30,41,59,0.65),transparent_30%),linear-gradient(135deg,#07090c_0%,#0d1117_55%,#050608_100%)]" />
 
       <nav className="relative z-10 border-b border-white/10 bg-[#090d12]/95 px-6 py-4 lg:px-10">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/admin" className="grid h-9 w-9 place-items-center border border-white/10 text-slate-400 transition-colors hover:border-white/25 hover:text-white">
+            <Link href="/admin" prefetch className="grid h-9 w-9 place-items-center border border-white/10 text-slate-400 transition-colors hover:border-white/25 hover:text-white">
               <ChevronLeft className="h-5 w-5" />
             </Link>
             <div>

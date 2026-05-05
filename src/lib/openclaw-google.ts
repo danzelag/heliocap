@@ -2,7 +2,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 import sharp from 'sharp'
 
 const STATIC_MAP_REQUEST_WIDTH = 640
-const STATIC_MAP_REQUEST_HEIGHT = 640
+const STATIC_MAP_REQUEST_HEIGHT = 360
 const STATIC_MAP_SCALE = 2
 const STATIC_MAP_WIDTH = STATIC_MAP_REQUEST_WIDTH * STATIC_MAP_SCALE
 const STATIC_MAP_HEIGHT = STATIC_MAP_REQUEST_HEIGHT * STATIC_MAP_SCALE
@@ -111,12 +111,30 @@ export async function buildRasterRenderPreview(renderSvg: string) {
     .toBuffer()
 }
 
-export function selectStaticMapZoom(model: Pick<SolarModel, 'panelCount'> | null) {
+export function selectStaticMapZoom(model: Pick<SolarModel, 'panelCount' | 'usableRoofAreaSqft'> | null) {
   const panelCount = model?.panelCount || 0
+  const usableRoofAreaSqft = model?.usableRoofAreaSqft || 0
 
-  if (panelCount > 500) return 18
-  if (panelCount > 150) return 19
+  if (panelCount > 650 || usableRoofAreaSqft > 90000) return 17
+  if (panelCount > 300 || usableRoofAreaSqft > 45000) return 18
+  if (panelCount > 90 || usableRoofAreaSqft > 16000) return 19
   return 20
+}
+
+export function selectStaticMapCenter(insights: GoogleSolarInsights | null, fallbackLat: number, fallbackLng: number) {
+  const center = insights?.center
+
+  if (typeof center?.latitude === 'number' && typeof center?.longitude === 'number') {
+    return {
+      lat: center.latitude,
+      lng: center.longitude,
+    }
+  }
+
+  return {
+    lat: fallbackLat,
+    lng: fallbackLng,
+  }
 }
 
 export async function fetchStaticSatelliteImage(lat: number, lng: number, zoom = DEFAULT_STATIC_MAP_ZOOM) {

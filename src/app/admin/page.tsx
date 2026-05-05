@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Database, Plus, RadioTower, ShieldCheck, Sun, Target, Zap } from 'lucide-react'
 import Link from 'next/link'
+import { AdminRoutePrefetcher } from '@/components/admin/AdminRoutePrefetcher'
 import { LeadTable } from '@/components/admin/LeadTable'
 import { ProposalJobsQueue, type ProposalJob, type ProposalJobEvent } from '@/components/admin/ProposalJobsQueue'
 import { Lead } from '@/services/lead.service'
@@ -70,6 +71,7 @@ export default async function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-[#07090c] text-slate-100">
+      <AdminRoutePrefetcher />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(30,41,59,0.75),transparent_32%),linear-gradient(135deg,#07090c_0%,#0d1117_52%,#050608_100%)]" />
 
       <nav className="relative z-10 border-b border-white/10 bg-[#090d12]/95 px-6 py-4 lg:px-10">
@@ -88,18 +90,18 @@ export default async function AdminDashboard() {
             <div className="border border-white/10 bg-white/[0.03] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-400">
               Operator {user.email}
             </div>
-            <Link href="/admin">
+            <Link href="/admin" prefetch>
               <Button variant="outline" className="h-10 rounded-none border-cyan-200/30 bg-cyan-200/10 px-5 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-cyan-100 hover:bg-cyan-200/15">
                 Proposals
               </Button>
             </Link>
-            <Link href="/admin/pipeline">
+            <Link href="/admin/pipeline" prefetch>
               <Button variant="outline" className="h-10 rounded-none border-white/15 bg-transparent px-5 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-slate-200 hover:bg-white/10">
                 <RadioTower className="mr-2 h-4 w-4" />
                 Prospects
               </Button>
             </Link>
-            <Link href="/admin/leads/new">
+            <Link href="/admin/leads/new" prefetch>
               <Button className="h-10 rounded-none border border-white/15 bg-slate-100 px-5 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-slate-950 hover:bg-white">
                 <Plus className="mr-2 h-4 w-4" />
                 New Target

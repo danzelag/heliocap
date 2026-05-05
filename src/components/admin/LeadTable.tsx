@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type SetStateAction } from 'react'
 import type { Lead, LeadStatus } from '@/services/lead.service'
 import { Button } from '@/components/ui/button'
 import { Archive, CalendarCheck, Check, Crosshair, Edit, ExternalLink, Mail, MessageSquare, MoreHorizontal, PhoneCall, Radar, Send, Trash, TriangleAlert } from 'lucide-react'
@@ -14,12 +14,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { readClientCache, writeClientCache } from '@/lib/client-cache'
+import { createClient } from '@/lib/supabase'
 
 interface LeadTableProps {
   initialLeads: Lead[]
 }
 
 const filters = ['all', 'published', 'contacted', 'emailed', 'replied', 'booked', 'archived'] as const
+const LEADS_CACHE_KEY = 'admin:leads'
 
 type StatusFilter = (typeof filters)[number]
 
@@ -87,7 +90,7 @@ function RowSelector({
 }
 
 export function LeadTable({ initialLeads }: LeadTableProps) {
-  const [leads, setLeads] = useState(initialLeads)
+  const [leads, setLeadsState] = useState(() => readClientCache<Lead[]>(LEADS_CACHE_KEY) || initialLeads)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -97,6 +100,42 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [lastDeleteCount, setLastDeleteCount] = useState<number | null>(null)
+
+  const setLeads = (next: SetStateAction<Lead[]>) => {
+    setLeadsState((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next
+      writeClientCache(LEADS_CACHE_KEY, resolved)
+      return resolved
+    })
+  }
+
+  useEffect(() => {
+    setLeadsState(initialLeads)
+    writeClientCache(LEADS_CACHE_KEY, initialLeads)
+  }, [initialLeads])
+
+  useEffect(() => {
+    let mounted = true
+
+    const refreshLeads = async () => {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('leads')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (!mounted || !data) return
+      const nextLeads = data as Lead[]
+      setLeadsState(nextLeads)
+      writeClientCache(LEADS_CACHE_KEY, nextLeads)
+    }
+
+    refreshLeads()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   const counts = useMemo(() => ({
     all: leads.length,

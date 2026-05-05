@@ -9,6 +9,7 @@ import {
   buildSolarOverlaySvg,
   fetchSolarInsights,
   fetchStaticSatelliteImage,
+  selectStaticMapCenter,
   selectStaticMapZoom,
   uploadLeadAsset,
 } from '@/lib/openclaw-google'
@@ -115,7 +116,8 @@ export async function POST(request: Request) {
       })
       const solarModel = buildSolarModel(solarInsights)
       const mapZoom = selectStaticMapZoom(solarModel)
-      const imageBuffer = await fetchStaticSatelliteImage(Number(lat), Number(lng), mapZoom)
+      const mapCenter = selectStaticMapCenter(solarInsights, Number(lat), Number(lng))
+      const imageBuffer = await fetchStaticSatelliteImage(mapCenter.lat, mapCenter.lng, mapZoom)
 
       finalRoofImageUrl = await uploadLeadAsset({
         supabase,
@@ -130,8 +132,8 @@ export async function POST(request: Request) {
       const overlaySvg = buildSolarOverlaySvg({
         satelliteUrl: satelliteBase64,
         insights: solarInsights,
-        lat: Number(lat),
-        lng: Number(lng),
+        lat: mapCenter.lat,
+        lng: mapCenter.lng,
         model: solarModel,
         zoom: mapZoom,
       })

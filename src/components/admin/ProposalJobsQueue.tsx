@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition, type SetStateAction } from 'react'
 import Link from 'next/link'
 import { Activity, Check, ChevronDown, ChevronRight, ExternalLink, Loader2, RadioTower, RefreshCcw, Trash2, TriangleAlert } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { clearProposalQueueAction } from '@/app/admin/pipeline/actions'
+import { readClientCache, writeClientCache } from '@/lib/client-cache'
 
 export type ProposalJob = {
   id: string
@@ -36,6 +37,9 @@ type ProposalJobsQueueProps = {
   initialJobs: ProposalJob[]
   initialEvents: ProposalJobEvent[]
 }
+
+const JOBS_CACHE_KEY = 'admin:proposal-jobs'
+const EVENTS_CACHE_KEY = 'admin:proposal-job-events'
 
 function statusClass(status: ProposalJob['status']) {
   if (status === 'completed') return 'border-emerald-300/30 bg-emerald-300/10 text-emerald-100'
@@ -74,8 +78,8 @@ function getJobEvents(events: ProposalJobEvent[], jobId: string) {
 }
 
 export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQueueProps) {
-  const [jobs, setJobs] = useState(() => sortJobs(initialJobs))
-  const [events, setEvents] = useState(() => sortEvents(initialEvents))
+  const [jobs, setJobsState] = useState(() => readClientCache<ProposalJob[]>(JOBS_CACHE_KEY) || sortJobs(initialJobs))
+  const [events, setEventsState] = useState(() => readClientCache<ProposalJobEvent[]>(EVENTS_CACHE_KEY) || sortEvents(initialEvents))
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [clearError, setClearError] = useState<string | null>(null)
@@ -83,6 +87,31 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
   const activeCount = useMemo(() => jobs.filter((job) => job.status === 'queued' || job.status === 'running').length, [jobs])
   const finishedCount = useMemo(() => jobs.filter((job) => job.status === 'completed' || job.status === 'failed').length, [jobs])
   const latestEvent = events[0]
+
+  const setJobs = (next: SetStateAction<ProposalJob[]>) => {
+    setJobsState((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next
+      writeClientCache(JOBS_CACHE_KEY, resolved)
+      return resolved
+    })
+  }
+
+  const setEvents = (next: SetStateAction<ProposalJobEvent[]>) => {
+    setEventsState((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next
+      writeClientCache(EVENTS_CACHE_KEY, resolved)
+      return resolved
+    })
+  }
+
+  useEffect(() => {
+    const sortedJobs = sortJobs(initialJobs)
+    const sortedEvents = sortEvents(initialEvents)
+    setJobsState(sortedJobs)
+    setEventsState(sortedEvents)
+    writeClientCache(JOBS_CACHE_KEY, sortedJobs)
+    writeClientCache(EVENTS_CACHE_KEY, sortedEvents)
+  }, [initialJobs, initialEvents])
 
   const handleClearQueue = () => {
     if (finishedCount === 0) return

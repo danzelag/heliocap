@@ -26,7 +26,7 @@ export default async function EditLeadPage({
   return (
     <div className="min-h-screen bg-background">
       <nav className="flex items-center gap-4 px-8 py-4 border-b border-border bg-white">
-        <Link href="/admin" className="text-muted-foreground hover:text-primary transition-colors">
+        <Link href="/admin" prefetch className="text-muted-foreground hover:text-primary transition-colors">
           <ChevronLeft className="w-5 h-5" />
         </Link>
         <span className="text-lg font-bold tracking-tight text-primary font-sans uppercase">Edit Lead: {lead.business_name}</span>

@@ -6,16 +6,20 @@ import { updateProposalJobProgress } from '@/lib/proposal-job-events'
 
 const PROPOSALS_BUCKET = 'proposals'
 const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image'
-const SOLAR_RENDER_PROMPT = `Create a realistic aerial view of a commercial building with a rooftop solar installation.
+const PREVIEW_WIDTH = 1280
+const PREVIEW_HEIGHT = 720
+const SOLAR_RENDER_PROMPT = `Create a realistic wide aerial view of a commercial building with a rooftop solar installation.
 
 Use the provided satellite image as the base.
-Add dark blue solar panels aligned cleanly and evenly across the usable roof area.
-Panels should be grouped in clean rows, not scattered.
-Avoid edges, HVAC units, and irregular shapes.
-Keep the building structure unchanged and recognizable.
-Do not add text, labels, or UI elements.
-Lighting should be natural and realistic.
-The result should look like a professional solar installation render used in a commercial proposal.`
+Upscale and enhance the image quality.
+Sharpen the roof and building details while keeping the property recognizable.
+Add dark blue/black solar panels aligned cleanly and evenly across usable roof areas.
+Panels should be grouped in professional rows, not scattered dots.
+Avoid edges, HVAC units, roads, and parking lots.
+Keep the building structure unchanged.
+Do not add text, labels, people, vehicles, logos, or UI elements.
+Use natural lighting and a premium commercial proposal look.
+Final image should be a polished 16:9 rooftop solar concept render.`
 
 type GenerateProposalImageBody = {
   roof_image_url?: string
@@ -116,6 +120,8 @@ export async function POST(request: NextRequest) {
 
       const aiRender = await generateAiSolarRender(roofAsset)
       const previewBuffer = await sharp(aiRender.buffer)
+        .resize(PREVIEW_WIDTH, PREVIEW_HEIGHT, { fit: 'cover', position: 'center' })
+        .sharpen()
         .webp({ quality: 86, effort: 4 })
         .toBuffer()
       

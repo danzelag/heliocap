@@ -196,7 +196,7 @@ export default function LeadGeneratorForm() {
               {isFailed ? job.error_message || 'The n8n workflow reported a failure.' : job.current_step}
             </p>
           </div>
-          <Link href="/admin" className="inline-flex h-10 items-center justify-center gap-2 border border-white/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-300 transition-colors hover:border-white/25 hover:text-white">
+          <Link href="/admin" prefetch className="inline-flex h-10 items-center justify-center gap-2 border border-white/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-300 transition-colors hover:border-white/25 hover:text-white">
             <LayoutDashboard className="h-3.5 w-3.5" />
             Dashboard
           </Link>
@@ -236,11 +236,18 @@ export default function LeadGeneratorForm() {
               View live page
             </a>
           ) : (
-            <Link href="/admin" className="flex h-12 items-center justify-center border border-white/15 bg-white text-sm font-semibold text-slate-950 transition-colors hover:bg-slate-200">
+            <Link href="/admin" prefetch className="flex h-12 items-center justify-center border border-white/15 bg-white text-sm font-semibold text-slate-950 transition-colors hover:bg-slate-200">
               Check dashboard
             </Link>
           )}
-          <Button variant="outline" onClick={() => window.location.reload()} className="h-12 rounded-none border-white/15 bg-transparent font-mono text-[10px] uppercase tracking-[0.2em] text-slate-200 hover:bg-white/10">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setJob(null)
+              setErrorMessage(null)
+            }}
+            className="h-12 rounded-none border-white/15 bg-transparent font-mono text-[10px] uppercase tracking-[0.2em] text-slate-200 hover:bg-white/10"
+          >
             Create another
           </Button>
         </div>

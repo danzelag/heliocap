@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition, type SetStateAction } from 'react'
 import Link from 'next/link'
 import { ExternalLink, Loader2, RadioTower, Rocket, Send, Trash2, TriangleAlert, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,8 @@ import {
   triggerProspectEnrichmentAction,
   updateProspectStageAction,
 } from '@/app/admin/pipeline/actions'
+import { readClientCache, writeClientCache } from '@/lib/client-cache'
+import { createClient } from '@/lib/supabase'
 
 type ProspectPipelineTableProps = {
   initialProspects: Prospect[]
@@ -29,6 +31,7 @@ const stageLabels: Record<ProspectStage, string> = {
   snoozed: 'Snoozed',
   dead: 'Dead',
 }
+const PROSPECTS_CACHE_KEY = 'admin:prospects'
 
 function formatUSD(value: number | null) {
   return new Intl.NumberFormat('en-US', {
@@ -51,12 +54,48 @@ function stageClass(stage: ProspectStage) {
 }
 
 export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTableProps) {
-  const [prospects, setProspects] = useState(initialProspects)
+  const [prospects, setProspectsState] = useState(() => readClientCache<Prospect[]>(PROSPECTS_CACHE_KEY) || initialProspects)
   const [activeStage, setActiveStage] = useState<ProspectStage | 'all'>('all')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [message, setMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+
+  const setProspects = (next: SetStateAction<Prospect[]>) => {
+    setProspectsState((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next
+      writeClientCache(PROSPECTS_CACHE_KEY, resolved)
+      return resolved
+    })
+  }
+
+  useEffect(() => {
+    setProspectsState(initialProspects)
+    writeClientCache(PROSPECTS_CACHE_KEY, initialProspects)
+  }, [initialProspects])
+
+  useEffect(() => {
+    let mounted = true
+
+    const refreshProspects = async () => {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from('prospects')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (!mounted || !data) return
+      const nextProspects = data as Prospect[]
+      setProspectsState(nextProspects)
+      writeClientCache(PROSPECTS_CACHE_KEY, nextProspects)
+    }
+
+    refreshProspects()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
 
   const counts = useMemo(() => {
     const initial = Object.fromEntries(prospectStages.map((stage) => [stage, 0])) as Record<ProspectStage, number>
