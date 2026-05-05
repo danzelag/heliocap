@@ -220,6 +220,28 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
   }
 }
 
+export async function clearProposalQueueAction() {
+  const supabase = await createAdminClient()
+
+  const { data: jobs, error: fetchError } = await supabase
+    .from('proposal_jobs')
+    .select('id')
+    .in('status', ['completed', 'failed'])
+
+  if (fetchError) return { success: false, error: fetchError.message }
+  if (!jobs || jobs.length === 0) return { success: true, cleared: 0 }
+
+  const ids = jobs.map((j) => j.id)
+
+  await supabase.from('proposal_job_events').delete().in('job_id', ids)
+  const { error } = await supabase.from('proposal_jobs').delete().in('id', ids)
+
+  if (error) return { success: false, error: error.message }
+
+  revalidatePath('/admin/pipeline')
+  return { success: true, cleared: ids.length }
+}
+
 export async function bulkDeleteProspectsAction(ids: string[]) {
   const uniqueIds = [...new Set(ids)].filter(Boolean)
   if (uniqueIds.length === 0) return { success: false, error: 'No prospects selected.' }

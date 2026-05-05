@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { Activity, Check, ExternalLink, Loader2, RadioTower, RefreshCcw, TriangleAlert } from 'lucide-react'
+import { Activity, Check, ChevronDown, ChevronRight, ExternalLink, Loader2, RadioTower, RefreshCcw, Trash2, TriangleAlert } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
+import { clearProposalQueueAction } from '@/app/admin/pipeline/actions'
 
 export type ProposalJob = {
   id: string
@@ -76,8 +77,27 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
   const [jobs, setJobs] = useState(() => sortJobs(initialJobs))
   const [events, setEvents] = useState(() => sortEvents(initialEvents))
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null)
+  const [collapsed, setCollapsed] = useState(false)
+  const [clearError, setClearError] = useState<string | null>(null)
+  const [isClearing, startClearTransition] = useTransition()
   const activeCount = useMemo(() => jobs.filter((job) => job.status === 'queued' || job.status === 'running').length, [jobs])
+  const finishedCount = useMemo(() => jobs.filter((job) => job.status === 'completed' || job.status === 'failed').length, [jobs])
   const latestEvent = events[0]
+
+  const handleClearQueue = () => {
+    if (finishedCount === 0) return
+    if (!window.confirm(`Clear ${finishedCount} completed/failed job${finishedCount === 1 ? '' : 's'} from the queue?`)) return
+    setClearError(null)
+    startClearTransition(async () => {
+      const result = await clearProposalQueueAction()
+      if (!result.success) {
+        setClearError(result.error || 'Failed to clear queue.')
+      } else {
+        setJobs([])
+        setEvents([])
+      }
+    })
+  }
 
   useEffect(() => {
     const supabase = createClient()
@@ -155,29 +175,49 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
 
   return (
     <section className="border border-white/10 bg-[#0b1016]/90 p-5 lg:p-6">
-      <div className="mb-5 flex flex-col gap-3 border-b border-white/10 pb-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.26em] text-cyan-200/70">
-            <Activity className="h-4 w-4" />
-            Live job stream
+      <div className={`flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between ${collapsed ? '' : 'mb-5 border-b border-white/10 pb-4'}`}>
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          className="flex items-center gap-3 text-left"
+        >
+          {collapsed ? <ChevronRight className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+          <div>
+            <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.26em] text-cyan-200/70">
+              <Activity className="h-3.5 w-3.5" />
+              Live job stream
+            </div>
+            <h2 className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-white">n8n production queue</h2>
           </div>
-          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">n8n production queue</h2>
-        </div>
+        </button>
         <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">
-          <span>{activeCount} active</span>
+          <span className={activeCount > 0 ? 'text-cyan-100' : ''}>{activeCount} active</span>
           <span className="inline-flex items-center gap-1.5">
             <RefreshCcw className="h-3.5 w-3.5" />
             {lastSyncedAt ? formatTime(lastSyncedAt.toISOString()) : 'Syncing'}
           </span>
           {latestEvent ? (
-            <span className="inline-flex items-center gap-1.5 text-cyan-100">
-              Latest {formatTime(latestEvent.created_at)}
-            </span>
+            <span className="text-slate-600">Latest {formatTime(latestEvent.created_at)}</span>
           ) : null}
+          {finishedCount > 0 && (
+            <button
+              type="button"
+              disabled={isClearing}
+              onClick={handleClearQueue}
+              className="inline-flex items-center gap-1.5 border border-white/10 px-2.5 py-1.5 text-slate-400 transition-colors hover:border-red-300/30 hover:text-red-200 disabled:opacity-50"
+            >
+              {isClearing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+              Clear {finishedCount}
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="overflow-hidden border border-white/10 bg-[#090d12]">
+      {clearError && (
+        <div className="mb-4 text-xs text-red-200">{clearError}</div>
+      )}
+
+      {!collapsed && <div className="overflow-hidden border border-white/10 bg-[#090d12]">
         {jobs.length === 0 ? (
           <div className="border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-slate-500">
             No proposal jobs yet. Create one proposal or bulk queue prospects and they will appear here.
@@ -249,7 +289,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
             })}
           </div>
         )}
-      </div>
+      </div>}
     </section>
   )
 }
