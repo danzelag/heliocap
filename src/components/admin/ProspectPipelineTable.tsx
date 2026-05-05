@@ -6,6 +6,7 @@ import { ExternalLink, Loader2, RadioTower, Rocket, Send, Trash2, TriangleAlert,
 import { Button } from '@/components/ui/button'
 import { type Prospect, type ProspectStage, prospectStages } from '@/lib/prospect'
 import {
+  bulkDeleteProspectsAction,
   bulkPromoteProspectsToLeadsAction,
   deleteProspectAction,
   promoteProspectToLeadAction,
@@ -126,6 +127,28 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
     })
   }
 
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return
+    if (!window.confirm(`Delete ${selectedIds.length} prospect${selectedIds.length === 1 ? '' : 's'}? This cannot be undone. Published proposals will not be removed.`)) return
+
+    setMessage(null)
+    const previous = prospects
+    const removing = new Set(selectedIds)
+    setProspects((prev) => prev.filter((row) => !removing.has(row.id)))
+    setSelectedIds([])
+
+    startTransition(async () => {
+      const result = await bulkDeleteProspectsAction([...removing])
+      if (!result.success) {
+        setProspects(previous)
+        setMessage(result.error || 'Failed to delete prospects.')
+      } else {
+        const n = 'deleted' in result ? result.deleted : removing.size
+        setMessage(`Deleted ${n} prospect${n === 1 ? '' : 's'}.`)
+      }
+    })
+  }
+
   const handleBulkPromote = () => {
     setMessage(null)
     startTransition(async () => {
@@ -196,6 +219,15 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
           >
             {isPending && !activeId ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-2 h-3.5 w-3.5" />}
             Create selected <span className="text-slate-500">{selectedIds.length}</span>
+          </Button>
+          <Button
+            type="button"
+            disabled={isPending || selectedIds.length === 0}
+            onClick={handleBulkDelete}
+            className="h-9 rounded-none border border-red-300/30 bg-transparent px-3 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-red-200 hover:border-red-300/60 hover:bg-red-500/10 hover:text-red-100 disabled:opacity-50"
+          >
+            <Trash2 className="mr-2 h-3.5 w-3.5" />
+            Delete selected <span className="text-red-300/50">{selectedIds.length}</span>
           </Button>
           <button
             type="button"

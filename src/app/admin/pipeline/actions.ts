@@ -220,6 +220,23 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
   }
 }
 
+export async function bulkDeleteProspectsAction(ids: string[]) {
+  const uniqueIds = [...new Set(ids)].filter(Boolean)
+  if (uniqueIds.length === 0) return { success: false, error: 'No prospects selected.' }
+
+  const supabase = await createAdminClient()
+  const { error } = await supabase
+    .from('prospects')
+    .delete()
+    .in('id', uniqueIds)
+
+  if (error) return { success: false, error: error.message }
+
+  revalidatePath('/admin')
+  revalidatePath('/admin/pipeline')
+  return { success: true, deleted: uniqueIds.length }
+}
+
 export async function deleteProspectAction(id: string) {
   if (!id) return { success: false, error: 'Missing prospect ID' }
 
