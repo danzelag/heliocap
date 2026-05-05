@@ -13,7 +13,7 @@ export function ProposalRoofRender({
   videoUrl,
   alt,
 }: ProposalRoofRenderProps) {
-  const displayUrl = roofImageUrl || renderPreviewUrl || renderImageUrl
+  const displayUrl = renderPreviewUrl || roofImageUrl || renderImageUrl
 
   return (
     <div className="relative aspect-video w-full overflow-hidden bg-slate-950">
@@ -26,14 +26,14 @@ export function ProposalRoofRender({
             muted
             loop
             playsInline
-            className="h-full w-full object-contain"
+            className="h-full w-full object-cover"
             aria-label={alt}
           />
         ) : displayUrl ? (
           <img
             src={displayUrl}
             alt={alt}
-            className="h-full w-full object-contain"
+            className="h-full w-full object-cover"
           />
         ) : (
           <>

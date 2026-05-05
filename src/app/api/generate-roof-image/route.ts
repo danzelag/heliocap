@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       jobId: job_id,
       businessName: business_name,
       status: 'running',
-      step: 'Grabbing map roof image',
+      step: 'Generating roof image',
       progressPercent: 20,
     })
 
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       jobId: job_id,
       businessName: business_name,
       status: 'running',
-      step: 'Roof image and solar geometry ready',
+      step: 'Roof image complete · running solar model',
       progressPercent: 45,
     })
 

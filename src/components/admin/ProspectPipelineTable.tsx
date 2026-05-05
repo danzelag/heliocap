@@ -2,11 +2,12 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
-import { ExternalLink, Loader2, RadioTower, Rocket, Send, TriangleAlert, Wand2 } from 'lucide-react'
+import { ExternalLink, Loader2, RadioTower, Rocket, Send, Trash2, TriangleAlert, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { type Prospect, type ProspectStage, prospectStages } from '@/lib/prospect'
 import {
   bulkPromoteProspectsToLeadsAction,
+  deleteProspectAction,
   promoteProspectToLeadAction,
   triggerProspectEnrichmentAction,
   updateProspectStageAction,
@@ -138,6 +139,30 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
         const failedText = failed ? ` ${failed} failed or missing.` : ''
         setMessage(`${queued} proposal job${queued === 1 ? '' : 's'} queued.${failedText} Watch the live production queue for completion.`)
       }
+    })
+  }
+
+  const handleDelete = (prospect: Prospect) => {
+    const label = prospect.business_name || prospect.address.split(',')[0] || 'this prospect'
+    if (!window.confirm(`Delete ${label}? This cannot be undone. Associated published proposals will not be removed.`)) {
+      return
+    }
+
+    setMessage(null)
+    setActiveId(prospect.id)
+    const previous = prospects
+    setProspects((prev) => prev.filter((row) => row.id !== prospect.id))
+    setSelectedIds((prev) => prev.filter((selectedId) => selectedId !== prospect.id))
+
+    startTransition(async () => {
+      const result = await deleteProspectAction(prospect.id)
+      if (!result.success) {
+        setProspects(previous)
+        setMessage(result.error || 'Failed to delete prospect.')
+      } else {
+        setMessage(`Deleted ${label}.`)
+      }
+      setActiveId(null)
     })
   }
 
@@ -332,6 +357,17 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                             <ExternalLink className="h-4 w-4" />
                           </Link>
                         )}
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-none border-red-300/30 bg-transparent text-red-200 hover:border-red-300/60 hover:bg-red-500/10 hover:text-red-100"
+                          disabled={busy}
+                          onClick={() => handleDelete(prospect)}
+                          title="Delete prospect"
+                        >
+                          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        </Button>
                       </div>
                     </td>
                   </tr>

@@ -40,7 +40,27 @@ export async function POST(request: Request) {
       building_type,
       job_id,
       prospect_id,
+      panel_count,
+      system_kw,
+      solar_model,
+      filtered,
+      reason,
     } = body
+
+    if (filtered) {
+      const message = (typeof reason === 'string' && reason) || 'No valid roof found'
+      if (job_id) {
+        await updateProposalJobProgress(supabase, {
+          jobId: job_id,
+          businessName: business_name || 'Filtered prospect',
+          status: 'failed',
+          step: message,
+          progressPercent: 100,
+          errorMessage: message,
+        })
+      }
+      return NextResponse.json({ skipped: true, reason: message }, { status: 200 })
+    }
 
     if (!business_name) {
       return NextResponse.json({ error: 'business_name is required' }, { status: 400 })
@@ -49,13 +69,19 @@ export async function POST(request: Request) {
       jobId: job_id,
       businessName: business_name,
       status: 'running',
-      step: 'Publishing proposal page',
+      step: 'Publishing proposal',
       progressPercent: 95,
     })
 
     // AI-Powered Estimation if roof_sqft is provided
     let savings = body.estimated_savings
     let payback = body.estimated_payback
+
+    if (solar_model && typeof solar_model === 'object') {
+      const model = solar_model as Record<string, unknown>
+      if (savings == null && typeof model.yearlySavings === 'number') savings = model.yearlySavings
+      if (payback == null && typeof model.estimatedPayback === 'number') payback = model.estimatedPayback
+    }
 
     if (roof_sqft && !savings) {
       const estimation = SolarUtils.calculateEstimation(roof_sqft, utility_rate || 0.12)

@@ -54,6 +54,7 @@ function formatTime(value: string) {
   return new Intl.DateTimeFormat('en-US', {
     hour: 'numeric',
     minute: '2-digit',
+    second: '2-digit',
   }).format(new Date(value))
 }
 
@@ -62,14 +63,13 @@ function sortJobs(jobs: ProposalJob[]) {
 }
 
 function sortEvents(events: ProposalJobEvent[]) {
-  return [...events].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 100)
+  return [...events].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 200)
 }
 
 function getJobEvents(events: ProposalJobEvent[], jobId: string) {
   return events
     .filter((event) => event.job_id === jobId)
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-    .slice(-8)
 }
 
 export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQueueProps) {
@@ -94,7 +94,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
           .from('proposal_job_events')
           .select('id, job_id, business_name, status, step, progress_percent, proposal_url, error_message, created_at')
           .order('created_at', { ascending: false })
-          .limit(100),
+          .limit(200),
       ])
 
       if (!mounted) return
@@ -104,7 +104,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
     }
 
     refresh()
-    const poller = window.setInterval(refresh, 5000)
+    const poller = window.setInterval(refresh, 4000)
 
     const jobsChannel = supabase
       .channel('admin-proposal-jobs')
@@ -159,9 +159,9 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
         <div>
           <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.26em] text-cyan-200/70">
             <Activity className="h-4 w-4" />
-            n8n worker telemetry
+            Live job stream
           </div>
-          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">Live production queue</h2>
+          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">n8n production queue</h2>
         </div>
         <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">
           <span>{activeCount} active</span>
@@ -169,135 +169,86 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
             <RefreshCcw className="h-3.5 w-3.5" />
             {lastSyncedAt ? formatTime(lastSyncedAt.toISOString()) : 'Syncing'}
           </span>
+          {latestEvent ? (
+            <span className="inline-flex items-center gap-1.5 text-cyan-100">
+              Latest {formatTime(latestEvent.created_at)}
+            </span>
+          ) : null}
         </div>
       </div>
 
-      <div className="grid gap-4 2xl:grid-cols-[minmax(380px,0.95fr)_minmax(520px,1.05fr)]">
-        <div className="min-w-0 overflow-hidden border border-white/10 bg-[#090d12]">
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-500">Live job window</div>
-            {latestEvent ? (
-              <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-cyan-100">
-                Latest {formatTime(latestEvent.created_at)}
-              </div>
-            ) : null}
+      <div className="overflow-hidden border border-white/10 bg-[#090d12]">
+        {jobs.length === 0 ? (
+          <div className="border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-slate-500">
+            No proposal jobs yet. Create one proposal or bulk queue prospects and they will appear here.
           </div>
-          {jobs.length === 0 ? (
-            <div className="border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-slate-500">
-              No proposal jobs yet. Create one proposal or bulk queue prospects and they will appear here.
-            </div>
-          ) : (
-            <div className="max-h-[660px] divide-y divide-white/10 overflow-y-auto">
-              {jobs.slice(0, 10).map((job) => {
-                const jobEvents = getJobEvents(events, job.id)
-
-                return (
-                  <div key={job.id} className="p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {statusIcon(job.status)}
-                      <span className="truncate font-semibold text-white">{job.business_name}</span>
-                      <span className={`border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.18em] ${statusClass(job.status)}`}>
-                        {job.status}
-                      </span>
+        ) : (
+          <div className="max-h-[720px] divide-y divide-white/10 overflow-y-auto">
+            {jobs.map((job) => {
+              const jobEvents = getJobEvents(events, job.id)
+              return (
+                <div key={job.id} className="p-4 lg:p-5">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {statusIcon(job.status)}
+                        <span className="truncate font-semibold text-white">{job.business_name}</span>
+                        <span className={`border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.18em] ${statusClass(job.status)}`}>
+                          {job.status}
+                        </span>
+                      </div>
+                      <div className="mt-1 truncate text-xs text-slate-500">{job.address}</div>
                     </div>
-                    <div className="mt-1 truncate text-xs text-slate-500">{job.address}</div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                        {formatTime(job.updated_at || job.created_at)}
+                      </span>
+                      {job.proposal_url ? (
+                        <Link
+                          href={job.proposal_url}
+                          target="_blank"
+                          className="inline-flex items-center gap-1.5 border border-emerald-300/30 bg-emerald-300/10 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-100 transition-colors hover:bg-emerald-300/20"
+                          title="Open proposal"
+                        >
+                          View proposal
+                          <ExternalLink className="h-3 w-3" />
+                        </Link>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
-                      {formatTime(job.updated_at || job.created_at)}
-                    </span>
-                    {job.proposal_url ? (
-                      <Link
-                        href={job.proposal_url}
-                        target="_blank"
-                        className="inline-flex h-9 w-9 items-center justify-center border border-white/10 text-slate-300 transition-colors hover:border-cyan-200/30 hover:text-cyan-100"
-                        title="Open proposal"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </Link>
-                    ) : null}
-                  </div>
-                </div>
 
-                    <div className="mt-4 border-l border-white/10 pl-4">
-                      {jobEvents.length === 0 ? (
-                        <div className="py-1 text-xs text-slate-500">{job.error_message || job.current_step}</div>
-                      ) : (
-                        <div className="space-y-3">
-                          {jobEvents.map((event) => (
-                            <div key={event.id} className="grid grid-cols-[4.5rem_1fr_auto] gap-3 text-xs">
+                  <div className="mt-4 border-l border-white/10 pl-4">
+                    {jobEvents.length === 0 ? (
+                      <div className="py-1 text-xs text-slate-500">{job.error_message || job.current_step || 'Awaiting first event'}</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {jobEvents.map((event) => {
+                          const tone = event.status === 'failed'
+                            ? 'text-red-100'
+                            : event.status === 'completed'
+                              ? 'text-emerald-100'
+                              : event.status === 'running'
+                                ? 'text-cyan-100'
+                                : 'text-slate-300'
+                          return (
+                            <div key={event.id} className="grid grid-cols-[5.5rem_1fr] gap-3 text-xs">
                               <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-600">
                                 {formatTime(event.created_at)}
                               </div>
-                              <div className={event.status === 'failed' ? 'text-red-100' : event.status === 'completed' ? 'text-emerald-100' : 'text-slate-300'}>
+                              <div className={tone}>
                                 {event.error_message || event.step}
                               </div>
-                              <div className="font-mono text-[10px] text-slate-500">{event.progress_percent}%</div>
                             </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="min-w-0 overflow-hidden border border-white/10 bg-[#090d12]">
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-500">
-              n8n event stream
-            </div>
-            <div className="font-mono text-[9px] uppercase tracking-[0.18em] text-slate-600">
-              Last {events.length}
-            </div>
+                </div>
+              )
+            })}
           </div>
-          <div className="max-h-[660px] overflow-y-auto">
-            <table className="w-full min-w-[560px] text-left text-sm">
-              <thead className="sticky top-0 bg-[#090d12]">
-                <tr className="border-b border-white/10 font-mono text-[9px] uppercase tracking-[0.2em] text-slate-600">
-                  <th className="px-4 py-3">Time</th>
-                  <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">n8n step</th>
-                  <th className="px-4 py-3 text-right">Pct</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/10">
-                {events.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-4 py-8 text-center text-sm text-slate-500">
-                      No workflow events yet. n8n progress updates will land here.
-                    </td>
-                  </tr>
-                ) : (
-                  events.map((event) => (
-                    <tr key={event.id} className="hover:bg-white/[0.025]">
-                      <td className="px-4 py-3 align-top font-mono text-[10px] uppercase tracking-[0.14em] text-slate-500">
-                        {formatTime(event.created_at)}
-                      </td>
-                      <td className="max-w-[13rem] px-4 py-3 align-top">
-                        <div className="truncate font-medium text-white">{event.business_name}</div>
-                        <div className={`mt-1 inline-flex border px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.14em] ${statusClass(event.status)}`}>
-                          {event.status}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 align-top text-xs text-slate-400">
-                        {event.error_message || event.step}
-                      </td>
-                      <td className="px-4 py-3 align-top text-right font-mono text-xs text-cyan-100">
-                        {event.progress_percent}%
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        )}
       </div>
     </section>
   )

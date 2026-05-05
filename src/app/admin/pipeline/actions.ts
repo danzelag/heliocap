@@ -220,6 +220,22 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
   }
 }
 
+export async function deleteProspectAction(id: string) {
+  if (!id) return { success: false, error: 'Missing prospect ID' }
+
+  const supabase = await createAdminClient()
+  const { error } = await supabase
+    .from('prospects')
+    .delete()
+    .eq('id', id)
+
+  if (error) return { success: false, error: error.message }
+
+  revalidatePath('/admin')
+  revalidatePath('/admin/pipeline')
+  return { success: true }
+}
+
 export async function triggerProspectEnrichmentAction(id: string) {
   if (!id) return { success: false, error: 'Missing prospect ID' }
 

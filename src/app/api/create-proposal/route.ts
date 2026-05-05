@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
         lng,
         slug,
         status: 'queued',
-        current_step: 'Queued in Helio Cap',
+        current_step: 'Request received',
         progress_percent: 2,
         created_by: user.id,
       }])
@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
       jobId: job.id,
       businessName: businessName,
       status: 'queued',
-      step: 'Queued in Helio Cap',
+      step: 'Request received',
       progressPercent: 2,
     })
 
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
       .from('proposal_jobs')
       .update({
         status: 'running',
-        current_step: 'n8n workflow started',
+        current_step: 'Workflow started',
         progress_percent: 8,
         receipt,
       })
@@ -142,7 +142,7 @@ export async function POST(request: NextRequest) {
       jobId: job.id,
       businessName: businessName,
       status: 'running',
-      step: 'n8n workflow started',
+      step: 'Workflow started',
       progressPercent: 8,
     })
 

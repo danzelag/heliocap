@@ -19,9 +19,18 @@ The result should look like a professional solar installation render used in a c
 
 type GenerateProposalImageBody = {
   roof_image_url?: string
+  render_image_url?: string
   business_name?: string
   address?: string
+  slug?: string
+  lat?: number
+  lng?: number
+  panel_count?: number
+  system_kw?: number
+  solar_model?: Record<string, unknown> | null
   job_id?: string
+  filtered?: boolean
+  reason?: string
 }
 
 type ImageAsset = {
@@ -52,22 +61,47 @@ type GeminiGenerateContentResponse = {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as GenerateProposalImageBody
-    const { roof_image_url, business_name, address, job_id } = body
-
-    if (!roof_image_url) {
-      return NextResponse.json({ error: 'roof_image_url is required' }, { status: 400 })
-    }
+    const { roof_image_url, business_name, address, job_id, filtered, reason } = body
 
     const supabase = await createAdminClient()
+
+    if (filtered) {
+      const message = reason || 'No valid roof found for this prospect'
+      await updateProposalJobProgress(supabase, {
+        jobId: job_id,
+        businessName: business_name,
+        status: 'failed',
+        step: message,
+        progressPercent: 100,
+        errorMessage: message,
+      })
+      return NextResponse.json({ skipped: true, reason: message })
+    }
+
+    if (!roof_image_url) {
+      const message = 'No roof image available — proposal cannot be rendered'
+      if (job_id) {
+        await updateProposalJobProgress(supabase, {
+          jobId: job_id,
+          businessName: business_name,
+          status: 'failed',
+          step: message,
+          progressPercent: 100,
+          errorMessage: message,
+        })
+      }
+      return NextResponse.json({ error: message }, { status: 400 })
+    }
+
     await updateProposalJobProgress(supabase, {
       jobId: job_id,
       businessName: business_name,
+      step: 'Generating proposal image',
       status: 'running',
-      step: 'Creating proposal preview image',
       progressPercent: 70,
     })
 
-    const slug = SolarUtils.generateSlug(business_name || address || crypto.randomUUID())
+    const slug = body.slug || SolarUtils.generateSlug(business_name || address || crypto.randomUUID())
     const roofAsset = await fetchImageAsset(roof_image_url)
 
     try {
@@ -75,7 +109,7 @@ export async function POST(request: NextRequest) {
         jobId: job_id,
         businessName: business_name,
         status: 'running',
-        step: 'Generating AI solar installation render',
+        step: 'Generating proposal image',
         progressPercent: 76,
       })
 
@@ -98,7 +132,7 @@ export async function POST(request: NextRequest) {
         jobId: job_id,
         businessName: business_name,
         status: 'running',
-        step: 'AI proposal render ready',
+        step: 'Proposal image complete',
         progressPercent: 85,
       })
 
@@ -111,7 +145,7 @@ export async function POST(request: NextRequest) {
         jobId: job_id,
         businessName: business_name,
         status: 'running',
-        step: 'Gemini render failed; using roof image',
+        step: 'AI render unavailable, using satellite roof image',
         progressPercent: 85,
       })
 
