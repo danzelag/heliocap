@@ -8,18 +8,17 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <claude-mem-context>
 # Memory Context
 
-# [solar-lead-gen] recent context, 2026-05-04 2:30pm EDT
+# [solar-lead-gen] recent context, 2026-05-06 12:16pm EDT
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
 Fetch details: get_observations([IDs]) | Search: mem-search skill
 
-Stats: 50 obs (17,556t read) | 492,921t work | 96% savings
+Stats: 50 obs (17,983t read) | 671,630t work | 97% savings
 
 ### Apr 29, 2026
 S83 User asked what the /design-handoff skill does — skill capability explanation provided (Apr 29 at 3:48 PM)
 S66 Add Google Places Autocomplete to lead creator/editor with automatic satellite roof image generation on address selection (Apr 29 at 3:48 PM)
-S67 Add Google Places Autocomplete + auto-satellite roof image generation to lead creator/editor, then deploy to Vercel (Apr 29 at 3:48 PM)
 ### Apr 30, 2026
 S84 User asked about "Claude Design" tool — available design skills and options explained (Apr 30 at 7:55 PM)
 S82 User asked what the /design-handoff skill does — skill capability explanation provided (Apr 30 at 7:55 PM)
@@ -27,40 +26,9 @@ S85 Fix heliocap Vercel build failure caused by TypeScript errors in Next.js 16.
 ### May 1, 2026
 S86 Fix proposal page image rendering (cropped/stretched SVG) + deploy to Vercel via git push or CLI (May 1 at 12:14 PM)
 ### May 3, 2026
-S87 Fix proposal page image rendering (aspect-ratio/object-fit bug) and deploy to Vercel via git push or Vercel CLI (May 3 at 2:06 AM)
-233 9:46a 🔴 ProposalRoofRender overlay fix committed and pushed to production
-245 10:34a ⚖️ Rasterize SVG render to WebP/JPG preview to fix slow proposal page performance
-246 10:35a 🔵 No image processing library available — sharp/canvas/resvg not in package.json
-247 " 🔵 SVG render embeds satellite image as base64 data URI — already self-contained, not a separate overlay
-248 " 🔵 ProposalRoofRender reverted to single-image logic — overlay patch from earlier session not present
-249 " 🔵 Proposal page passes render_image_url directly to ProposalRoofRender — no render_preview_url field exists yet
-250 " 🔵 sharp already installed — `npm install sharp` was a no-op
-251 " 🔵 src/app/admin/leads/[id]/actions.ts cannot be read via unquoted glob in zsh
-252 10:36a 🔵 sharp ^0.34.5 already in package.json — rasterization can proceed immediately
-253 " 🟣 Added `buildRasterRenderPreview` to openclaw-google.ts — SVG-to-WebP rasterization helper
-254 " 🟣 /api/generate-roof-image now rasterizes SVG and returns render_preview_url
-255 10:37a 🟣 /api/leads accepts and stores render_preview_url; auto-generates WebP preview when building from lat/lng
-256 " 🟣 Lead interface gains render_preview_url field in lead.service.ts
-257 " 🟣 ProposalRoofRender prioritizes render_preview_url over SVG render for hero display
-258 " 🟣 Proposal page passes render_preview_url to ProposalRoofRender and uses it for OpenGraph
-259 " 🟣 Migration 20240503010000 adds render_preview_url TEXT column to leads table
+S87 Fix proposal page image rendering (aspect-ratio/object-fit bug) and deploy to Vercel via git push or Vercel CLI (May 3 at 2:03 AM)
+S95 Migrate /api/generate-proposal-image to use Gemini AI image generation with a single GOOGLE_MAPS_API_KEY (May 3 at 2:06 AM)
 ### May 4, 2026
-261 12:15p 🟣 Proposal Job Events Table with Realtime Progress Tracking
-262 " 🔵 generate-roof-image API Route Architecture
-263 12:16p 🔵 generate-proposal-image API Route Architecture
-264 " 🔵 ProposalJobsQueue Already Has Realtime + Polling Wiring
-265 " 🟣 updateProposalJobProgress Helper Added to proposal-job-events.ts
-266 " 🔴 generate-roof-image Route Now Emits Step Progress Events
-267 12:17p 🔴 Full Pipeline Progress Instrumentation Across All n8n API Routes
-268 " ✅ ProposalJobsQueue Events Table Layout Improved for Wide Screens
-269 " 🔴 Build Passes Clean After Progress Instrumentation; proposalUrl Removed from 85% Event
-270 12:18p 🟣 Proposal Queue Progress Sync Shipped to Production
-271 12:24p 🔵 Redundant Job Tracking Tables Identified in Proposal System
-272 2:06p 🟣 Live Production Queue with Real-Time n8n Step Visibility
-273 " 🔵 Live Production Queue Architecture — Full Stack Inventory
-274 " 🔵 Complete Proposal Job Pipeline — Full n8n → Supabase → UI Data Flow Mapped
-275 2:07p 🔴 n8n Webhook Update Endpoint Made Flexible for Multiple Field Name Conventions
-276 " 🟣 ProposalJobsQueue Redesigned — Per-Job Step Timeline Replaces Progress Bar
 277 2:08p 🔵 ProposalJobsQueue JSX Redesign Patch Failed — Only Data Layer Changes Applied
 278 " 🟣 ProposalJobsQueue JSX Layout Redesign Successfully Applied
 279 " 🟣 Live Queue UI Fully Shipped — JSX Confirmed and Server-Side Limits Updated
@@ -79,10 +47,41 @@ S87 Fix proposal page image rendering (aspect-ratio/object-fit bug) and deploy t
 292 " 🔄 GenerateProposalImageBody Type Cleaned Up — render_image_url and solar_model Removed
 293 " 🔵 generate-proposal-image Refactor Verified Clean — Build Passes with No Errors
 294 " 🔵 git diff Reveals Original Route Required render_image_url and Used Parallel Fetch
+S101 HELIOCAP solar-lead-gen 10-point UX/API overhaul — build, commit, and push to GitHub (May 4 at 2:30 PM)
+295 2:30p 🔵 Broader Session Changeset — 7 Files Modified Across Admin UI and API Routes
+296 " 🟣 Gemini Proposal Render Pipeline Committed and Pushed to main
 ### May 5, 2026
-295 12:58a 🔴 Fixed Gemini model name (gemini-2.0-flash) and API key retrieval in /api/generate-proposal-image
-296 " 🟣 Added source logging (ai_generated vs fallback_roof_image) to /api/generate-proposal-image
-297 " 🔵 Production Build Failing with TurbopackInternalError (os error 1) in globals.css
+303 12:17a 🔵 HELIOCAP Solar Lead Gen — Project Structure Mapped
+304 12:18a 🔵 ProposalRoofRender Has Wrong Image Priority Order
+305 " 🔵 Proposal Page Has Redundant Solar Layout Preview Card
+306 " 🔵 ProposalJobsQueue Has Two Side-by-Side Panels and Exposes Progress Percent
+307 " 🔵 Progress Stuck at 2%/8% — Root Cause Found in actions.ts
+308 " 🔵 ProspectPipelineTable Has No Delete Action
+309 " 🔵 generate-proposal-image API Accepts Minimal Payload — Mismatched with n8n Requirements
+310 " 🔵 Lead Service Fetches Published Proposals Only — Admin Fallback Available
+311 12:19a 🔴 ProposalRoofRender Image Priority Fixed — AI Render Now Shown First
+312 " 🔴 Removed Duplicate Solar Layout Preview Card from Proposal Hero
+313 " 🔵 n8n Job Update API at /api/proposal-jobs/update — Flexible Payload Schema
+314 " 🟣 ProposalJobsQueue Unified into Single Live Job Stream Panel
+315 12:20a 🟣 Prospect Delete Implemented — Server Action + Optimistic UI
+316 " 🟣 Delete Button Wired into ProspectPipelineTable Action Column
+317 " 🔴 generate-proposal-image API Payload Type Expanded to Match n8n Workflow Fields
+318 " 🟣 generate-proposal-image Now Handles n8n Filtered Items and Missing Roof Images Gracefully
+319 12:21a ✅ Event Step Labels Standardized Across Proposal Pipeline for Live Stream Readability
+S102 HELIOCAP UX/API overhaul: commit bulk delete, then add queue-clearing and collapsible queue UI (May 5 at 12:28 AM)
+320 6:26p 🔴 Gemini Image Generation Model Updated in /api/generate-proposal-image
+321 " 🔵 generate-proposal-image Route Structure Confirmed Before Fix
+322 " 🔴 Gemini Model Constant Updated: gemini-2.0-flash → gemini-2.5-flash-image
+323 " ✅ solar-lead-gen Production Build Passes After Gemini Model Fix
+324 " 🔴 Gemini Model Fix Committed to main Branch
+325 6:27p 🔴 Gemini Model Fix Pushed to GitHub — heliocap main Branch
+326 6:41p ✅ Planned: Gemini image model fix, proposal image quality overhaul, and dashboard navigation performance
+327 " 🔵 Solar lead-gen project structure mapped: two app directories, key files identified
+328 6:42p 🔵 ProposalJobsQueue uses both Supabase Realtime + 4-second polling; static map currently generates square 1280×1280 images
+329 " 🔵 Server actions use revalidatePath for cache busting; n8n webhook integration confirmed in pipeline actions
+330 6:43p 🔵 next.config.ts is effectively empty — no custom image domains, rewrites, or experimental flags configured
+331 " 🔵 generate-proposal-image already uses gemini-2.5-flash-image; image quality fix must target generate-roof-image static map dimensions
+332 6:49p 🟣 Live Production Queue UI with Real-Time n8n Step Tracking
 
-Access 493k tokens of past work via get_observations([IDs]) or mem-search skill.
+Access 672k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>

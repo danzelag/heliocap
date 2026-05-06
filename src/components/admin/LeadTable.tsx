@@ -116,9 +116,9 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
 
   useEffect(() => {
     let mounted = true
+    const supabase = createClient()
 
     const refreshLeads = async () => {
-      const supabase = createClient()
       const { data } = await supabase
         .from('leads')
         .select('*')
@@ -131,9 +131,43 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
     }
 
     refreshLeads()
+    const poller = window.setInterval(refreshLeads, 7000)
+    const channel = supabase
+      .channel('admin-leads-live')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'leads',
+        },
+        (payload) => {
+          if (!mounted) return
+
+          const deletedId = (payload.old as Pick<Lead, 'id'> | null)?.id
+          if (payload.eventType === 'DELETE' && deletedId) {
+            setLeads((prev) => prev.filter((lead) => lead.id !== deletedId))
+            setSelectedIds((prev) => prev.filter((id) => id !== deletedId))
+            return
+          }
+
+          const nextLead = payload.new as Lead | null
+          if (!nextLead) return
+
+          setLeads((prev) => {
+            const existing = prev.filter((lead) => lead.id !== nextLead.id)
+            return [nextLead, ...existing].sort((a, b) => (
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            ))
+          })
+        },
+      )
+      .subscribe()
 
     return () => {
       mounted = false
+      window.clearInterval(poller)
+      supabase.removeChannel(channel)
     }
   }, [])
 

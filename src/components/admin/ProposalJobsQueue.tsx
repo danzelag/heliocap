@@ -203,7 +203,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
   }, [])
 
   return (
-    <section className="border border-white/10 bg-[#0b1016]/90 p-5 lg:p-6">
+    <section className={`self-start border border-white/10 bg-[#0b1016]/90 transition-all ${collapsed ? 'p-3 lg:p-4' : 'p-5 lg:p-6'}`}>
       <div className={`flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between ${collapsed ? '' : 'mb-5 border-b border-white/10 pb-4'}`}>
         <button
           type="button"
@@ -214,9 +214,9 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
           <div>
             <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.26em] text-cyan-200/70">
               <Activity className="h-3.5 w-3.5" />
-              Live job stream
+              Live proposal activity
             </div>
-            <h2 className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-white">n8n production queue</h2>
+            <h2 className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-white">Proposal Build Monitor</h2>
           </div>
         </button>
         <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">

@@ -76,9 +76,9 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
 
   useEffect(() => {
     let mounted = true
+    const supabase = createClient()
 
     const refreshProspects = async () => {
-      const supabase = createClient()
       const { data } = await supabase
         .from('prospects')
         .select('*')
@@ -91,9 +91,43 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
     }
 
     refreshProspects()
+    const poller = window.setInterval(refreshProspects, 7000)
+    const channel = supabase
+      .channel('admin-prospects-live')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'prospects',
+        },
+        (payload) => {
+          if (!mounted) return
+
+          const deletedId = (payload.old as Pick<Prospect, 'id'> | null)?.id
+          if (payload.eventType === 'DELETE' && deletedId) {
+            setProspects((prev) => prev.filter((prospect) => prospect.id !== deletedId))
+            setSelectedIds((prev) => prev.filter((id) => id !== deletedId))
+            return
+          }
+
+          const nextProspect = payload.new as Prospect | null
+          if (!nextProspect) return
+
+          setProspects((prev) => {
+            const existing = prev.filter((prospect) => prospect.id !== nextProspect.id)
+            return [nextProspect, ...existing].sort((a, b) => (
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            ))
+          })
+        },
+      )
+      .subscribe()
 
     return () => {
       mounted = false
+      window.clearInterval(poller)
+      supabase.removeChannel(channel)
     }
   }, [])
 
@@ -143,7 +177,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
         if (alreadyLive) {
           setMessage(`Already live at ${url || `/proposal/${slug}`}`)
         } else {
-          setMessage(`Proposal job queued for ${slug}. Watch the live production queue for completion.`)
+          setMessage(`Proposal job queued for ${slug}. Watch the proposal build monitor for completion.`)
         }
       }
       setActiveId(null)
@@ -199,7 +233,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
         const queued = 'queued' in result ? result.queued : 0
         const failed = 'failed' in result ? result.failed : 0
         const failedText = failed ? ` ${failed} failed or missing.` : ''
-        setMessage(`${queued} proposal job${queued === 1 ? '' : 's'} queued.${failedText} Watch the live production queue for completion.`)
+        setMessage(`${queued} proposal job${queued === 1 ? '' : 's'} queued.${failedText} Watch the proposal build monitor for completion.`)
       }
     })
   }
