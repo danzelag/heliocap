@@ -9,21 +9,20 @@ export class SolarUtils {
    * Calculates potential solar savings and ROI based on roof area.
    */
   static calculateEstimation(roofSqft: number, rate: number = 0.18) {
-    // 1. System Size (kW): Avg 1 panel (400W) per 25 sqft
-    const systemSizeKW = (roofSqft / 25) * 0.4;
+    const boundedRoofSqft = Math.min(Math.max(roofSqft || 0, 0), 180000);
+    const usableRoofSqft = boundedRoofSqft * 0.42;
+    const panelCount = Math.min(Math.floor(usableRoofSqft / 37), 3600);
+    const systemSizeKW = panelCount * 0.4;
 
-    // 2. Annual Production (kWh): GTA ~1,300 peak sun-hours/year
-    const annualProductionKWh = systemSizeKW * 1300;
+    // GTA commercial rooftops usually land near 1,100-1,250 kWh/kW after real-world losses.
+    const annualProductionKWh = systemSizeKW * 1180;
     
-    // 3. Annual Savings ($): Production * Utility Rate
-    const annualSavings = annualProductionKWh * rate;
+    const annualSavings = Math.min(annualProductionKWh * rate, 375000);
     
-    // 4. Payback Period (Years): Estimated $2.50/watt install cost
-    // We apply the 30% Investment Tax Credit (ITC) as it's standard for commercial solar
-    const grossCost = systemSizeKW * 1000 * 2.5;
+    const grossCost = systemSizeKW * 1000 * 1.8;
     const itcDiscount = grossCost * 0.30;
     const netCost = grossCost - itcDiscount;
-    const paybackYears = netCost / annualSavings;
+    const paybackYears = annualSavings > 0 ? netCost / annualSavings : 0;
 
     return {
       savings: Math.round(annualSavings),

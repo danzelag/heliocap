@@ -11,15 +11,17 @@ const PREVIEW_HEIGHT = 720
 const SOLAR_RENDER_PROMPT = `Create a realistic wide aerial view of a commercial building with a rooftop solar installation.
 
 Use the provided satellite image as the base.
-Upscale and enhance the image quality.
-Sharpen the roof and building details while keeping the property recognizable.
-Add dark blue/black solar panels aligned cleanly and evenly across usable roof areas.
-Panels should be grouped in professional rows, not scattered dots.
-Avoid edges, HVAC units, roads, and parking lots.
+Upscale and enhance the entire image quality.
+Sharpen the roof, building details, roads, shadows, and surrounding site while keeping the property recognizable.
+Add dark blue/black solar panels aligned cleanly and evenly across realistic usable roof areas.
+Panels should be grouped in professional rows, with maintenance corridors and setbacks.
+Avoid edges, HVAC units, roads, parking lots, trees, grass, and irregular unusable areas.
+Panels must have subtle depth, shadows, reflection, and perspective matching.
 Keep the building structure unchanged.
 Do not add text, labels, people, vehicles, logos, or UI elements.
 Use natural lighting and a premium commercial proposal look.
-Final image should be a polished 16:9 rooftop solar concept render.`
+Avoid pasted-on/flat/dotted "solar acne."
+Final image should look like a polished 16:9 commercial solar development render, not a Google Maps screenshot.`
 
 type GenerateProposalImageBody = {
   roof_image_url?: string

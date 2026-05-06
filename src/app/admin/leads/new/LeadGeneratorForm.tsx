@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase'
 
 const inputClass = 'admin-input px-3 py-2.5 text-sm placeholder:text-slate-400'
-const labelClass = 'text-xs font-semibold text-slate-600'
+const labelClass = 'text-xs font-semibold text-stone-400'
 
 type CreateProposalResponse = {
   success?: boolean
@@ -176,27 +176,27 @@ export default function LeadGeneratorForm() {
     const isFailed = job.status === 'failed'
 
     return (
-      <div className={`admin-panel p-5 lg:p-6 ${isFailed ? 'border-red-200' : isComplete ? 'border-emerald-200' : 'border-sky-200'}`}>
+      <div className={`admin-panel p-5 lg:p-6 ${isFailed ? 'border-red-900/60' : isComplete ? 'border-emerald-900/60' : 'border-sky-900/60'}`}>
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <div className={`mb-4 grid h-12 w-12 place-items-center rounded-lg border ${isFailed ? 'border-red-200 bg-red-50' : isComplete ? 'border-emerald-200 bg-emerald-50' : 'border-sky-200 bg-sky-50'}`}>
+            <div className={`mb-4 grid h-12 w-12 place-items-center rounded-lg border ${isFailed ? 'border-red-900/60 bg-red-950/25' : isComplete ? 'border-emerald-900/60 bg-emerald-950/25' : 'border-sky-900/60 bg-sky-950/25'}`}>
               {isFailed ? (
-                <TriangleAlert className="h-6 w-6 text-red-600" />
+                <TriangleAlert className="h-6 w-6 text-red-300" />
               ) : isComplete ? (
-                <Check className="h-6 w-6 text-emerald-600" />
+                <Check className="h-6 w-6 text-emerald-300" />
               ) : (
-                <RadioTower className="h-6 w-6 text-sky-600" />
+                <RadioTower className="h-6 w-6 text-sky-300" />
               )}
             </div>
             <div className="admin-eyebrow">Proposal job</div>
-            <h2 className="mt-1 text-2xl font-semibold text-slate-950">
+            <h2 className="mt-1 text-2xl font-semibold text-stone-50">
               {isFailed ? 'Proposal failed' : isComplete ? 'Proposal created' : 'Proposal generating'}
             </h2>
             <p className="mt-2 text-sm text-slate-500">
               {isFailed ? job.error_message || 'The n8n workflow reported a failure.' : job.current_step}
             </p>
           </div>
-          <Link href="/admin" prefetch className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50">
+          <Link href="/admin" prefetch className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-stone-700/70 bg-stone-950/70 px-4 text-sm font-semibold text-stone-300 transition-colors hover:bg-stone-900/60">
             <LayoutDashboard className="h-3.5 w-3.5" />
             Dashboard
           </Link>
@@ -207,9 +207,9 @@ export default function LeadGeneratorForm() {
             <span>{job.current_step}</span>
             <span>{job.progress_percent}%</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+          <div className="h-2 overflow-hidden rounded-full bg-stone-800">
             <div
-              className={`h-full transition-all duration-500 ${isFailed ? 'bg-red-500' : isComplete ? 'bg-emerald-500' : 'bg-sky-500'}`}
+              className={`h-full transition-all duration-500 ${isFailed ? 'bg-red-400' : isComplete ? 'bg-emerald-400' : 'bg-sky-400'}`}
               style={{ width: `${job.progress_percent}%` }}
             />
           </div>
@@ -221,9 +221,9 @@ export default function LeadGeneratorForm() {
         </div>
 
         {job.proposal_url && (
-          <div className="mt-5 flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <code className="min-w-0 flex-1 truncate font-mono text-xs text-slate-600">{job.proposal_url}</code>
-            <Button onClick={copyToClipboard} size="sm" className="rounded-lg bg-slate-950 text-white hover:bg-slate-800">
+          <div className="mt-5 flex items-center gap-2 rounded-lg border border-stone-700/70 bg-stone-900/60 p-3">
+            <code className="min-w-0 flex-1 truncate font-mono text-xs text-stone-400">{job.proposal_url}</code>
+            <Button onClick={copyToClipboard} size="sm" className="rounded-lg bg-amber-300 text-stone-950 hover:bg-amber-200">
               {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
               <span className="ml-2">{copied ? 'Copied' : 'Copy'}</span>
             </Button>
@@ -232,11 +232,11 @@ export default function LeadGeneratorForm() {
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {job.proposal_url ? (
-            <a href={job.proposal_url} target="_blank" className="flex h-11 items-center justify-center rounded-lg bg-slate-950 text-sm font-semibold text-white transition-colors hover:bg-slate-800">
+            <a href={job.proposal_url} target="_blank" className="flex h-11 items-center justify-center rounded-lg bg-amber-300 text-sm font-semibold text-stone-950 transition-colors hover:bg-amber-200">
               View live page
             </a>
           ) : (
-            <Link href="/admin" prefetch className="flex h-11 items-center justify-center rounded-lg bg-slate-950 text-sm font-semibold text-white transition-colors hover:bg-slate-800">
+            <Link href="/admin" prefetch className="flex h-11 items-center justify-center rounded-lg bg-amber-300 text-sm font-semibold text-stone-950 transition-colors hover:bg-amber-200">
               Check dashboard
             </Link>
           )}
@@ -246,7 +246,7 @@ export default function LeadGeneratorForm() {
               setJob(null)
               setErrorMessage(null)
             }}
-            className="h-11 rounded-lg border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            className="h-11 rounded-lg border-stone-700/70 bg-stone-950/70 text-stone-300 hover:bg-stone-900/60"
           >
             Create another
           </Button>
@@ -261,9 +261,9 @@ export default function LeadGeneratorForm() {
       <input type="hidden" name="lng" ref={lngRef} />
 
       <section className="admin-panel overflow-hidden">
-        <div className="border-b border-slate-200 px-4 py-3">
+        <div className="border-b border-stone-700/70 px-4 py-3">
           <div className="admin-eyebrow">Target</div>
-          <h2 className="mt-1 text-xl font-semibold text-slate-950">Business details</h2>
+          <h2 className="mt-1 text-xl font-semibold text-stone-50">Business details</h2>
         </div>
 
         <div className="space-y-5 p-4">
@@ -287,7 +287,7 @@ export default function LeadGeneratorForm() {
       </section>
 
       {errorMessage && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="flex items-center gap-2 rounded-lg border border-red-900/60 bg-red-950/25 px-4 py-3 text-sm text-red-300">
           <TriangleAlert className="h-4 w-4" />
           {errorMessage}
         </div>
@@ -297,7 +297,7 @@ export default function LeadGeneratorForm() {
         <Button
           type="submit"
           disabled={loading}
-          className="h-12 w-full rounded-lg bg-slate-950 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+          className="h-12 w-full rounded-lg bg-amber-300 text-sm font-semibold text-stone-950 hover:bg-amber-200 disabled:opacity-50"
         >
           {loading ? <Loader2 className="mr-3 h-5 w-5 animate-spin" /> : <ChevronRight className="mr-3 h-5 w-5" />}
           {loading ? 'Creating' : 'Create proposal'}

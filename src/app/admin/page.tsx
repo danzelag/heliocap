@@ -76,8 +76,8 @@ export default async function AdminDashboard() {
       <nav className="admin-nav sticky top-0 z-20 px-5 py-3 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
-            <div className="grid h-10 w-10 place-items-center rounded-lg border border-emerald-200 bg-emerald-50">
-              <Sun className="h-5 w-5 text-emerald-700" />
+            <div className="grid h-10 w-10 place-items-center rounded-lg border border-emerald-900/60 bg-emerald-950/25">
+              <Sun className="h-5 w-5 text-emerald-300" />
             </div>
             <div>
               <div className="admin-eyebrow">Helio Cap</div>
@@ -86,22 +86,22 @@ export default async function AdminDashboard() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <div className="hidden rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 md:block">
+            <div className="hidden rounded-full border border-stone-700/70 bg-stone-950/70 px-3 py-2 text-sm text-slate-500 md:block">
               {user.email}
             </div>
             <Link href="/admin" prefetch>
-              <Button variant="outline" className="h-10 rounded-lg border-emerald-600 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">
+              <Button variant="outline" className="h-10 rounded-lg border-amber-300/70 bg-emerald-950/25 px-4 text-sm font-semibold text-emerald-300 hover:bg-emerald-950/40">
                 Proposals
               </Button>
             </Link>
             <Link href="/admin/pipeline" prefetch>
-              <Button variant="outline" className="h-10 rounded-lg border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+              <Button variant="outline" className="h-10 rounded-lg border-stone-700/70 bg-stone-950/70 px-4 text-sm font-semibold text-stone-300 hover:bg-stone-900/60">
                 <RadioTower className="mr-2 h-4 w-4" />
                 Prospects
               </Button>
             </Link>
             <Link href="/admin/leads/new" prefetch>
-              <Button className="h-10 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800">
+              <Button className="h-10 rounded-lg bg-amber-300 px-4 text-sm font-semibold text-stone-950 hover:bg-amber-200">
                 <Plus className="mr-2 h-4 w-4" />
                 New proposal
               </Button>
@@ -119,20 +119,20 @@ export default async function AdminDashboard() {
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <div className="admin-eyebrow">Status</div>
-                  <h2 className="mt-1 text-lg font-semibold text-slate-950">Pipeline</h2>
+                  <h2 className="mt-1 text-lg font-semibold text-stone-50">Pipeline</h2>
                 </div>
                 <ShieldCheck className="h-5 w-5 text-slate-400" />
               </div>
 
               <div className="space-y-2">
                 {workflow.map((step, index) => (
-                  <div key={step.label} className="grid grid-cols-[1.75rem_1fr_auto] items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                  <div key={step.label} className="grid grid-cols-[1.75rem_1fr_auto] items-center gap-2 rounded-lg border border-stone-700/70 bg-stone-900/60 p-2.5">
                     <div className="text-xs font-semibold text-slate-400">{String(index + 1).padStart(2, '0')}</div>
                     <div>
-                      <div className="text-xs font-semibold text-slate-600">{step.label}</div>
+                      <div className="text-xs font-semibold text-stone-400">{step.label}</div>
                       <div className="text-xs text-slate-500">{step.value}</div>
                     </div>
-                    <span className={`h-2 w-2 rounded-full ${step.active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                    <span className={`h-2 w-2 rounded-full ${step.active ? 'bg-emerald-400' : 'bg-stone-600'}`} />
                   </div>
                 ))}
               </div>
@@ -147,7 +147,7 @@ export default async function AdminDashboard() {
                       <span className="text-xs font-semibold text-slate-500">{item.label}</span>
                       <Icon className="h-3.5 w-3.5 text-slate-400" />
                     </div>
-                    <div className="num text-xl font-semibold text-slate-950">{item.value}</div>
+                    <div className="num text-xl font-semibold text-stone-50">{item.value}</div>
                   </div>
                 )
               })}

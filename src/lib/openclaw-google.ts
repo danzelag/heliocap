@@ -13,7 +13,15 @@ const PANEL_WATTS = 400
 const COMMERCIAL_COST_PER_WATT = 1.8
 const FEDERAL_ITC_RATE = 0.3
 const DEFAULT_UTILITY_RATE = 0.18 // Ontario all-in commercial rate (electricity + Global Adjustment + delivery)
-const DEPLOYABLE_PANEL_RATIO = 0.7
+const PANEL_AREA_SQFT = PANEL_WIDTH_METERS * PANEL_HEIGHT_METERS * 10.7639
+const COMMERCIAL_ROOF_UTILIZATION = 0.42
+const PANEL_LAYOUT_AREA_MULTIPLIER = 1.75
+const DEPLOYABLE_PANEL_RATIO = 0.46
+const FALLBACK_PANEL_COUNT = 420
+const MAX_REALISTIC_PANEL_COUNT = 3600
+const MAX_REALISTIC_SYSTEM_KW = 1440
+const REALISTIC_KWH_PER_KW = 1180
+const MAX_COMMERCIAL_YEARLY_SAVINGS = 375_000
 
 type GoogleLatLng = {
   latitude: number
@@ -60,6 +68,8 @@ export type SolarModel = {
   utilityRate: number
   usableRoofAreaSqft: number | null
   quality: 'google_solar' | 'fallback'
+  needsReview: boolean
+  reviewReasons: string[]
 }
 
 type UploadAssetArgs = {
@@ -115,9 +125,9 @@ export function selectStaticMapZoom(model: Pick<SolarModel, 'panelCount' | 'usab
   const panelCount = model?.panelCount || 0
   const usableRoofAreaSqft = model?.usableRoofAreaSqft || 0
 
-  if (panelCount > 650 || usableRoofAreaSqft > 90000) return 17
-  if (panelCount > 300 || usableRoofAreaSqft > 45000) return 18
-  if (panelCount > 90 || usableRoofAreaSqft > 16000) return 19
+  if (panelCount > 1800 || usableRoofAreaSqft > 120000) return 17
+  if (panelCount > 700 || usableRoofAreaSqft > 55000) return 18
+  if (panelCount > 150 || usableRoofAreaSqft > 14000) return 19
   return 20
 }
 
@@ -184,28 +194,40 @@ export async function fetchSolarInsights(lat: number, lng: number): Promise<Goog
 
 export function buildSolarModel(insights: GoogleSolarInsights | null, utilityRate = DEFAULT_UTILITY_RATE): SolarModel {
   const panels = insights?.solarPotential?.solarPanels || []
-  const fallbackMaxPanelCount = 700
-  const maxPanelCount = insights?.solarPotential?.maxArrayPanelsCount || panels.length || fallbackMaxPanelCount
-  const deployableCount = Math.floor((panels.length || maxPanelCount) * DEPLOYABLE_PANEL_RATIO)
+  const rawMaxPanelCount = insights?.solarPotential?.maxArrayPanelsCount || panels.length || FALLBACK_PANEL_COUNT
+  const rawArrayAreaSqft = insights?.solarPotential?.maxArrayAreaMeters2
+    ? insights.solarPotential.maxArrayAreaMeters2 * 10.7639
+    : null
+  const usableRoofAreaSqft = rawArrayAreaSqft
+    ? Math.round(rawArrayAreaSqft * COMMERCIAL_ROOF_UTILIZATION)
+    : null
+  const roofAreaPanelLimit = usableRoofAreaSqft
+    ? Math.max(24, Math.floor(usableRoofAreaSqft / (PANEL_AREA_SQFT * PANEL_LAYOUT_AREA_MULTIPLIER)))
+    : FALLBACK_PANEL_COUNT
+  const maxPanelCount = Math.min(rawMaxPanelCount, roofAreaPanelLimit, MAX_REALISTIC_PANEL_COUNT)
+  const deployableCount = Math.max(0, Math.floor(Math.min(panels.length || maxPanelCount, maxPanelCount) * DEPLOYABLE_PANEL_RATIO))
   const sortedPanels = [...panels].sort((a, b) => (b.yearlyEnergyDcKwh || 0) - (a.yearlyEnergyDcKwh || 0))
   const deployablePanels = sortedPanels.slice(0, deployableCount)
-  const yearlyKwhFromPanels = deployablePanels.reduce((sum, panel) => sum + (panel.yearlyEnergyDcKwh || 0), 0)
-  const panelCount = deployablePanels.length || deployableCount
+  const panelCount = Math.min(deployablePanels.length || deployableCount || maxPanelCount, maxPanelCount)
   const systemSizeKw = panelCount * (PANEL_WATTS / 1000)
-  const yearlyKwh = yearlyKwhFromPanels || Math.round(systemSizeKw * 1450)
-  const yearlySavings = Math.round(yearlyKwh * utilityRate)
+  const rawYearlyKwhFromPanels = deployablePanels.reduce((sum, panel) => sum + (panel.yearlyEnergyDcKwh || 0), 0)
+  const modeledYearlyKwh = Math.round(systemSizeKw * REALISTIC_KWH_PER_KW)
+  const yearlyKwh = Math.min(rawYearlyKwhFromPanels || modeledYearlyKwh, modeledYearlyKwh)
+  const yearlySavings = Math.min(Math.round(yearlyKwh * utilityRate), MAX_COMMERCIAL_YEARLY_SAVINGS)
   const savings25yr = Math.round(yearlySavings * 25 * 1.03)
   const systemCost = Math.round(systemSizeKw * 1000 * COMMERCIAL_COST_PER_WATT)
   const federalItc = Math.round(systemCost * FEDERAL_ITC_RATE)
   const netCost = systemCost - federalItc
   const estimatedPayback = yearlySavings > 0 ? Number((netCost / yearlySavings).toFixed(1)) : 0
-  const usableRoofAreaSqft = insights?.solarPotential?.maxArrayAreaMeters2
-    ? Math.round(insights.solarPotential.maxArrayAreaMeters2 * 10.7639)
-    : null
+  const reviewReasons = [
+    rawMaxPanelCount > MAX_REALISTIC_PANEL_COUNT ? 'google_panel_count_capped' : null,
+    systemSizeKw > MAX_REALISTIC_SYSTEM_KW ? 'system_size_at_commercial_cap' : null,
+    rawArrayAreaSqft && usableRoofAreaSqft ? 'roof_utilization_reduced_for_setbacks_hvac_walkways' : null,
+  ].filter((reason): reason is string => Boolean(reason))
 
   return {
     panelCount,
-    maxPanelCount,
+    maxPanelCount: rawMaxPanelCount,
     systemSizeKw: Number(systemSizeKw.toFixed(1)),
     yearlyKwh: Math.round(yearlyKwh),
     yearlySavings,
@@ -216,6 +238,8 @@ export function buildSolarModel(insights: GoogleSolarInsights | null, utilityRat
     utilityRate,
     usableRoofAreaSqft,
     quality: insights ? 'google_solar' : 'fallback',
+    needsReview: rawMaxPanelCount > MAX_REALISTIC_PANEL_COUNT || systemSizeKw > MAX_REALISTIC_SYSTEM_KW,
+    reviewReasons,
   }
 }
 
@@ -266,8 +290,6 @@ export function buildSolarOverlaySvg({
     })
     .join('')
 
-  const summary = `${model.panelCount.toLocaleString()} panels · ${model.systemSizeKw.toLocaleString()} kW · $${model.yearlySavings.toLocaleString()} annual savings`
-
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${STATIC_MAP_WIDTH}" height="${STATIC_MAP_HEIGHT}" viewBox="0 0 ${STATIC_MAP_WIDTH} ${STATIC_MAP_HEIGHT}">
   <defs>
@@ -280,11 +302,6 @@ export function buildSolarOverlaySvg({
   <image href="${escapeXml(satelliteUrl)}" x="0" y="0" width="${STATIC_MAP_WIDTH}" height="${STATIC_MAP_HEIGHT}" preserveAspectRatio="xMidYMid slice"/>
   <rect width="${STATIC_MAP_WIDTH}" height="${STATIC_MAP_HEIGHT}" fill="url(#hud)"/>
   <g>${panelRects}</g>
-  <g transform="translate(32 32)">
-    <rect width="560" height="82" fill="#020617" opacity="0.78" stroke="#94a3b8" stroke-opacity="0.28"/>
-    <text x="20" y="31" fill="#e2e8f0" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="15" letter-spacing="2">OPENCLAW SOLAR GEOMETRY</text>
-    <text x="20" y="60" fill="#67e8f9" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="18">${escapeXml(summary)}</text>
-  </g>
 </svg>`
 }
 

@@ -42,16 +42,16 @@ const JOBS_CACHE_KEY = 'admin:proposal-jobs'
 const EVENTS_CACHE_KEY = 'admin:proposal-job-events'
 
 function statusClass(status: ProposalJob['status']) {
-  if (status === 'completed') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
-  if (status === 'failed') return 'border-red-200 bg-red-50 text-red-700'
-  if (status === 'running') return 'border-sky-200 bg-sky-50 text-sky-800'
-  return 'border-slate-200 bg-slate-50 text-slate-600'
+  if (status === 'completed') return 'border-emerald-900/60 bg-emerald-950/25 text-emerald-300'
+  if (status === 'failed') return 'border-red-900/60 bg-red-950/25 text-red-300'
+  if (status === 'running') return 'border-sky-900/60 bg-sky-950/25 text-sky-300'
+  return 'border-stone-700/70 bg-stone-900/60 text-stone-400'
 }
 
 function statusIcon(status: ProposalJob['status']) {
-  if (status === 'completed') return <Check className="h-4 w-4 text-emerald-600" />
-  if (status === 'failed') return <TriangleAlert className="h-4 w-4 text-red-600" />
-  if (status === 'running') return <RadioTower className="h-4 w-4 text-sky-600" />
+  if (status === 'completed') return <Check className="h-4 w-4 text-emerald-300" />
+  if (status === 'failed') return <TriangleAlert className="h-4 w-4 text-red-300" />
+  if (status === 'running') return <RadioTower className="h-4 w-4 text-sky-300" />
   return <Loader2 className="h-4 w-4 text-slate-400" />
 }
 
@@ -195,7 +195,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
 
   return (
     <section className={`admin-panel self-start transition-all ${collapsed ? 'p-3 lg:p-4' : 'p-4 lg:p-5'}`}>
-      <div className={`flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between ${collapsed ? '' : 'mb-4 border-b border-slate-200 pb-4'}`}>
+      <div className={`flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between ${collapsed ? '' : 'mb-4 border-b border-stone-700/70 pb-4'}`}>
         <button
           type="button"
           onClick={() => setCollapsed((v) => !v)}
@@ -207,11 +207,11 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
               <Activity className="h-3.5 w-3.5" />
               Proposal jobs
             </div>
-            <h2 className="mt-1 text-xl font-semibold text-slate-950">Build queue</h2>
+            <h2 className="mt-1 text-xl font-semibold text-stone-50">Build queue</h2>
           </div>
         </button>
         <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
-          <span className={activeCount > 0 ? 'text-sky-700' : ''}>{activeCount} active</span>
+          <span className={activeCount > 0 ? 'text-sky-300' : ''}>{activeCount} active</span>
           <span className="inline-flex items-center gap-1.5">
             <RefreshCcw className="h-3.5 w-3.5" />
             {lastSyncedAt ? formatTime(lastSyncedAt.toISOString()) : 'Syncing'}
@@ -224,7 +224,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
               type="button"
               disabled={isClearing}
               onClick={handleClearQueue}
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-slate-500 transition-colors hover:border-red-200 hover:text-red-600 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-md border border-stone-700/70 bg-stone-950/70 px-2.5 py-1.5 text-slate-500 transition-colors hover:border-red-900/60 hover:text-red-300 disabled:opacity-50"
             >
               {isClearing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
               Clear {finishedCount}
@@ -234,16 +234,16 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
       </div>
 
       {clearError && (
-        <div className="mb-4 text-xs text-red-600">{clearError}</div>
+        <div className="mb-4 text-xs text-red-300">{clearError}</div>
       )}
 
-      {!collapsed && <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+      {!collapsed && <div className="overflow-hidden rounded-lg border border-stone-700/70 bg-stone-950/70">
         {jobs.length === 0 ? (
-          <div className="border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
+          <div className="border border-dashed border-stone-700/70 bg-stone-900/60 p-5 text-sm text-slate-500">
             No proposal jobs yet.
           </div>
         ) : (
-          <div className="max-h-[680px] divide-y divide-slate-100 overflow-y-auto">
+          <div className="max-h-[680px] divide-y divide-stone-800 overflow-y-auto">
             {jobs.map((job) => {
               const jobEvents = getJobEvents(events, job.id)
               return (
@@ -252,7 +252,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         {statusIcon(job.status)}
-                        <span className="truncate font-semibold text-slate-950">{job.business_name}</span>
+                        <span className="truncate font-semibold text-stone-50">{job.business_name}</span>
                         <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusClass(job.status)}`}>
                           {job.status}
                         </span>
@@ -267,7 +267,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
                         <Link
                           href={job.proposal_url}
                           target="_blank"
-                          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-100"
+                          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-900/60 bg-emerald-950/25 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-950/40"
                           title="Open proposal"
                         >
                           View
@@ -277,19 +277,19 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
                     </div>
                   </div>
 
-                  <div className="mt-4 border-l border-slate-200 pl-4">
+                  <div className="mt-4 border-l border-stone-700/70 pl-4">
                     {jobEvents.length === 0 ? (
                       <div className="py-1 text-xs text-slate-500">{job.error_message || job.current_step || 'Awaiting first event'}</div>
                     ) : (
                       <div className="space-y-2">
                         {jobEvents.map((event) => {
                           const tone = event.status === 'failed'
-                            ? 'text-red-700'
+                            ? 'text-red-300'
                             : event.status === 'completed'
-                              ? 'text-emerald-700'
+                              ? 'text-emerald-300'
                               : event.status === 'running'
-                                ? 'text-sky-700'
-                                : 'text-slate-600'
+                                ? 'text-sky-300'
+                                : 'text-stone-400'
                           return (
                             <div key={event.id} className="grid grid-cols-[5.5rem_1fr] gap-3 text-xs">
                               <div className="text-xs text-slate-400">

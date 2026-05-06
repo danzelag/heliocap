@@ -41,8 +41,6 @@ export async function POST(request: Request) {
       building_type,
       job_id,
       prospect_id,
-      panel_count,
-      system_kw,
       solar_model,
       filtered,
       reason,
@@ -75,12 +73,12 @@ export async function POST(request: Request) {
     })
 
     // AI-Powered Estimation if roof_sqft is provided
-    let savings = body.estimated_savings
+    let savings = capCommercialSavings(body.estimated_savings)
     let payback = body.estimated_payback
 
     if (solar_model && typeof solar_model === 'object') {
       const model = solar_model as Record<string, unknown>
-      if (savings == null && typeof model.yearlySavings === 'number') savings = model.yearlySavings
+      if (savings == null && typeof model.yearlySavings === 'number') savings = capCommercialSavings(model.yearlySavings)
       if (payback == null && typeof model.estimatedPayback === 'number') payback = model.estimatedPayback
     }
 
@@ -157,7 +155,7 @@ export async function POST(request: Request) {
         contentType: 'image/webp',
       })
 
-      savings = savings || solarModel.yearlySavings
+      savings = savings || capCommercialSavings(solarModel.yearlySavings)
       payback = payback || solarModel.estimatedPayback
     }
 
@@ -232,8 +230,14 @@ export async function POST(request: Request) {
       url: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/proposal/${data.slug}` 
     })
 
-  } catch (error: any) {
-    console.error('Automation Hook Error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    console.error('Automation Hook Error:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
+}
+
+function capCommercialSavings(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.min(Math.max(Math.round(value), 0), 375000)
 }

@@ -26,7 +26,7 @@ export default async function EditLeadPage({
     <div className="admin-shell">
       <nav className="admin-nav px-5 py-3 lg:px-8">
         <div className="mx-auto flex max-w-5xl items-center gap-4">
-          <Link href="/admin" prefetch className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50">
+          <Link href="/admin" prefetch className="grid h-9 w-9 place-items-center rounded-lg border border-stone-700/70 bg-stone-950/70 text-stone-400 transition-colors hover:bg-stone-900/60">
             <ChevronLeft className="w-5 h-5" />
           </Link>
           <span className="admin-title">Edit proposal</span>

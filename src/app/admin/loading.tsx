@@ -1,5 +1,5 @@
 function SkeletonBox({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse rounded-lg bg-slate-200 ${className}`} />
+  return <div className={`animate-pulse rounded-lg bg-stone-800 ${className}`} />
 }
 
 export default function Loading() {
@@ -33,15 +33,15 @@ export default function Loading() {
             </div>
           </div>
           <div className="space-y-3">
-            <SkeletonBox className="h-56 border border-slate-200 bg-white" />
+            <SkeletonBox className="h-56 border border-stone-700/70 bg-stone-950/70" />
             <div className="grid grid-cols-2 gap-3">
               {Array.from({ length: 4 }).map((_, index) => (
-                <SkeletonBox key={index} className="h-24 border border-slate-200 bg-white" />
+                <SkeletonBox key={index} className="h-24 border border-stone-700/70 bg-stone-950/70" />
               ))}
             </div>
           </div>
         </section>
-        <SkeletonBox className="h-[460px] border border-slate-200 bg-white" />
+        <SkeletonBox className="h-[460px] border border-stone-700/70 bg-stone-950/70" />
       </main>
     </div>
   )

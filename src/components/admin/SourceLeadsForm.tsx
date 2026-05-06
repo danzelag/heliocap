@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Loader2, Search, TriangleAlert } from 'lucide-react'
 
 const inputClass = 'admin-input px-3 py-2.5 text-sm placeholder:text-slate-400'
-const labelClass = 'text-xs font-semibold text-slate-600'
+const labelClass = 'text-xs font-semibold text-stone-400'
 
 type SourceLeadsResponse = {
   success?: boolean
@@ -57,12 +57,12 @@ export function SourceLeadsForm() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="admin-eyebrow">Source prospects</div>
-          <h2 className="mt-1 text-xl font-semibold text-slate-950">Find buildings</h2>
+          <h2 className="mt-1 text-xl font-semibold text-stone-50">Find buildings</h2>
         </div>
         <Button
           type="submit"
           disabled={loading}
-          className="h-10 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+          className="h-10 rounded-lg bg-amber-300 px-4 text-sm font-semibold text-stone-950 hover:bg-amber-200 disabled:opacity-50"
         >
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
           {loading ? 'Sourcing' : 'Source'}
@@ -101,7 +101,7 @@ export function SourceLeadsForm() {
       </div>
 
       {(message || error) && (
-        <div className={`mt-4 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
+        <div className={`mt-4 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm ${error ? 'border-red-900/60 bg-red-950/25 text-red-300' : 'border-emerald-900/60 bg-emerald-950/25 text-emerald-300'}`}>
           <TriangleAlert className="h-4 w-4" />
           {error || message}
         </div>

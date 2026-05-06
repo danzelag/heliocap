@@ -19,7 +19,7 @@ export function readClientCache<T>(key: string): T | null {
   return entry.value
 }
 
-export function writeClientCache<T>(key: string, value: T, ttlMs = 45_000) {
+export function writeClientCache<T>(key: string, value: T, ttlMs = 120_000) {
   if (typeof window === 'undefined') return
 
   memoryCache.set(key, {
