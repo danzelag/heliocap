@@ -42,16 +42,16 @@ const JOBS_CACHE_KEY = 'admin:proposal-jobs'
 const EVENTS_CACHE_KEY = 'admin:proposal-job-events'
 
 function statusClass(status: ProposalJob['status']) {
-  if (status === 'completed') return 'border-emerald-300/30 bg-emerald-300/10 text-emerald-100'
-  if (status === 'failed') return 'border-red-300/30 bg-red-500/10 text-red-100'
-  if (status === 'running') return 'border-cyan-200/30 bg-cyan-200/10 text-cyan-100'
-  return 'border-white/10 bg-white/[0.03] text-slate-300'
+  if (status === 'completed') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
+  if (status === 'failed') return 'border-red-200 bg-red-50 text-red-700'
+  if (status === 'running') return 'border-sky-200 bg-sky-50 text-sky-800'
+  return 'border-slate-200 bg-slate-50 text-slate-600'
 }
 
 function statusIcon(status: ProposalJob['status']) {
-  if (status === 'completed') return <Check className="h-4 w-4 text-emerald-200" />
-  if (status === 'failed') return <TriangleAlert className="h-4 w-4 text-red-200" />
-  if (status === 'running') return <RadioTower className="h-4 w-4 text-cyan-100" />
+  if (status === 'completed') return <Check className="h-4 w-4 text-emerald-600" />
+  if (status === 'failed') return <TriangleAlert className="h-4 w-4 text-red-600" />
+  if (status === 'running') return <RadioTower className="h-4 w-4 text-sky-600" />
   return <Loader2 className="h-4 w-4 text-slate-400" />
 }
 
@@ -103,15 +103,6 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
       return resolved
     })
   }
-
-  useEffect(() => {
-    const sortedJobs = sortJobs(initialJobs)
-    const sortedEvents = sortEvents(initialEvents)
-    setJobsState(sortedJobs)
-    setEventsState(sortedEvents)
-    writeClientCache(JOBS_CACHE_KEY, sortedJobs)
-    writeClientCache(EVENTS_CACHE_KEY, sortedEvents)
-  }, [initialJobs, initialEvents])
 
   const handleClearQueue = () => {
     if (finishedCount === 0) return
@@ -203,37 +194,37 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
   }, [])
 
   return (
-    <section className={`self-start border border-white/10 bg-[#0b1016]/90 transition-all ${collapsed ? 'p-3 lg:p-4' : 'p-5 lg:p-6'}`}>
-      <div className={`flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between ${collapsed ? '' : 'mb-5 border-b border-white/10 pb-4'}`}>
+    <section className={`admin-panel self-start transition-all ${collapsed ? 'p-3 lg:p-4' : 'p-4 lg:p-5'}`}>
+      <div className={`flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between ${collapsed ? '' : 'mb-4 border-b border-slate-200 pb-4'}`}>
         <button
           type="button"
           onClick={() => setCollapsed((v) => !v)}
           className="flex items-center gap-3 text-left"
         >
-          {collapsed ? <ChevronRight className="h-4 w-4 text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-500" />}
+          {collapsed ? <ChevronRight className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
           <div>
-            <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.26em] text-cyan-200/70">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
               <Activity className="h-3.5 w-3.5" />
-              Live proposal activity
+              Proposal jobs
             </div>
-            <h2 className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-white">Proposal Build Monitor</h2>
+            <h2 className="mt-1 text-xl font-semibold text-slate-950">Build queue</h2>
           </div>
         </button>
-        <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500">
-          <span className={activeCount > 0 ? 'text-cyan-100' : ''}>{activeCount} active</span>
+        <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-slate-500">
+          <span className={activeCount > 0 ? 'text-sky-700' : ''}>{activeCount} active</span>
           <span className="inline-flex items-center gap-1.5">
             <RefreshCcw className="h-3.5 w-3.5" />
             {lastSyncedAt ? formatTime(lastSyncedAt.toISOString()) : 'Syncing'}
           </span>
           {latestEvent ? (
-            <span className="text-slate-600">Latest {formatTime(latestEvent.created_at)}</span>
+            <span className="text-slate-400">Latest {formatTime(latestEvent.created_at)}</span>
           ) : null}
           {finishedCount > 0 && (
             <button
               type="button"
               disabled={isClearing}
               onClick={handleClearQueue}
-              className="inline-flex items-center gap-1.5 border border-white/10 px-2.5 py-1.5 text-slate-400 transition-colors hover:border-red-300/30 hover:text-red-200 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-slate-500 transition-colors hover:border-red-200 hover:text-red-600 disabled:opacity-50"
             >
               {isClearing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
               Clear {finishedCount}
@@ -243,65 +234,65 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
       </div>
 
       {clearError && (
-        <div className="mb-4 text-xs text-red-200">{clearError}</div>
+        <div className="mb-4 text-xs text-red-600">{clearError}</div>
       )}
 
-      {!collapsed && <div className="overflow-hidden border border-white/10 bg-[#090d12]">
+      {!collapsed && <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
         {jobs.length === 0 ? (
-          <div className="border border-dashed border-white/10 bg-white/[0.02] p-6 text-sm text-slate-500">
-            No proposal jobs yet. Create one proposal or bulk queue prospects and they will appear here.
+          <div className="border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
+            No proposal jobs yet.
           </div>
         ) : (
-          <div className="max-h-[720px] divide-y divide-white/10 overflow-y-auto">
+          <div className="max-h-[680px] divide-y divide-slate-100 overflow-y-auto">
             {jobs.map((job) => {
               const jobEvents = getJobEvents(events, job.id)
               return (
-                <div key={job.id} className="p-4 lg:p-5">
+                <div key={job.id} className="p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         {statusIcon(job.status)}
-                        <span className="truncate font-semibold text-white">{job.business_name}</span>
-                        <span className={`border px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.18em] ${statusClass(job.status)}`}>
+                        <span className="truncate font-semibold text-slate-950">{job.business_name}</span>
+                        <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${statusClass(job.status)}`}>
                           {job.status}
                         </span>
                       </div>
                       <div className="mt-1 truncate text-xs text-slate-500">{job.address}</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
-                      <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                      <span className="text-xs font-medium text-slate-500">
                         {formatTime(job.updated_at || job.created_at)}
                       </span>
                       {job.proposal_url ? (
                         <Link
                           href={job.proposal_url}
                           target="_blank"
-                          className="inline-flex items-center gap-1.5 border border-emerald-300/30 bg-emerald-300/10 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-emerald-100 transition-colors hover:bg-emerald-300/20"
+                          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 transition-colors hover:bg-emerald-100"
                           title="Open proposal"
                         >
-                          View proposal
+                          View
                           <ExternalLink className="h-3 w-3" />
                         </Link>
                       ) : null}
                     </div>
                   </div>
 
-                  <div className="mt-4 border-l border-white/10 pl-4">
+                  <div className="mt-4 border-l border-slate-200 pl-4">
                     {jobEvents.length === 0 ? (
                       <div className="py-1 text-xs text-slate-500">{job.error_message || job.current_step || 'Awaiting first event'}</div>
                     ) : (
                       <div className="space-y-2">
                         {jobEvents.map((event) => {
                           const tone = event.status === 'failed'
-                            ? 'text-red-100'
+                            ? 'text-red-700'
                             : event.status === 'completed'
-                              ? 'text-emerald-100'
+                              ? 'text-emerald-700'
                               : event.status === 'running'
-                                ? 'text-cyan-100'
-                                : 'text-slate-300'
+                                ? 'text-sky-700'
+                                : 'text-slate-600'
                           return (
                             <div key={event.id} className="grid grid-cols-[5.5rem_1fr] gap-3 text-xs">
-                              <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-600">
+                              <div className="text-xs text-slate-400">
                                 {formatTime(event.created_at)}
                               </div>
                               <div className={tone}>

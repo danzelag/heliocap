@@ -46,11 +46,11 @@ function formatNumber(value: number | null) {
 }
 
 function stageClass(stage: ProspectStage) {
-  if (stage === 'booked') return 'border-emerald-300/35 bg-emerald-300/10 text-emerald-100'
-  if (stage === 'microsite_live' || stage === 'emailed' || stage === 'replied') return 'border-cyan-200/30 bg-cyan-200/10 text-cyan-100'
-  if (stage === 'dead') return 'border-red-300/30 bg-red-500/10 text-red-100'
-  if (stage === 'snoozed') return 'border-amber-300/30 bg-amber-300/10 text-amber-100'
-  return 'border-white/10 bg-white/[0.03] text-slate-300'
+  if (stage === 'booked') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
+  if (stage === 'microsite_live' || stage === 'emailed' || stage === 'replied') return 'border-sky-200 bg-sky-50 text-sky-800'
+  if (stage === 'dead') return 'border-red-200 bg-red-50 text-red-700'
+  if (stage === 'snoozed') return 'border-amber-200 bg-amber-50 text-amber-800'
+  return 'border-slate-200 bg-slate-50 text-slate-600'
 }
 
 export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTableProps) {
@@ -68,11 +68,6 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
       return resolved
     })
   }
-
-  useEffect(() => {
-    setProspectsState(initialProspects)
-    writeClientCache(PROSPECTS_CACHE_KEY, initialProspects)
-  }, [initialProspects])
 
   useEffect(() => {
     let mounted = true
@@ -273,14 +268,14 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
   }
 
   return (
-    <section className="border border-white/10 bg-black/35 shadow-[0_24px_90px_rgba(0,0,0,0.42)] backdrop-blur-xl">
-      <div className="flex flex-col gap-5 border-b border-white/10 p-5 lg:flex-row lg:items-center lg:justify-between">
+    <section className="admin-panel overflow-hidden">
+      <div className="flex flex-col gap-4 border-b border-slate-200 p-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.32em] text-cyan-200/70">
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
             <RadioTower className="h-4 w-4" />
-            OpenClaw pipeline
+            Prospects
           </div>
-          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">Prospect Command Queue</h2>
+          <h2 className="mt-1 text-xl font-semibold text-slate-950">Pipeline</h2>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -288,23 +283,23 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
             type="button"
             disabled={isPending || selectedIds.length === 0}
             onClick={handleBulkPromote}
-            className="h-9 rounded-none bg-slate-100 px-3 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-slate-950 hover:bg-white disabled:opacity-50"
+            className="h-9 rounded-lg bg-slate-950 px-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
           >
             {isPending && !activeId ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-2 h-3.5 w-3.5" />}
-            Create selected <span className="text-slate-500">{selectedIds.length}</span>
+            Create <span className="text-slate-300">{selectedIds.length}</span>
           </Button>
           <Button
             type="button"
             disabled={isPending || selectedIds.length === 0}
             onClick={handleBulkDelete}
-            className="h-9 rounded-none border border-red-300/30 bg-transparent px-3 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-red-200 hover:border-red-300/60 hover:bg-red-500/10 hover:text-red-100 disabled:opacity-50"
+            className="h-9 rounded-lg border border-red-200 bg-white px-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
           >
             <Trash2 className="mr-2 h-3.5 w-3.5" />
-            Delete selected <span className="text-red-300/50">{selectedIds.length}</span>
+            Delete <span className="text-red-400">{selectedIds.length}</span>
           </Button>
           <button
             type="button"
-            className={`border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${activeStage === 'all' ? 'border-cyan-200/40 bg-cyan-200/10 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-slate-500 hover:border-cyan-200/20 hover:text-slate-200'}`}
+            className={`admin-chip px-3 py-2 transition-colors ${activeStage === 'all' ? 'admin-chip-active' : 'hover:border-slate-300 hover:text-slate-700'}`}
             onClick={() => setActiveStage('all')}
           >
             All <span className="text-slate-500">{prospects.length}</span>
@@ -313,7 +308,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
             <button
               key={stage}
               type="button"
-              className={`border px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${activeStage === stage ? 'border-cyan-200/40 bg-cyan-200/10 text-cyan-100' : 'border-white/10 bg-white/[0.03] text-slate-500 hover:border-cyan-200/20 hover:text-slate-200'}`}
+              className={`admin-chip px-3 py-2 transition-colors ${activeStage === stage ? 'admin-chip-active' : 'hover:border-slate-300 hover:text-slate-700'}`}
               onClick={() => setActiveStage(stage)}
             >
               {stageLabels[stage]} <span className="text-slate-500">{counts[stage]}</span>
@@ -323,8 +318,8 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
       </div>
 
       {message && (
-        <div className="flex items-center gap-2 border-b border-white/10 bg-slate-950/70 px-5 py-4 text-sm text-slate-300">
-          <TriangleAlert className="h-4 w-4 text-amber-200" />
+        <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <TriangleAlert className="h-4 w-4 text-amber-600" />
           {message}
         </div>
       )}
@@ -332,32 +327,31 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1180px] text-left text-sm">
           <thead>
-            <tr className="border-b border-white/10 bg-white/[0.025] font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">
-              <th className="w-12 px-5 py-4">
+            <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+              <th className="w-12 px-4 py-3">
                 <input
                   type="checkbox"
                   aria-label="Select all visible prospects"
                   checked={allVisibleSelected}
                   onChange={handleToggleVisibleSelection}
-                  className="h-4 w-4 rounded-sm border-white/20 bg-transparent accent-cyan-200"
+                  className="h-4 w-4 rounded-sm border-slate-300 accent-emerald-600"
                 />
               </th>
-              <th className="px-5 py-4">Prospect</th>
-              <th className="px-5 py-4">Parcel</th>
-              <th className="px-5 py-4">Solar Signal</th>
-              <th className="px-5 py-4">Owner</th>
-              <th className="px-5 py-4">Stage</th>
-              <th className="px-5 py-4 text-right">Actions</th>
+              <th className="px-4 py-3">Prospect</th>
+              <th className="px-4 py-3">Parcel</th>
+              <th className="px-4 py-3">Solar</th>
+              <th className="px-4 py-3">Owner</th>
+              <th className="px-4 py-3">Stage</th>
+              <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/10">
+          <tbody className="divide-y divide-slate-100">
             {filteredProspects.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-5 py-16 text-center">
-                  <div className="mx-auto max-w-sm border border-dashed border-white/15 bg-white/[0.025] p-8">
-                    <Rocket className="mx-auto h-8 w-8 text-slate-600" />
-                    <div className="mt-4 font-mono text-[10px] uppercase tracking-[0.24em] text-slate-500">No prospects in this lane</div>
-                    <p className="mt-2 text-sm text-slate-400">Once n8n starts sourcing parcels, they will appear here.</p>
+                <td colSpan={7} className="px-4 py-12 text-center">
+                  <div className="mx-auto max-w-sm rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6">
+                    <Rocket className="mx-auto h-7 w-7 text-slate-400" />
+                    <div className="mt-3 text-sm font-semibold text-slate-700">No prospects</div>
                   </div>
                 </td>
               </tr>
@@ -365,32 +359,32 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
               filteredProspects.map((prospect) => {
                 const busy = isPending && activeId === prospect.id
                 return (
-                  <tr key={prospect.id} className="transition-colors hover:bg-cyan-200/[0.035]">
-                    <td className="px-5 py-5 align-top">
+                  <tr key={prospect.id} className="transition-colors hover:bg-slate-50">
+                    <td className="px-4 py-4 align-top">
                       <input
                         type="checkbox"
                         aria-label={`Select ${prospect.business_name || prospect.address}`}
                         checked={selectedIds.includes(prospect.id)}
                         onChange={() => handleToggleSelection(prospect.id)}
-                        className="h-4 w-4 rounded-sm border-white/20 bg-transparent accent-cyan-200"
+                        className="h-4 w-4 rounded-sm border-slate-300 accent-emerald-600"
                       />
                     </td>
-                    <td className="px-5 py-5 align-top">
-                      <div className="font-semibold text-white">{prospect.business_name || prospect.address.split(',')[0]}</div>
+                    <td className="px-4 py-4 align-top">
+                      <div className="font-semibold text-slate-950">{prospect.business_name || prospect.address.split(',')[0]}</div>
                       <div className="mt-1 max-w-xs text-xs text-slate-500">{prospect.address}</div>
-                      <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.16em] text-slate-600">
+                      <div className="mt-2 text-xs text-slate-400">
                         {prospect.metro || 'Metro pending'} · {prospect.county || 'County pending'}
                       </div>
                     </td>
-                    <td className="px-5 py-5 align-top">
-                      <div className="font-mono text-xs text-slate-300">{prospect.place_id || prospect.parcel_id || 'No ID'}</div>
+                    <td className="px-4 py-4 align-top">
+                      <div className="text-xs font-medium text-slate-700">{prospect.place_id || prospect.parcel_id || 'No ID'}</div>
                       <div className="mt-1 text-xs text-slate-500">
                         {formatNumber(prospect.sqft)} sqft · {prospect.year_built || 'Year unknown'}
                       </div>
                       <div className="mt-1 text-xs text-slate-500">{prospect.use_code || 'Use code pending'}</div>
                     </td>
-                    <td className="px-5 py-5 align-top">
-                      <div className="font-mono text-xs text-cyan-100">
+                    <td className="px-4 py-4 align-top">
+                      <div className="text-xs font-medium text-slate-700">
                         {formatNumber(prospect.panel_count)} panels · {prospect.system_kw || 0} kW
                       </div>
                       <div className="mt-1 text-xs text-slate-500">
@@ -398,45 +392,45 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                       </div>
                       <div className="mt-2 flex gap-2">
                         {prospect.satellite_url && (
-                          <a href={prospect.satellite_url} target="_blank" rel="noreferrer" className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400 hover:text-cyan-100">
+                          <a href={prospect.satellite_url} target="_blank" rel="noreferrer" className="text-xs font-medium text-slate-500 hover:text-emerald-700">
                             Satellite
                           </a>
                         )}
                         {prospect.render_url && (
-                          <a href={prospect.render_url} target="_blank" rel="noreferrer" className="font-mono text-[10px] uppercase tracking-[0.18em] text-slate-400 hover:text-cyan-100">
+                          <a href={prospect.render_url} target="_blank" rel="noreferrer" className="text-xs font-medium text-slate-500 hover:text-emerald-700">
                             Render
                           </a>
                         )}
                       </div>
                     </td>
-                    <td className="px-5 py-5 align-top">
-                      <div className="text-sm text-white">{prospect.owner_name || prospect.owner_llc || 'Owner pending'}</div>
+                    <td className="px-4 py-4 align-top">
+                      <div className="text-sm text-slate-900">{prospect.owner_name || prospect.owner_llc || 'Owner pending'}</div>
                       <div className="mt-1 text-xs text-slate-500">{prospect.owner_title || prospect.enrichment_source || 'Not enriched'}</div>
-                      <div className="mt-1 font-mono text-[10px] text-slate-500">{prospect.owner_email || 'No email yet'}</div>
+                      <div className="mt-1 text-xs text-slate-500">{prospect.owner_email || 'No email yet'}</div>
                     </td>
-                    <td className="px-5 py-5 align-top">
-                      <div className={`inline-flex border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.18em] ${stageClass(prospect.pipeline_stage)}`}>
+                    <td className="px-4 py-4 align-top">
+                      <div className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${stageClass(prospect.pipeline_stage)}`}>
                         {stageLabels[prospect.pipeline_stage]}
                       </div>
                       <select
                         value={prospect.pipeline_stage}
                         onChange={(event) => handleStageChange(prospect.id, event.target.value as ProspectStage)}
                         disabled={busy}
-                        className="mt-3 block w-full border border-white/10 bg-[#090d12] px-2 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-slate-300 outline-none"
+                        className="admin-input mt-3 block px-2 py-2 text-xs text-slate-700"
                       >
                         {prospectStages.map((stage) => (
                           <option key={stage} value={stage}>{stageLabels[stage]}</option>
                         ))}
                       </select>
                     </td>
-                    <td className="px-5 py-5 align-top">
+                    <td className="px-4 py-4 align-top">
                       <div className="flex justify-end gap-2">
                         {prospect.pipeline_stage === 'solar_fetched' && (
                           <Button
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="rounded-none border-white/15 bg-transparent text-slate-200 hover:bg-white/10"
+                            className="rounded-md border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                             disabled={busy}
                             onClick={() => handleEnrich(prospect.id)}
                           >
@@ -446,7 +440,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                         <Button
                           type="button"
                           size="sm"
-                          className="rounded-none bg-slate-100 text-slate-950 hover:bg-white"
+                          className="rounded-md bg-slate-950 text-white hover:bg-slate-800"
                           disabled={busy || prospect.pipeline_stage === 'dead'}
                           onClick={() => handlePromote(prospect.id)}
                           title="Promote prospect to proposal worker"
@@ -456,7 +450,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                         {prospect.microsite_slug && (
                           <Link
                             href={`/proposal/${prospect.microsite_slug}`}
-                            className="inline-flex h-9 items-center justify-center border border-white/10 px-3 text-slate-300 transition-colors hover:border-cyan-200/30 hover:text-cyan-100"
+                            className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 px-3 text-slate-600 transition-colors hover:bg-slate-50"
                             target="_blank"
                           >
                             <ExternalLink className="h-4 w-4" />
@@ -466,7 +460,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="rounded-none border-red-300/30 bg-transparent text-red-200 hover:border-red-300/60 hover:bg-red-500/10 hover:text-red-100"
+                          className="rounded-md border-red-200 bg-white text-red-600 hover:bg-red-50"
                           disabled={busy}
                           onClick={() => handleDelete(prospect)}
                           title="Delete prospect"

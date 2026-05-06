@@ -53,62 +53,55 @@ export default async function PipelinePage() {
   ]
 
   return (
-    <div className="min-h-screen bg-[#07090c] text-slate-100">
+    <div className="admin-shell">
       <AdminRoutePrefetcher />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(30,41,59,0.75),transparent_32%),linear-gradient(135deg,#07090c_0%,#0d1117_52%,#050608_100%)]" />
 
-      <nav className="relative z-10 border-b border-white/10 bg-[#090d12]/95 px-6 py-4 lg:px-10">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <nav className="admin-nav sticky top-0 z-20 px-5 py-3 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
-            <div className="grid h-10 w-10 place-items-center border border-white/15 bg-white/[0.03]">
-              <ShieldCheck className="h-5 w-5 text-slate-200" />
+            <div className="grid h-10 w-10 place-items-center rounded-lg border border-emerald-200 bg-emerald-50">
+              <ShieldCheck className="h-5 w-5 text-emerald-700" />
             </div>
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.36em] text-slate-500">OpenClaw</div>
-              <div className="text-xl font-semibold tracking-[-0.04em] text-white">Pipeline Control</div>
+              <div className="admin-eyebrow">Helio Cap</div>
+              <div className="admin-title">Prospects</div>
             </div>
           </div>
 
-          <Link href="/admin" prefetch className="inline-flex h-10 items-center justify-center gap-2 border border-white/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-300 transition-colors hover:border-white/25 hover:text-white">
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Command Center
-          </Link>
           <div className="flex flex-wrap gap-2">
-            <Link href="/admin" prefetch className="inline-flex h-10 items-center justify-center border border-white/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-300 transition-colors hover:border-white/25 hover:text-white">
+            <Link href="/admin" prefetch className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50">
+              <ArrowLeft className="h-3.5 w-3.5" />
               Proposals
             </Link>
-            <Link href="/admin/pipeline" prefetch className="inline-flex h-10 items-center justify-center border border-cyan-200/30 bg-cyan-200/10 px-4 font-mono text-[10px] uppercase tracking-[0.2em] text-cyan-100">
+            <Link href="/admin/pipeline" prefetch className="inline-flex h-10 items-center justify-center rounded-lg border border-emerald-600 bg-emerald-50 px-4 text-sm font-semibold text-emerald-800">
               Prospects
             </Link>
           </div>
         </div>
       </nav>
 
-      <main className="relative z-10 mx-auto flex max-w-7xl flex-col gap-6 px-6 py-8 lg:px-10">
-        <section className="border border-white/10 bg-[#0b1016]/90 p-5 lg:p-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <main className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6 lg:px-8">
+        <section className="admin-panel p-4 lg:p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.26em] text-slate-500">Pipeline-first MVP</div>
-              <h1 className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-white">Build the boring machine first.</h1>
-              <p className="mt-2 max-w-2xl text-sm text-slate-400">
-                Source buildings, fetch solar geometry, enrich owners, and publish proposal microsites. Video stays parked in v2 until replies prove the spend.
-              </p>
+              <div className="admin-eyebrow">Prospect pipeline</div>
+              <h1 className="mt-1 text-2xl font-semibold text-slate-950">Prospects</h1>
             </div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-slate-500">
-              Operator {user.email}
+            <div className="rounded-full border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500">
+              {user.email}
             </div>
           </div>
 
-          <div className="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {stats.map((item) => {
               const Icon = item.icon
               return (
-                <div key={item.label} className="border border-white/10 bg-white/[0.025] p-3">
+                <div key={item.label} className="admin-panel-muted p-3">
                   <div className="mb-3 flex items-center justify-between">
-                    <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-slate-500">{item.label}</span>
-                    <Icon className={`h-3.5 w-3.5 ${item.tone}`} />
+                    <span className="text-xs font-semibold text-slate-500">{item.label}</span>
+                    <Icon className="h-3.5 w-3.5 text-slate-400" />
                   </div>
-                  <div className="num text-xl font-semibold tracking-[-0.04em] text-white">{item.value}</div>
+                  <div className="num text-xl font-semibold text-slate-950">{item.value}</div>
                 </div>
               )
             })}
@@ -116,7 +109,7 @@ export default async function PipelinePage() {
 
           <div className="mt-4 flex flex-wrap gap-2">
             {prospectStages.map((stage) => (
-              <div key={stage} className="border border-white/10 bg-[#090d12] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.18em] text-slate-500">
+              <div key={stage} className="admin-chip px-3 py-2">
                 {stage.replace('_', ' ')}
               </div>
             ))}

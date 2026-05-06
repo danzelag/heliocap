@@ -5,35 +5,31 @@ import LeadGeneratorForm from './LeadGeneratorForm'
 
 export default function NewLeadPage() {
   return (
-    <div className="min-h-screen bg-[#07090c] text-slate-100">
+    <div className="admin-shell">
       <AdminRoutePrefetcher />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(30,41,59,0.65),transparent_30%),linear-gradient(135deg,#07090c_0%,#0d1117_55%,#050608_100%)]" />
 
-      <nav className="relative z-10 border-b border-white/10 bg-[#090d12]/95 px-6 py-4 lg:px-10">
+      <nav className="admin-nav sticky top-0 z-20 px-5 py-3 lg:px-8">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/admin" prefetch className="grid h-9 w-9 place-items-center border border-white/10 text-slate-400 transition-colors hover:border-white/25 hover:text-white">
+            <Link href="/admin" prefetch className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50">
               <ChevronLeft className="h-5 w-5" />
             </Link>
             <div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.32em] text-slate-500">Command Center</div>
-              <div className="text-lg font-semibold tracking-[-0.03em] text-white">Generate Outreach Portfolio</div>
+              <div className="admin-eyebrow">Helio Cap</div>
+              <div className="admin-title">New proposal</div>
             </div>
           </div>
-          <div className="hidden items-center gap-2 border border-white/10 bg-white/[0.03] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.2em] text-slate-500 sm:flex">
+          <div className="hidden items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-500 sm:flex">
             <FilePlus2 className="h-3.5 w-3.5 text-slate-400" />
-            New dossier
+            New
           </div>
         </div>
       </nav>
 
-      <main className="relative z-10 mx-auto max-w-6xl px-6 py-8 lg:px-10">
-        <div className="mb-6 border border-white/10 bg-[#0b1016]/90 p-5">
-          <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-slate-500">Portfolio intake</div>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.05em] text-white">Create a proposal target</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-            Assemble the site record, imagery, and economics required to publish a client-facing proposal page.
-          </p>
+      <main className="mx-auto max-w-6xl px-5 py-6 lg:px-8">
+        <div className="admin-panel mb-5 p-4 lg:p-5">
+          <div className="admin-eyebrow">Proposal</div>
+          <h1 className="mt-1 text-2xl font-semibold text-slate-950">Create proposal</h1>
         </div>
 
         <LeadGeneratorForm />

@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase-server'
 import { notFound } from 'next/navigation'
 import EditLeadForm from './EditLeadForm'
-import { Button } from '@/components/ui/button'
 import { ChevronLeft } from 'lucide-react'
 import Link from 'next/link'
 
@@ -24,15 +23,17 @@ export default async function EditLeadPage({
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <nav className="flex items-center gap-4 px-8 py-4 border-b border-border bg-white">
-        <Link href="/admin" prefetch className="text-muted-foreground hover:text-primary transition-colors">
-          <ChevronLeft className="w-5 h-5" />
-        </Link>
-        <span className="text-lg font-bold tracking-tight text-primary font-sans uppercase">Edit Lead: {lead.business_name}</span>
+    <div className="admin-shell">
+      <nav className="admin-nav px-5 py-3 lg:px-8">
+        <div className="mx-auto flex max-w-5xl items-center gap-4">
+          <Link href="/admin" prefetch className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50">
+            <ChevronLeft className="w-5 h-5" />
+          </Link>
+          <span className="admin-title">Edit proposal</span>
+        </div>
       </nav>
 
-      <main className="max-w-3xl mx-auto p-8 mt-8">
+      <main className="mx-auto max-w-5xl px-5 py-6 lg:px-8">
         <EditLeadForm lead={lead} />
       </main>
     </div>

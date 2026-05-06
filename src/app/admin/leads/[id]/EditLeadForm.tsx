@@ -6,6 +6,9 @@ import { Loader2, Satellite } from 'lucide-react'
 import AddressAutocomplete, { type PlaceResult } from '@/components/AddressAutocomplete'
 import { updateLeadAction } from './actions'
 
+const inputClass = 'admin-input px-3 py-2.5 text-sm placeholder:text-slate-400'
+const labelClass = 'text-xs font-semibold text-slate-600'
+
 interface Lead {
   id: string
   business_name: string
@@ -54,7 +57,9 @@ export default function EditLeadForm({ lead }: { lead: Lead }) {
         renderPreviewUrlRef.current.value = data.render_preview_url
       }
     } catch (err) {
-      console.error('Roof image generation failed:', err)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Roof image generation failed:', err)
+      }
     } finally {
       setRoofGenerating(false)
     }
@@ -65,7 +70,7 @@ export default function EditLeadForm({ lead }: { lead: Lead }) {
       id="edit-lead-form"
       data-slug={lead.business_name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
       action={updateLeadAction}
-      className="bg-white rounded-sm border border-border shadow-sm p-8 space-y-8"
+      className="admin-panel space-y-6 p-4 lg:p-6"
     >
       <input type="hidden" name="id" value={lead.id} />
       <input type="hidden" name="lat" ref={latRef} />
@@ -73,22 +78,22 @@ export default function EditLeadForm({ lead }: { lead: Lead }) {
       <input type="hidden" name="roof_image_url" ref={roofImageUrlRef} defaultValue={lead.roof_image_url || ''} />
       <input type="hidden" name="render_preview_url" ref={renderPreviewUrlRef} defaultValue={lead.render_preview_url || ''} />
 
-      <div className="grid grid-cols-2 gap-8">
+      <div className="grid gap-5 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Business Name</label>
+          <label className={labelClass}>Business name</label>
           <input
             name="business_name"
             defaultValue={lead.business_name}
             required
-            className="w-full px-3 py-3 border border-border rounded-sm bg-white text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className={inputClass}
           />
         </div>
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Status</label>
+          <label className={labelClass}>Status</label>
           <select
             name="status"
             defaultValue={lead.status}
-            className="w-full px-3 py-3 border border-border rounded-sm bg-white text-primary focus:outline-none focus:ring-1 focus:ring-primary appearance-none"
+            className={`${inputClass} appearance-none`}
           >
             <option value="published">Published</option>
             <option value="contacted">Contacted</option>
@@ -100,55 +105,55 @@ export default function EditLeadForm({ lead }: { lead: Lead }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-8">
+      <div className="grid gap-5 md:grid-cols-2">
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Contact Name</label>
+          <label className={labelClass}>Contact name</label>
           <input
             name="contact_name"
             defaultValue={lead.contact_name || ''}
-            className="w-full px-3 py-3 border border-border rounded-sm bg-white text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className={inputClass}
           />
         </div>
         <div className="space-y-2">
-          <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Estimated Savings ($)</label>
+          <label className={labelClass}>Estimated savings ($)</label>
           <input
             name="estimated_savings"
             type="number"
             defaultValue={lead.estimated_savings || ''}
-            className="w-full px-3 py-3 border border-border rounded-sm bg-white text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className={inputClass}
           />
         </div>
       </div>
 
       {/* Address with autocomplete */}
       <div className="space-y-2">
-        <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Business Address</label>
+        <label className={labelClass}>Business address</label>
         <AddressAutocomplete
           name="address"
           defaultValue={lead.address || ''}
-          placeholder="Start typing to search and auto-fetch satellite view…"
+          placeholder="Start typing an address"
           onPlaceSelect={handlePlaceSelect}
-          className="w-full px-3 py-3 border border-border rounded-sm bg-white text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className={inputClass}
         />
       </div>
 
       {/* Roof preview after address selection */}
       {(roofGenerating || roofPreview) && (
         <div className="space-y-3">
-          <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-            <Satellite className="w-3 h-3" /> Roof Satellite Image
+          <label className={`${labelClass} flex items-center gap-2`}>
+            <Satellite className="w-3 h-3" /> Roof image
           </label>
-          <div className="relative rounded-sm border border-border overflow-hidden aspect-video bg-muted/30 flex items-center justify-center">
+          <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
             {roofGenerating ? (
-              <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                <Loader2 className="w-6 h-6 animate-spin text-accent" />
-                <p className="text-[10px] font-bold tracking-widest uppercase">Fetching Satellite View…</p>
+              <div className="flex flex-col items-center gap-2 text-slate-500">
+                <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+                <p className="text-sm font-medium">Fetching image</p>
               </div>
             ) : (
               <>
                 <img src={roofPreview!} className="w-full h-full object-cover" alt="Roof satellite view" />
-                <div className="absolute top-2 left-2 bg-accent/90 text-white text-[9px] font-bold tracking-widest px-2 py-0.5 rounded-sm uppercase">
-                  Auto-Generated
+                <div className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-xs font-semibold text-slate-700">
+                  Generated
                 </div>
               </>
             )}
@@ -157,18 +162,18 @@ export default function EditLeadForm({ lead }: { lead: Lead }) {
       )}
 
       <div className="space-y-2">
-        <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Internal Notes</label>
+        <label className={labelClass}>Notes</label>
         <textarea
           name="notes"
           rows={4}
           defaultValue={lead.notes || ''}
-          className="w-full px-3 py-3 border border-border rounded-sm bg-white text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className={inputClass}
         />
       </div>
 
-      <div className="pt-4 border-t border-border flex justify-end">
-        <Button type="submit" className="bg-primary hover:bg-secondary text-white font-bold rounded-sm px-10 h-12 tracking-widest">
-          SAVE CHANGES
+      <div className="flex justify-end border-t border-slate-200 pt-4">
+        <Button type="submit" className="h-10 rounded-lg bg-slate-950 px-5 text-sm font-semibold text-white hover:bg-slate-800">
+          Save changes
         </Button>
       </div>
     </form>

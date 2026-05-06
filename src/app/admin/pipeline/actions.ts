@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase-server'
 import { SolarUtils } from '@/lib/solar-utils'
-import { prospectStages, type ProspectStage } from '@/lib/prospect'
+import { prospectStages, type Prospect, type ProspectStage } from '@/lib/prospect'
 import { recordProposalJobEvent } from '@/lib/proposal-job-events'
 
 const DEFAULT_SITE_URL = 'https://heliocap.vercel.app'
@@ -104,7 +104,7 @@ export async function bulkPromoteProspectsToLeadsAction(ids: string[]) {
   }
 }
 
-async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof createAdminClient>>, prospect: any) {
+async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof createAdminClient>>, prospect: Prospect) {
   if (prospect.lead_id && prospect.microsite_slug) {
     return {
       success: true,
@@ -115,7 +115,7 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
     }
   }
 
-  const businessName = prospect.owner_llc || prospect.owner_name || prospect.address.split(',')[0] || 'OpenClaw Prospect'
+  const businessName = prospect.owner_llc || prospect.owner_name || prospect.address.split(',')[0] || 'Helio Cap Prospect'
   const slug = await getUniqueSlug(businessName)
 
   if (prospect.lat == null || prospect.lng == null) {

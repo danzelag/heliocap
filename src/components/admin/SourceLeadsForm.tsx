@@ -4,8 +4,8 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Loader2, Search, TriangleAlert } from 'lucide-react'
 
-const inputClass = 'w-full border border-white/10 bg-[#090d12] px-3 py-3 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-600 focus:border-slate-400'
-const labelClass = 'font-mono text-[10px] uppercase tracking-[0.22em] text-slate-500'
+const inputClass = 'admin-input px-3 py-2.5 text-sm placeholder:text-slate-400'
+const labelClass = 'text-xs font-semibold text-slate-600'
 
 type SourceLeadsResponse = {
   success?: boolean
@@ -53,22 +53,19 @@ export function SourceLeadsForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border border-white/10 bg-[#0b1016]/90 p-5 lg:p-6">
+    <form onSubmit={handleSubmit} className="admin-panel p-4 lg:p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.26em] text-slate-500">Source prospects</div>
-          <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">Find buildings, do not publish.</h2>
-          <p className="mt-2 max-w-2xl text-sm text-slate-400">
-            This triggers the n8n sourcing worker. Results should land in the prospects table only.
-          </p>
+          <div className="admin-eyebrow">Source prospects</div>
+          <h2 className="mt-1 text-xl font-semibold text-slate-950">Find buildings</h2>
         </div>
         <Button
           type="submit"
           disabled={loading}
-          className="h-11 rounded-none border border-white/15 bg-slate-100 px-5 font-mono text-[10px] font-bold uppercase tracking-[0.22em] text-slate-950 hover:bg-white disabled:opacity-50"
+          className="h-10 rounded-lg bg-slate-950 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
         >
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-          {loading ? 'Sourcing' : 'Source Leads'}
+          {loading ? 'Sourcing' : 'Source'}
         </Button>
       </div>
 
@@ -104,7 +101,7 @@ export function SourceLeadsForm() {
       </div>
 
       {(message || error) && (
-        <div className={`mt-4 flex items-center gap-2 border px-4 py-3 text-sm ${error ? 'border-red-300/25 bg-red-500/10 text-red-100' : 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100'}`}>
+        <div className={`mt-4 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm ${error ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}>
           <TriangleAlert className="h-4 w-4" />
           {error || message}
         </div>
