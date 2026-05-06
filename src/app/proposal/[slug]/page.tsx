@@ -5,10 +5,10 @@ import { PageViewTracker } from '@/components/site/PageViewTracker'
 
 export const revalidate = 3600
 import {
-  ArrowRight, Download, Layers, MapPin,
+  ArrowRight, Download, MapPin,
   Building2, Cpu, TrendingDown,
   ShieldCheck, Activity, FileCheck,
-  ArrowUpRight, FileText
+  FileText
 } from 'lucide-react'
 import { SavingsPanel } from '@/components/site/SavingsPanel'
 import { CtaForm } from '@/components/site/CtaForm'
@@ -130,29 +130,11 @@ export default async function ClientLandingPage({
                     videoUrl={lead.video_url}
                     alt={`Projected solar installation at ${businessName}, ${address}`}
                   />
-                  {/* Engineering grid overlay */}
-                  <div className="pointer-events-none absolute inset-0 grid-bg opacity-20 mix-blend-overlay" />
-                  {/* Corner crosshairs */}
-                  <Crosshair position="top-left" />
-                  <Crosshair position="top-right" />
-                  <Crosshair position="bottom-left" />
-                  <Crosshair position="bottom-right" />
-                  {/* Top-left tag */}
-                  <div className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-sm border border-white/15 bg-primary/75 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white backdrop-blur-sm">
-                    <Layers className="h-3 w-3" />
-                    Projected installation
-                  </div>
-                  {/* Bottom spec strip */}
-                  <div className="absolute inset-x-0 bottom-0 flex flex-wrap items-center justify-between gap-x-6 gap-y-1 border-t border-white/10 bg-primary/85 px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-white/80 backdrop-blur-sm">
-                    <span>{systemSize} kW DC</span>
-                    <span className="hidden sm:inline">{Math.round(systemSize * 2.4).toLocaleString()} modules</span>
-                    <span>Tilt 10° · Azimuth 180°</span>
-                  </div>
                 </div>
               </div>
               <figcaption className="mt-3 flex items-center justify-between text-[11px] text-white/45">
-                <span className="font-mono uppercase tracking-[0.16em]">Modeled solar installation · satellite + AI render</span>
-                <span className="font-mono">Coordinates on file</span>
+                <span className="font-mono uppercase tracking-[0.16em]">Premium site visualization</span>
+                <span className="font-mono">Modeled from roof geometry</span>
               </figcaption>
             </figure>
 
@@ -415,14 +397,4 @@ function SpecCell({ label, value, accent }: { label: string; value: string; acce
       <div className={`num mt-2 text-2xl font-semibold tracking-tight ${accent ? "text-roi" : "text-white"}`}>{value}</div>
     </div>
   );
-}
-
-function Crosshair({ position }: { position: "top-left" | "top-right" | "bottom-left" | "bottom-right" }) {
-  const map = {
-    "top-left": "top-3 left-3 border-l border-t",
-    "top-right": "top-3 right-3 border-r border-t",
-    "bottom-left": "bottom-3 left-3 border-l border-b",
-    "bottom-right": "bottom-3 right-3 border-r border-b",
-  } as const;
-  return <div className={`pointer-events-none absolute h-4 w-4 border-white/60 ${map[position]}`} />;
 }

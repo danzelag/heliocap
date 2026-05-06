@@ -1,27 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import sharp from 'sharp'
 import { createAdminClient } from '@/lib/supabase-server'
 import { SolarUtils } from '@/lib/solar-utils'
 import { updateProposalJobProgress } from '@/lib/proposal-job-events'
+import { generatePremiumSolarRender } from '@/lib/gemini-solar-render'
 
 const PROPOSALS_BUCKET = 'proposals'
-const GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image'
-const PREVIEW_WIDTH = 1280
-const PREVIEW_HEIGHT = 720
-const SOLAR_RENDER_PROMPT = `Create a realistic wide aerial view of a commercial building with a rooftop solar installation.
-
-Use the provided satellite image as the base.
-Upscale and enhance the entire image quality.
-Sharpen the roof, building details, roads, shadows, and surrounding site while keeping the property recognizable.
-Add dark blue/black solar panels aligned cleanly and evenly across realistic usable roof areas.
-Panels should be grouped in professional rows, with maintenance corridors and setbacks.
-Avoid edges, HVAC units, roads, parking lots, trees, grass, and irregular unusable areas.
-Panels must have subtle depth, shadows, reflection, and perspective matching.
-Keep the building structure unchanged.
-Do not add text, labels, people, vehicles, logos, or UI elements.
-Use natural lighting and a premium commercial proposal look.
-Avoid pasted-on/flat/dotted "solar acne."
-Final image should look like a polished 16:9 commercial solar development render, not a Google Maps screenshot.`
+const PROPOSAL_IMAGE_TIMEOUT_MS = 45_000
 
 type GenerateProposalImageBody = {
   roof_image_url?: string
@@ -39,35 +23,10 @@ type GenerateProposalImageBody = {
   reason?: string
 }
 
-type ImageAsset = {
-  buffer: Buffer
-  mimeType: string
-}
-
-type GeminiInlineData = {
-  data?: string
-  mimeType?: string
-  mime_type?: string
-}
-
-type GeminiPart = {
-  text?: string
-  inlineData?: GeminiInlineData
-  inline_data?: GeminiInlineData
-}
-
-type GeminiGenerateContentResponse = {
-  candidates?: Array<{
-    content?: {
-      parts?: GeminiPart[]
-    }
-  }>
-}
-
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as GenerateProposalImageBody
-    const { roof_image_url, business_name, address, job_id, filtered, reason } = body
+    const { roof_image_url, render_image_url, business_name, address, job_id, filtered, reason } = body
 
     const supabase = await createAdminClient()
 
@@ -108,10 +67,9 @@ export async function POST(request: NextRequest) {
     })
 
     const slug = body.slug || SolarUtils.generateSlug(business_name || address || crypto.randomUUID())
-    const roofAsset = await fetchImageAsset(roof_image_url)
 
     try {
-      console.log(`[generate-proposal-image] Calling Gemini (${GEMINI_IMAGE_MODEL}) for AI solar render: ${slug}`)
+      console.log(`[generate-proposal-image] Calling Gemini for premium solar render: ${slug}`)
       await updateProposalJobProgress(supabase, {
         jobId: job_id,
         businessName: business_name,
@@ -120,18 +78,17 @@ export async function POST(request: NextRequest) {
         progressPercent: 76,
       })
 
-      const aiRender = await generateAiSolarRender(roofAsset)
-      const previewBuffer = await sharp(aiRender.buffer)
-        .resize(PREVIEW_WIDTH, PREVIEW_HEIGHT, { fit: 'cover', position: 'center' })
-        .sharpen()
-        .webp({ quality: 86, effort: 4 })
-        .toBuffer()
+      const aiRender = await generatePremiumSolarRender({
+        roofImageUrl: roof_image_url,
+        renderImageUrl: render_image_url,
+        timeoutMs: PROPOSAL_IMAGE_TIMEOUT_MS,
+      })
       
       const filePath = `${slug}/preview.webp`
       const { error } = await supabase.storage
         .from(PROPOSALS_BUCKET)
-        .upload(filePath, previewBuffer, {
-          contentType: 'image/webp',
+        .upload(filePath, aiRender.buffer, {
+          contentType: aiRender.mimeType,
           upsert: true,
         })
 
@@ -172,108 +129,4 @@ export async function POST(request: NextRequest) {
     console.error('[generate-proposal-image]', message)
     return NextResponse.json({ error: message }, { status: 500 })
   }
-}
-
-async function fetchImageAsset(url: string): Promise<ImageAsset> {
-  const response = await fetch(assertFetchableAssetUrl(url), { cache: 'no-store' })
-  if (!response.ok) {
-    throw new Error(`Failed to fetch image asset: ${response.status}`)
-  }
-
-  const mimeType = normalizeImageMimeType(response.headers.get('content-type'))
-  return {
-    buffer: Buffer.from(await response.arrayBuffer()),
-    mimeType,
-  }
-}
-
-async function generateAiSolarRender(roofAsset: ImageAsset): Promise<ImageAsset> {
-  const apiKey = getGoogleImageApiKey()
-  
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: SOLAR_RENDER_PROMPT },
-            {
-              inline_data: {
-                mime_type: roofAsset.mimeType,
-                data: roofAsset.buffer.toString('base64'),
-              },
-            },
-          ],
-        }],
-      }),
-      cache: 'no-store',
-    },
-  )
-
-  const responseText = await response.text()
-  if (!response.ok) {
-    throw new Error(`Gemini image generation failed: ${response.status} ${responseText.slice(0, 240)}`)
-  }
-
-  const payload = JSON.parse(responseText) as GeminiGenerateContentResponse
-  const parts = payload.candidates?.flatMap((candidate) => candidate.content?.parts || []) || []
-  const imagePart = parts.find((part) => part.inlineData?.data || part.inline_data?.data)
-  const inlineData = imagePart?.inlineData || imagePart?.inline_data
-
-  if (!inlineData?.data) {
-    const text = parts.map((part) => part.text).filter(Boolean).join(' ')
-    throw new Error(`Gemini did not return image data${text ? `: ${text.slice(0, 240)}` : ''}`)
-  }
-
-  return {
-    buffer: Buffer.from(inlineData.data, 'base64'),
-    mimeType: normalizeImageMimeType(inlineData.mimeType || inlineData.mime_type),
-  }
-}
-
-function getGoogleImageApiKey() {
-  const key = process.env.GEMINI_API_KEY
-
-  if (!key) {
-    throw new Error('GEMINI_API_KEY is not configured')
-  }
-
-  return key
-}
-
-function normalizeImageMimeType(value?: string | null) {
-  const mimeType = value?.split(';')[0]?.trim().toLowerCase()
-  if (mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/webp') {
-    return mimeType
-  }
-
-  return 'image/png'
-}
-
-function assertFetchableAssetUrl(value: string) {
-  const url = new URL(value)
-  const hostname = url.hostname.toLowerCase()
-
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new Error('Asset URLs must use http or https')
-  }
-  if (
-    hostname === 'localhost' ||
-    hostname.endsWith('.local') ||
-    hostname === '127.0.0.1' ||
-    hostname === '0.0.0.0' ||
-    hostname === '::1' ||
-    hostname.startsWith('10.') ||
-    hostname.startsWith('192.168.') ||
-    /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
-  ) {
-    throw new Error('Private asset URLs are not allowed')
-  }
-
-  return url
 }

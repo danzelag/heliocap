@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
+import { generatePremiumSolarRender, type PremiumSolarRenderSource } from '@/lib/gemini-solar-render'
 import { verifyN8nRequest } from '@/lib/n8n-auth'
 import { SolarUtils } from '@/lib/solar-utils'
 import { recordProposalJobEvent, updateProposalJobProgress } from '@/lib/proposal-job-events'
@@ -13,6 +14,8 @@ import {
   selectStaticMapZoom,
   uploadLeadAsset,
 } from '@/lib/openclaw-google'
+
+type RenderSource = PremiumSolarRenderSource | 'provided_preview' | 'technical_preview' | 'none'
 
 /**
  * Automation Hook for external AIs like OpenClaw.
@@ -106,6 +109,7 @@ export async function POST(request: Request) {
     let finalRoofImageUrl = roof_image_url || null
     let finalRenderImageUrl = render_image_url || roof_image_url || null
     let finalRenderPreviewUrl = render_preview_url || null
+    let renderSource: RenderSource = finalRenderPreviewUrl ? 'provided_preview' : 'none'
 
     if (!finalRoofImageUrl && !finalRenderImageUrl && lat != null && lng != null) {
       const solarInsights = await fetchSolarInsights(Number(lat), Number(lng)).catch((error) => {
@@ -154,9 +158,58 @@ export async function POST(request: Request) {
         body: renderPreviewBuffer,
         contentType: 'image/webp',
       })
+      renderSource = 'technical_preview'
 
       savings = savings || capCommercialSavings(solarModel.yearlySavings)
       payback = payback || solarModel.estimatedPayback
+    }
+
+    const premiumRoofImageUrl = finalRoofImageUrl
+    if (premiumRoofImageUrl && shouldAttemptPremiumRender({
+      roofImageUrl: premiumRoofImageUrl,
+      renderImageUrl: finalRenderImageUrl,
+      renderPreviewUrl: finalRenderPreviewUrl,
+    })) {
+      try {
+        await updateProposalJobProgress(supabase, {
+          jobId: job_id,
+          businessName: business_name,
+          status: 'running',
+          step: 'Generating premium proposal image',
+          progressPercent: 82,
+        })
+
+        const premiumRender = await generatePremiumSolarRender({
+          roofImageUrl: premiumRoofImageUrl,
+          renderImageUrl: finalRenderImageUrl,
+          timeoutMs: getLeadsGeminiRenderTimeoutMs(),
+        })
+
+        finalRenderPreviewUrl = await uploadLeadAsset({
+          supabase,
+          bucket: 'leads',
+          slug,
+          fileName: 'premium_render.webp',
+          body: premiumRender.buffer,
+          contentType: premiumRender.mimeType,
+        })
+        renderSource = 'ai_generated'
+      } catch (error) {
+        console.error('[api/leads] Gemini premium render failed, publishing with roof image fallback:', error)
+        finalRenderPreviewUrl = premiumRoofImageUrl
+        renderSource = 'fallback_roof_image'
+
+        await updateProposalJobProgress(supabase, {
+          jobId: job_id,
+          businessName: business_name,
+          status: 'running',
+          step: 'AI render unavailable, publishing with roof image',
+          progressPercent: 90,
+        })
+      }
+    } else if (!finalRenderPreviewUrl && finalRoofImageUrl) {
+      finalRenderPreviewUrl = finalRoofImageUrl
+      renderSource = 'fallback_roof_image'
     }
 
     const { data, error } = await supabase
@@ -227,6 +280,7 @@ export async function POST(request: Request) {
       lead_id: data.id,
       slug: data.slug,
       render_preview_url: data.render_preview_url,
+      source: renderSource,
       url: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/proposal/${data.slug}` 
     })
 
@@ -240,4 +294,40 @@ export async function POST(request: Request) {
 function capCommercialSavings(value: unknown) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
   return Math.min(Math.max(Math.round(value), 0), 375000)
+}
+
+function shouldAttemptPremiumRender({
+  roofImageUrl,
+  renderImageUrl,
+  renderPreviewUrl,
+}: {
+  roofImageUrl: string | null
+  renderImageUrl: string | null
+  renderPreviewUrl: string | null
+}) {
+  if (!roofImageUrl) return false
+  if (!renderPreviewUrl) return true
+
+  return isTechnicalPreviewUrl(renderPreviewUrl, roofImageUrl, renderImageUrl)
+}
+
+function isTechnicalPreviewUrl(previewUrl: string, roofImageUrl: string, renderImageUrl: string | null) {
+  if (previewUrl === roofImageUrl || previewUrl === renderImageUrl) return true
+
+  try {
+    const pathname = new URL(previewUrl).pathname.toLowerCase()
+    return pathname.includes('render_preview') || pathname.endsWith('/render.svg')
+  } catch {
+    return previewUrl.includes('render_preview') || previewUrl.endsWith('/render.svg')
+  }
+}
+
+function getLeadsGeminiRenderTimeoutMs() {
+  const configuredValue = Number(process.env.GEMINI_LEADS_TIMEOUT_MS)
+
+  if (Number.isFinite(configuredValue) && configuredValue >= 1000) {
+    return configuredValue
+  }
+
+  return 18_000
 }
