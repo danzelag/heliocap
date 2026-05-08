@@ -352,8 +352,9 @@ _Both Claude and Codex: update this section as work progresses. Note what's done
 ### Status
 - [x] Phase 0 — Kill PropertyVisual, full-bleed hero
 - [x] Phase 1 — `veo-render.ts` + 3 API routes
-- [ ] Phase 2 — n8n nodes
+- [x] Phase 2 — n8n nodes (spec complete, ready to wire in n8n UI)
 - [x] Phase 3 — Verify video renders on proposal page
+- [x] **SHIPPED** — Commit 0452162, pushed to `codex/minimal-admin-ui`, Vercel deploying
 
 ### Decisions log
 - **Auth header:** `verifyN8nRequest` uses `Authorization: Bearer <secret>`, not `x-n8n-secret`. All three new routes use this existing helper. n8n nodes must send `Authorization: Bearer {{ $env.N8N_WEBHOOK_SECRET }}`.
