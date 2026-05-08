@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Database, Plus, RadioTower, ShieldCheck, Sun, Target, Zap } from 'lucide-react'
 import Link from 'next/link'
 import { AdminRoutePrefetcher } from '@/components/admin/AdminRoutePrefetcher'
+import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle'
 import { LeadTable } from '@/components/admin/LeadTable'
 import { ProposalJobsQueue, type ProposalJob, type ProposalJobEvent } from '@/components/admin/ProposalJobsQueue'
 import { Lead } from '@/services/lead.service'
@@ -76,32 +77,33 @@ export default async function AdminDashboard() {
       <nav className="admin-nav sticky top-0 z-20 px-5 py-3 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
-            <div className="grid h-10 w-10 place-items-center rounded-lg border border-emerald-900/60 bg-emerald-950/25">
-              <Sun className="h-5 w-5 text-emerald-300" />
+            <div className="admin-brand-mark h-10 w-10">
+              <Sun className="h-5 w-5" />
             </div>
             <div>
               <div className="admin-eyebrow">Helio Cap</div>
-              <div className="admin-title">Admin</div>
+              <div className="admin-title">Command Center</div>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <div className="hidden rounded-full border border-stone-700/70 bg-stone-950/70 px-3 py-2 text-sm text-slate-500 md:block">
+            <div className="admin-chip hidden px-3 py-2 md:block">
               {user.email}
             </div>
+            <AdminThemeToggle />
             <Link href="/admin" prefetch>
-              <Button variant="outline" className="h-10 rounded-lg border-amber-300/70 bg-emerald-950/25 px-4 text-sm font-semibold text-emerald-300 hover:bg-emerald-950/40">
+              <Button variant="outline" className="admin-nav-pill admin-nav-pill-active">
                 Proposals
               </Button>
             </Link>
             <Link href="/admin/pipeline" prefetch>
-              <Button variant="outline" className="h-10 rounded-lg border-stone-700/70 bg-stone-950/70 px-4 text-sm font-semibold text-stone-300 hover:bg-stone-900/60">
+              <Button variant="outline" className="admin-nav-pill">
                 <RadioTower className="mr-2 h-4 w-4" />
                 Prospects
               </Button>
             </Link>
             <Link href="/admin/leads/new" prefetch>
-              <Button className="h-10 rounded-lg bg-amber-300 px-4 text-sm font-semibold text-stone-950 hover:bg-amber-200">
+              <Button className="admin-primary-button h-10 px-4 text-sm">
                 <Plus className="mr-2 h-4 w-4" />
                 New proposal
               </Button>
@@ -126,13 +128,13 @@ export default async function AdminDashboard() {
 
               <div className="space-y-2">
                 {workflow.map((step, index) => (
-                  <div key={step.label} className="grid grid-cols-[1.75rem_1fr_auto] items-center gap-2 rounded-lg border border-stone-700/70 bg-stone-900/60 p-2.5">
+                  <div key={step.label} className="admin-panel-muted grid grid-cols-[1.75rem_1fr_auto] items-center gap-2 p-2.5">
                     <div className="text-xs font-semibold text-slate-400">{String(index + 1).padStart(2, '0')}</div>
                     <div>
                       <div className="text-xs font-semibold text-stone-400">{step.label}</div>
                       <div className="text-xs text-slate-500">{step.value}</div>
                     </div>
-                    <span className={`h-2 w-2 rounded-full ${step.active ? 'bg-emerald-400' : 'bg-stone-600'}`} />
+                    <span className={`h-2 w-2 rounded-full ${step.active ? 'bg-primary' : 'bg-muted-foreground/35'}`} />
                   </div>
                 ))}
               </div>

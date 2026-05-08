@@ -1,6 +1,7 @@
 import { ChevronLeft, FilePlus2 } from 'lucide-react'
 import Link from 'next/link'
 import { AdminRoutePrefetcher } from '@/components/admin/AdminRoutePrefetcher'
+import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle'
 import LeadGeneratorForm from './LeadGeneratorForm'
 
 export default function NewLeadPage() {
@@ -11,7 +12,7 @@ export default function NewLeadPage() {
       <nav className="admin-nav sticky top-0 z-20 px-5 py-3 lg:px-8">
         <div className="mx-auto flex max-w-6xl items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link href="/admin" prefetch className="grid h-9 w-9 place-items-center rounded-lg border border-stone-700/70 bg-stone-950/70 text-stone-400 transition-colors hover:bg-stone-900/60">
+            <Link href="/admin" prefetch className="admin-nav-pill h-9 w-9 px-0" aria-label="Back to command center">
               <ChevronLeft className="h-5 w-5" />
             </Link>
             <div>
@@ -19,9 +20,12 @@ export default function NewLeadPage() {
               <div className="admin-title">New proposal</div>
             </div>
           </div>
-          <div className="hidden items-center gap-2 rounded-full border border-stone-700/70 bg-stone-950/70 px-3 py-2 text-sm font-medium text-slate-500 sm:flex">
-            <FilePlus2 className="h-3.5 w-3.5 text-slate-400" />
-            New
+          <div className="flex items-center gap-2">
+            <AdminThemeToggle />
+            <div className="admin-chip hidden px-3 py-2 text-sm font-medium sm:flex">
+              <FilePlus2 className="h-3.5 w-3.5" />
+              New
+            </div>
           </div>
         </div>
       </nav>

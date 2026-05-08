@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { ArrowLeft, Database, RadioTower, ShieldCheck, Sun, Target, Zap } from 'lucide-react'
 import { AdminRoutePrefetcher } from '@/components/admin/AdminRoutePrefetcher'
+import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle'
 import { createClient } from '@/lib/supabase-server'
 import { ProspectPipelineTable } from '@/components/admin/ProspectPipelineTable'
 import { ProposalJobsQueue, type ProposalJob, type ProposalJobEvent } from '@/components/admin/ProposalJobsQueue'
@@ -59,8 +60,8 @@ export default async function PipelinePage() {
       <nav className="admin-nav sticky top-0 z-20 px-5 py-3 lg:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
-            <div className="grid h-10 w-10 place-items-center rounded-lg border border-emerald-900/60 bg-emerald-950/25">
-              <ShieldCheck className="h-5 w-5 text-emerald-300" />
+            <div className="admin-brand-mark h-10 w-10">
+              <ShieldCheck className="h-5 w-5" />
             </div>
             <div>
               <div className="admin-eyebrow">Helio Cap</div>
@@ -68,12 +69,13 @@ export default async function PipelinePage() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <Link href="/admin" prefetch className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-stone-700/70 bg-stone-950/70 px-4 text-sm font-semibold text-stone-300 transition-colors hover:bg-stone-900/60">
+          <div className="flex flex-wrap items-center gap-2">
+            <AdminThemeToggle />
+            <Link href="/admin" prefetch className="admin-nav-pill">
               <ArrowLeft className="h-3.5 w-3.5" />
               Proposals
             </Link>
-            <Link href="/admin/pipeline" prefetch className="inline-flex h-10 items-center justify-center rounded-lg border border-amber-300/70 bg-emerald-950/25 px-4 text-sm font-semibold text-emerald-300">
+            <Link href="/admin/pipeline" prefetch className="admin-nav-pill admin-nav-pill-active">
               Prospects
             </Link>
           </div>
@@ -87,7 +89,7 @@ export default async function PipelinePage() {
               <div className="admin-eyebrow">Prospect pipeline</div>
               <h1 className="mt-1 text-2xl font-semibold text-stone-50">Prospects</h1>
             </div>
-            <div className="rounded-full border border-stone-700/70 bg-stone-950/70 px-3 py-2 text-sm text-slate-500">
+            <div className="admin-chip px-3 py-2 text-sm">
               {user.email}
             </div>
           </div>
