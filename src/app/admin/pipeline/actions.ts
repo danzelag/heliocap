@@ -106,6 +106,13 @@ export async function bulkPromoteProspectsToLeadsAction(ids: string[]) {
 
 async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof createAdminClient>>, prospect: Prospect) {
   if (prospect.lead_id && prospect.microsite_slug) {
+    if (prospect.pipeline_stage !== 'microsite_live') {
+      await supabase
+        .from('prospects')
+        .update({ pipeline_stage: 'microsite_live' })
+        .eq('id', prospect.id)
+    }
+
     return {
       success: true,
       lead_id: prospect.lead_id,

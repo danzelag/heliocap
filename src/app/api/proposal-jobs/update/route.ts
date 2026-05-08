@@ -3,12 +3,12 @@ import { createAdminClient } from '@/lib/supabase-server'
 import { verifyN8nRequest } from '@/lib/n8n-auth'
 import { recordProposalJobEvent, type ProposalJobStatus } from '@/lib/proposal-job-events'
 
-const allowedStatuses = ['queued', 'running', 'completed', 'failed'] as const
+const allowedStatuses = ['queued', 'running', 'completed', 'failed', 'not_qualified'] as const
 
 type UpdateProposalJobPayload = {
   job_id?: string
   jobId?: string
-  status?: ProposalJobStatus
+  status?: ProposalJobStatus | 'not_qualified'
   current_step?: string
   step?: string
   message?: string
@@ -24,6 +24,9 @@ type UpdateProposalJobPayload = {
   leadId?: string | null
   error_message?: string | null
   errorMessage?: string | null
+  qualified?: boolean
+  is_qualified?: boolean
+  passed?: boolean
   receipt?: Record<string, unknown> | null
 }
 
@@ -39,8 +42,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'job_id is required' }, { status: 400 })
     }
 
-    const status = body.status || 'running'
-    if (!allowedStatuses.includes(status)) {
+    const requestedStatus = body.status || 'running'
+    if (!allowedStatuses.includes(requestedStatus)) {
       return NextResponse.json({ error: 'Invalid job status' }, { status: 400 })
     }
 
@@ -49,7 +52,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'current_step, step, message, or node_name is required' }, { status: 400 })
     }
 
-    const progressPercent = Number(body.progress_percent ?? body.progress ?? 0)
+    const qualificationFlag = body.qualified ?? body.is_qualified ?? body.passed
+    const isNotQualified =
+      requestedStatus === 'not_qualified' ||
+      qualificationFlag === false ||
+      /not\s*qualified|disqualified|filter qualified solar targets/i.test(currentStep)
+    const status: ProposalJobStatus = isNotQualified ? 'failed' : requestedStatus as ProposalJobStatus
+    const progressPercent = Number(body.progress_percent ?? body.progress ?? (isNotQualified ? 100 : 0))
     if (!Number.isFinite(progressPercent) || progressPercent < 0 || progressPercent > 100) {
       return NextResponse.json({ error: 'progress_percent must be between 0 and 100' }, { status: 400 })
     }
@@ -57,13 +66,18 @@ export async function POST(request: NextRequest) {
     const supabase = await createAdminClient()
     const update: Record<string, unknown> = {
       status,
-      current_step: currentStep,
+      current_step: isNotQualified && !/not\s*qualified/i.test(currentStep)
+        ? `Not qualified: ${currentStep}`
+        : currentStep,
       progress_percent: Math.round(progressPercent),
     }
     const proposalUrl = body.proposal_url ?? body.proposalUrl ?? null
     const leadId = body.lead_id ?? body.leadId ?? null
-    const errorMessage = body.error_message ?? body.errorMessage ?? null
+    const errorMessage = body.error_message ?? body.errorMessage ?? (isNotQualified ? 'Not qualified' : null)
     const receipt = body.receipt || {}
+    if (qualificationFlag !== undefined) {
+      receipt.qualified = qualificationFlag
+    }
     if (body.execution_id || body.executionId) {
       receipt.execution_id = body.execution_id || body.executionId
     }
@@ -73,8 +87,10 @@ export async function POST(request: NextRequest) {
 
     if ('proposal_url' in body || 'proposalUrl' in body) update.proposal_url = proposalUrl
     if ('lead_id' in body || 'leadId' in body) update.lead_id = leadId
-    if ('error_message' in body || 'errorMessage' in body) update.error_message = errorMessage
-    if ('receipt' in body || body.execution_id || body.executionId || body.node_name || body.nodeName) update.receipt = receipt
+    if ('error_message' in body || 'errorMessage' in body || isNotQualified) update.error_message = errorMessage
+    if ('receipt' in body || body.execution_id || body.executionId || body.node_name || body.nodeName || qualificationFlag !== undefined) {
+      update.receipt = receipt
+    }
 
     const { data: job, error } = await supabase
       .from('proposal_jobs')
@@ -90,7 +106,7 @@ export async function POST(request: NextRequest) {
       jobId,
       businessName: job.business_name,
       status,
-      step: currentStep,
+      step: String(update.current_step),
       progressPercent,
       proposalUrl,
       errorMessage,

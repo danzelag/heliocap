@@ -39,7 +39,7 @@ export default async function AdminDashboard() {
     .from('proposal_jobs')
     .select('id, business_name, address, slug, status, current_step, progress_percent, proposal_url, error_message, created_at, updated_at')
     .order('created_at', { ascending: false })
-    .limit(12)
+    .limit(24)
 
   const { data: jobEvents } = await supabase
     .from('proposal_job_events')
@@ -113,7 +113,7 @@ export default async function AdminDashboard() {
       </nav>
 
       <main className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6 lg:px-8">
-        <section className="grid gap-5 lg:grid-cols-[1fr_19rem]">
+        <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_17rem]">
           <ProposalJobsQueue initialJobs={jobRows} initialEvents={jobEventRows} />
 
           <div className="space-y-3">

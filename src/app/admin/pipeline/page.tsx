@@ -32,7 +32,7 @@ export default async function PipelinePage() {
     .from('proposal_jobs')
     .select('id, business_name, address, slug, status, current_step, progress_percent, proposal_url, error_message, created_at, updated_at')
     .order('created_at', { ascending: false })
-    .limit(12)
+    .limit(24)
 
   const { data: jobEvents } = await supabase
     .from('proposal_job_events')

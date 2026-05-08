@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase-server'
-import type { Prospect } from '@/lib/prospect'
+import { sortProspectsForAdmin, type Prospect } from '@/lib/prospect'
 
 export class ProspectService {
   static async listProspects(): Promise<Prospect[]> {
@@ -14,6 +14,6 @@ export class ProspectService {
       return []
     }
 
-    return (data || []) as Prospect[]
+    return sortProspectsForAdmin((data || []) as Prospect[])
   }
 }

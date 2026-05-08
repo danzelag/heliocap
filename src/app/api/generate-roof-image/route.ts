@@ -24,7 +24,18 @@ import {
  */
 export async function POST(request: NextRequest) {
   try {
-    const { lat, lng, slug, bucket = 'leads', job_id, business_name } = await request.json()
+    const {
+      lat,
+      lng,
+      slug,
+      bucket = 'leads',
+      job_id,
+      business_name,
+      prospect_id,
+      prospectId,
+      place_id,
+      placeId,
+    } = await request.json()
 
     if (bucket !== 'leads' && bucket !== 'prospects') {
       return NextResponse.json({ error: 'bucket must be leads or prospects' }, { status: 400 })
@@ -105,6 +116,33 @@ export async function POST(request: NextRequest) {
       progressPercent: 45,
     })
 
+    if (bucket === 'prospects') {
+      const prospectIdentifier = prospect_id || prospectId || (isUuid(slug) ? slug : null)
+      const placeIdentifier = place_id || placeId
+      const update = {
+        panel_count: solarModel.panelCount,
+        system_kw: solarModel.systemSizeKw,
+        yearly_kwh: solarModel.yearlyKwh,
+        annual_savings: solarModel.yearlySavings,
+        system_cost: solarModel.systemCost,
+        federal_itc: solarModel.federalItc,
+        payback_years: solarModel.estimatedPayback,
+        satellite_url: roofImageUrl,
+        render_url: renderImageUrl,
+        render_preview_url: renderPreviewUrl,
+        solar_quality: solarModel.quality,
+        pipeline_stage: 'solar_fetched',
+      }
+
+      if (prospectIdentifier) {
+        const { error: updateError } = await supabase.from('prospects').update(update).eq('id', prospectIdentifier)
+        if (updateError) console.error('[generate-roof-image] prospect update:', updateError.message)
+      } else if (placeIdentifier) {
+        const { error: updateError } = await supabase.from('prospects').update(update).eq('place_id', placeIdentifier)
+        if (updateError) console.error('[generate-roof-image] prospect update:', updateError.message)
+      }
+    }
+
     return NextResponse.json({
       roof_image_url: roofImageUrl,
       render_image_url: renderImageUrl,
@@ -117,4 +155,8 @@ export async function POST(request: NextRequest) {
     console.error('[generate-roof-image]', message)
     return NextResponse.json({ error: message }, { status: 500 })
   }
+}
+
+function isUuid(value: unknown) {
+  return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }

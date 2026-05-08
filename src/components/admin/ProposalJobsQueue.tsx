@@ -40,6 +40,9 @@ type ProposalJobsQueueProps = {
 
 const JOBS_CACHE_KEY = 'admin:proposal-jobs'
 const EVENTS_CACHE_KEY = 'admin:proposal-job-events'
+const STALE_RUNNING_MS = 20 * 60 * 1000
+
+type QueueDisplayStatus = ProposalJob['status'] | 'not_qualified' | 'stalled'
 
 function isBatchJob(job: ProposalJob) {
   return job.slug.startsWith('batch-')
@@ -53,11 +56,31 @@ function parseBatchAddress(address: string) {
   return { count, category, location }
 }
 
-function statusClass(status: ProposalJob['status']) {
-  if (status === 'completed') return 'border-emerald-900/60 bg-emerald-950/25 text-emerald-300'
-  if (status === 'failed') return 'border-red-900/60 bg-red-950/25 text-red-300'
-  if (status === 'running') return 'border-sky-900/60 bg-sky-950/25 text-sky-300'
-  return 'border-stone-700/70 bg-stone-900/60 text-stone-400'
+function getDisplayStatus(job: ProposalJob): QueueDisplayStatus {
+  const text = `${job.current_step || ''} ${job.error_message || ''}`
+  if (/not\s*qualified|disqualified|filter qualified solar targets/i.test(text)) return 'not_qualified'
+  if (
+    job.status === 'running' &&
+    new Date().getTime() - new Date(job.updated_at || job.created_at).getTime() > STALE_RUNNING_MS
+  ) {
+    return 'stalled'
+  }
+  return job.status
+}
+
+function statusClass(status: QueueDisplayStatus) {
+  if (status === 'completed') return 'admin-status admin-status-success px-2 py-1'
+  if (status === 'failed') return 'admin-status admin-status-danger px-2 py-1'
+  if (status === 'not_qualified') return 'admin-status admin-status-warning px-2 py-1'
+  if (status === 'running') return 'admin-status admin-status-running px-2 py-1'
+  if (status === 'stalled') return 'admin-status admin-status-danger px-2 py-1'
+  return 'admin-status px-2 py-1'
+}
+
+function statusLabel(status: QueueDisplayStatus) {
+  if (status === 'not_qualified') return 'not qualified'
+  if (status === 'stalled') return 'needs update'
+  return status
 }
 
 function formatTime(value: string) {
@@ -69,7 +92,20 @@ function formatTime(value: string) {
 }
 
 function sortJobs(jobs: ProposalJob[]) {
-  return [...jobs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 12)
+  const rank: Record<QueueDisplayStatus, number> = {
+    running: 0,
+    queued: 1,
+    stalled: 2,
+    not_qualified: 3,
+    failed: 4,
+    completed: 5,
+  }
+
+  return [...jobs].sort((a, b) => {
+    const statusDelta = rank[getDisplayStatus(a)] - rank[getDisplayStatus(b)]
+    if (statusDelta !== 0) return statusDelta
+    return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
+  }).slice(0, 24)
 }
 
 function sortEvents(events: ProposalJobEvent[]) {
@@ -89,8 +125,14 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
   const [clearError, setClearError] = useState<string | null>(null)
   const [isClearing, startClearTransition] = useTransition()
 
-  const activeCount = useMemo(() => jobs.filter((j) => j.status === 'queued' || j.status === 'running').length, [jobs])
-  const finishedCount = useMemo(() => jobs.filter((j) => !isBatchJob(j) && (j.status === 'completed' || j.status === 'failed')).length, [jobs])
+  const activeCount = useMemo(() => jobs.filter((j) => {
+    const status = getDisplayStatus(j)
+    return status === 'queued' || status === 'running'
+  }).length, [jobs])
+  const finishedCount = useMemo(() => jobs.filter((j) => {
+    const status = getDisplayStatus(j)
+    return !isBatchJob(j) && (status === 'completed' || status === 'failed' || status === 'not_qualified')
+  }).length, [jobs])
 
   const setJobs = (next: SetStateAction<ProposalJob[]>) => {
     setJobsState((prev) => {
@@ -110,7 +152,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
 
   const handleClearQueue = () => {
     if (finishedCount === 0) return
-    if (!window.confirm(`Clear ${finishedCount} completed/failed job${finishedCount === 1 ? '' : 's'} from the queue?`)) return
+    if (!window.confirm(`Clear ${finishedCount} finished job${finishedCount === 1 ? '' : 's'} from the queue?`)) return
     setClearError(null)
     startClearTransition(async () => {
       const result = await clearProposalQueueAction()
@@ -133,7 +175,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
           .from('proposal_jobs')
           .select('id, business_name, address, slug, status, current_step, progress_percent, proposal_url, error_message, created_at, updated_at')
           .order('created_at', { ascending: false })
-          .limit(12),
+          .limit(24),
         supabase
           .from('proposal_job_events')
           .select('id, job_id, business_name, status, step, progress_percent, proposal_url, error_message, created_at')
@@ -174,18 +216,18 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
 
   return (
     <section className={`admin-panel self-start transition-all ${collapsed ? 'p-3 lg:p-4' : 'p-4 lg:p-5'}`}>
-      <div className={`flex items-center justify-between ${collapsed ? '' : 'mb-4 border-b border-stone-700/70 pb-4'}`}>
+      <div className={`flex items-center justify-between ${collapsed ? '' : 'admin-divider mb-3 border-b pb-3'}`}>
         <button
           type="button"
           onClick={() => setCollapsed((v) => !v)}
           className="flex items-center gap-2.5 text-left"
         >
           {collapsed ? <ChevronRight className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
-          <Activity className="h-3.5 w-3.5 text-slate-500" />
+          <Activity className="h-3.5 w-3.5 text-primary" />
           <span className="text-sm font-semibold text-stone-100">
             Build queue
             {activeCount > 0 && (
-              <span className="ml-2 font-mono text-xs text-sky-400">{activeCount} active</span>
+              <span className="ml-2 font-mono text-xs text-primary">{activeCount} active</span>
             )}
           </span>
         </button>
@@ -194,7 +236,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
             type="button"
             disabled={isClearing}
             onClick={handleClearQueue}
-            className="inline-flex items-center gap-1.5 rounded border border-stone-700/70 px-2 py-1 text-xs text-slate-500 transition-colors hover:border-red-900/60 hover:text-red-300 disabled:opacity-50"
+            className="admin-subtle-button inline-flex items-center gap-1.5 px-2 py-1 text-xs transition-colors hover:text-red-300 disabled:opacity-50"
           >
             {isClearing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
             Clear {finishedCount}
@@ -205,11 +247,11 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
       {clearError && <div className="mb-3 text-xs text-red-300">{clearError}</div>}
 
       {!collapsed && (
-        <div className="overflow-hidden rounded-lg border border-stone-700/70 bg-stone-950/70">
+        <div className="admin-scroll-panel overflow-hidden">
           {jobs.length === 0 ? (
             <div className="p-5 text-sm text-slate-500">No jobs yet.</div>
           ) : (
-            <div className="max-h-[680px] divide-y divide-stone-800/80 overflow-y-auto">
+            <div className="max-h-[340px] divide-y divide-stone-800/80 overflow-y-auto">
               {jobs.map((job) => {
                 if (isBatchJob(job)) {
                   const { count, category, location } = parseBatchAddress(job.address)
@@ -223,7 +265,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
                           {[count, category, location].filter(Boolean).map((chip) => (
                             <span
                               key={chip}
-                              className="rounded border border-stone-700/70 bg-stone-900/60 px-2 py-0.5 text-xs text-stone-300"
+                              className="admin-chip px-2 py-0.5 text-xs"
                             >
                               {chip}
                             </span>
@@ -236,6 +278,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
                 }
 
                 const jobEvents = getJobEvents(events, job.id)
+                const displayStatus = getDisplayStatus(job)
                 return (
                   <div key={job.id} className="px-4 py-3">
                     <div className="flex items-start gap-3">
@@ -245,8 +288,8 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1.5">
                         <span className="text-xs text-slate-500">{formatTime(job.updated_at || job.created_at)}</span>
-                        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusClass(job.status)}`}>
-                          {job.status}
+                        <span className={statusClass(displayStatus)}>
+                          {statusLabel(displayStatus)}
                         </span>
                         {job.proposal_url ? (
                           <Link
@@ -262,12 +305,13 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
                     </div>
 
                     {jobEvents.length > 0 && (
-                      <div className="mt-3 space-y-1.5 border-l border-stone-700/60 pl-3">
+                      <div className="admin-divider mt-3 space-y-1.5 border-l pl-3">
                         {jobEvents.map((event) => {
                           const tone =
-                            event.status === 'failed' ? 'text-red-300/80'
+                            /not\s*qualified|disqualified|filter qualified/i.test(`${event.step} ${event.error_message || ''}`) ? 'text-amber-300'
+                            : event.status === 'failed' ? 'text-red-300/80'
                             : event.status === 'completed' ? 'text-emerald-300/80'
-                            : event.status === 'running' ? 'text-sky-300/80'
+                            : event.status === 'running' ? 'text-primary'
                             : 'text-stone-500'
                           return (
                             <div key={event.id} className="grid grid-cols-[5rem_1fr] gap-2 text-xs">

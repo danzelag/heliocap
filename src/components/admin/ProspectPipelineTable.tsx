@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition, type SetStateAction } from
 import Link from 'next/link'
 import { ExternalLink, Loader2, RadioTower, Rocket, Send, Trash2, TriangleAlert, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { type Prospect, type ProspectStage, prospectStages } from '@/lib/prospect'
+import { sortProspectsForAdmin, type Prospect, type ProspectStage, prospectStages } from '@/lib/prospect'
 import {
   bulkDeleteProspectsAction,
   bulkPromoteProspectsToLeadsAction,
@@ -46,15 +46,17 @@ function formatNumber(value: number | null) {
 }
 
 function stageClass(stage: ProspectStage) {
-  if (stage === 'booked') return 'border-emerald-900/60 bg-emerald-950/25 text-emerald-300'
-  if (stage === 'microsite_live' || stage === 'emailed' || stage === 'replied') return 'border-sky-900/60 bg-sky-950/25 text-sky-300'
-  if (stage === 'dead') return 'border-red-900/60 bg-red-950/25 text-red-300'
-  if (stage === 'snoozed') return 'border-amber-900/60 bg-amber-950/25 text-amber-300'
-  return 'border-stone-700/70 bg-stone-900/60 text-stone-400'
+  if (stage === 'booked' || stage === 'microsite_live') return 'admin-status admin-status-success px-2.5 py-1'
+  if (stage === 'dead') return 'admin-status admin-status-danger px-2.5 py-1'
+  if (stage === 'snoozed') return 'admin-status admin-status-warning px-2.5 py-1'
+  if (stage === 'solar_fetched' || stage === 'enriched' || stage === 'emailed' || stage === 'replied') {
+    return 'admin-status admin-status-running px-2.5 py-1'
+  }
+  return 'admin-status px-2.5 py-1'
 }
 
 export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTableProps) {
-  const [prospects, setProspectsState] = useState(() => readClientCache<Prospect[]>(PROSPECTS_CACHE_KEY) || initialProspects)
+  const [prospects, setProspectsState] = useState(() => sortProspectsForAdmin(readClientCache<Prospect[]>(PROSPECTS_CACHE_KEY) || initialProspects))
   const [activeStage, setActiveStage] = useState<ProspectStage | 'all'>('all')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -63,7 +65,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
 
   const setProspects = (next: SetStateAction<Prospect[]>) => {
     setProspectsState((prev) => {
-      const resolved = typeof next === 'function' ? next(prev) : next
+      const resolved = sortProspectsForAdmin(typeof next === 'function' ? next(prev) : next)
       writeClientCache(PROSPECTS_CACHE_KEY, resolved)
       return resolved
     })
@@ -80,7 +82,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
         .order('created_at', { ascending: false })
 
       if (!mounted || !data) return
-      const nextProspects = data as Prospect[]
+      const nextProspects = sortProspectsForAdmin(data as Prospect[])
       setProspectsState(nextProspects)
       writeClientCache(PROSPECTS_CACHE_KEY, nextProspects)
     }
@@ -111,9 +113,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
 
           setProspects((prev) => {
             const existing = prev.filter((prospect) => prospect.id !== nextProspect.id)
-            return [nextProspect, ...existing].sort((a, b) => (
-              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-            ))
+            return sortProspectsForAdmin([nextProspect, ...existing])
           })
         },
       )
@@ -170,6 +170,16 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
         const alreadyLive = 'already_live' in result && result.already_live
 
         if (alreadyLive) {
+          setProspects((prev) => prev.map((prospect) => (
+            prospect.id === id
+              ? {
+                ...prospect,
+                lead_id: 'lead_id' in result && typeof result.lead_id === 'string' ? result.lead_id : prospect.lead_id,
+                microsite_slug: slug,
+                pipeline_stage: 'microsite_live',
+              }
+              : prospect
+          )))
           setMessage(`Already live at ${url || `/proposal/${slug}`}`)
         } else {
           setMessage(`Proposal job queued for ${slug}. Watch the proposal build monitor for completion.`)
@@ -358,6 +368,16 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
             ) : (
               filteredProspects.map((prospect) => {
                 const busy = isPending && activeId === prospect.id
+                const hasProposal = Boolean(prospect.lead_id || prospect.microsite_slug)
+                const hasSolarData = Boolean(
+                  prospect.panel_count ||
+                  prospect.system_kw ||
+                  prospect.annual_savings ||
+                  prospect.federal_itc ||
+                  prospect.satellite_url ||
+                  prospect.render_url ||
+                  prospect.render_preview_url
+                )
                 return (
                   <tr key={prospect.id} className="transition-colors hover:bg-stone-900/60">
                     <td className="px-4 py-4 align-top">
@@ -372,32 +392,41 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                     <td className="px-4 py-4 align-top">
                       <div className="font-semibold text-stone-50">{prospect.business_name || prospect.address.split(',')[0]}</div>
                       <div className="mt-1 max-w-xs text-xs text-slate-500">{prospect.address}</div>
-                      <div className="mt-2 text-xs text-slate-400">
-                        {prospect.metro || 'Metro pending'} · {prospect.county || 'County pending'}
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-400">
+                        {hasProposal && <span className="admin-status admin-status-success px-2 py-1">proposal made</span>}
+                        <span>{prospect.metro || 'Metro pending'} · {prospect.county || 'County pending'}</span>
                       </div>
                     </td>
                     <td className="px-4 py-4 align-top">
                       <div className="text-xs font-medium text-stone-300">{prospect.place_id || prospect.parcel_id || 'No ID'}</div>
                       <div className="mt-1 text-xs text-slate-500">
-                        {formatNumber(prospect.sqft)} sqft · {prospect.year_built || 'Year unknown'}
-                      </div>
-                      <div className="mt-1 text-xs text-slate-500">{prospect.use_code || 'Use code pending'}</div>
-                    </td>
-                    <td className="px-4 py-4 align-top">
-                      <div className="text-xs font-medium text-stone-300">
-                        {formatNumber(prospect.panel_count)} panels · {prospect.system_kw || 0} kW
+                        {prospect.sqft ? `${formatNumber(prospect.sqft)} sqft` : 'Area pending'} · {prospect.year_built || 'Year unknown'}
                       </div>
                       <div className="mt-1 text-xs text-slate-500">
-                        {formatUSD(prospect.annual_savings)} annual · {formatUSD(prospect.federal_itc)} ITC
+                        {prospect.use_code || prospect.category || 'Use code pending'}
                       </div>
+                    </td>
+                    <td className="px-4 py-4 align-top">
+                      {hasSolarData ? (
+                        <>
+                          <div className="text-xs font-medium text-stone-300">
+                            {formatNumber(prospect.panel_count)} panels · {prospect.system_kw || 0} kW
+                          </div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {formatUSD(prospect.annual_savings)} annual · {formatUSD(prospect.federal_itc)} ITC
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-xs font-medium text-stone-300">Solar pending</div>
+                      )}
                       <div className="mt-2 flex gap-2">
                         {prospect.satellite_url && (
-                          <a href={prospect.satellite_url} target="_blank" rel="noreferrer" className="text-xs font-medium text-slate-500 hover:text-emerald-300">
+                          <a href={prospect.satellite_url} target="_blank" rel="noreferrer" className="text-xs font-medium text-slate-500 hover:text-primary">
                             Satellite
                           </a>
                         )}
-                        {prospect.render_url && (
-                          <a href={prospect.render_url} target="_blank" rel="noreferrer" className="text-xs font-medium text-slate-500 hover:text-emerald-300">
+                        {(prospect.render_preview_url || prospect.render_url) && (
+                          <a href={prospect.render_preview_url || prospect.render_url || '#'} target="_blank" rel="noreferrer" className="text-xs font-medium text-slate-500 hover:text-primary">
                             Render
                           </a>
                         )}
@@ -441,11 +470,11 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                           type="button"
                           size="sm"
                           className="rounded-md bg-amber-300 text-stone-950 hover:bg-amber-200"
-                          disabled={busy || prospect.pipeline_stage === 'dead'}
+                          disabled={busy || prospect.pipeline_stage === 'dead' || hasProposal}
                           onClick={() => handlePromote(prospect.id)}
-                          title="Promote prospect to proposal worker"
+                          title={hasProposal ? 'Proposal already made' : 'Promote prospect to proposal worker'}
                         >
-                          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : hasProposal ? <ExternalLink className="h-4 w-4" /> : <Send className="h-4 w-4" />}
                         </Button>
                         {prospect.microsite_slug && (
                           <Link

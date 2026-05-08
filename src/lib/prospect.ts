@@ -60,3 +60,28 @@ export interface Prospect {
   created_at: string
   updated_at: string
 }
+
+const prospectStageRank: Record<string, number> = {
+  microsite_live: 0,
+  booked: 1,
+  replied: 2,
+  emailed: 3,
+  enriched: 4,
+  solar_fetched: 5,
+  sourced: 6,
+  snoozed: 7,
+  dead: 8,
+}
+
+export function sortProspectsForAdmin(prospects: Prospect[]) {
+  return [...prospects].sort((a, b) => {
+    const aDelivered = a.lead_id || a.microsite_slug ? 0 : 1
+    const bDelivered = b.lead_id || b.microsite_slug ? 0 : 1
+    if (aDelivered !== bDelivered) return aDelivered - bDelivered
+
+    const stageDelta = (prospectStageRank[a.pipeline_stage] ?? 99) - (prospectStageRank[b.pipeline_stage] ?? 99)
+    if (stageDelta !== 0) return stageDelta
+
+    return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
+  })
+}
