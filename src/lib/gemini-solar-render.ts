@@ -5,23 +5,25 @@ const DEFAULT_TIMEOUT_MS = 45_000
 const PREVIEW_WIDTH = 1280
 const PREVIEW_HEIGHT = 720
 
-const PREMIUM_SOLAR_RENDER_PROMPT = `Create a premium 16:9 architectural aerial visualization of a commercial rooftop solar installation.
+const PREMIUM_SOLAR_RENDER_PROMPT = `Transform this commercial property satellite reference into a premium architectural energy visualization.
 
-Use the first image only as the real site reference for roof shape, building footprint, roads, grass, shadows, and surrounding context.
-If a second image is provided, use it only as a rough technical guide for where solar panels belong. Do not copy its flat overlay style, dots, strokes, grid texture, colors, labels, or map-user-interface look.
+Use the first image only for geometry, scale, roof shape, building footprint, parking layout, lot context, and commercial property scale. If a second image is provided, use it as the solar panel layout guide and preserve the array placement, row direction, spacing, setbacks, and usable-roof boundaries.
 
-The final image should feel like a polished commercial development render created for an executive solar proposal, not a Google Maps screenshot.
-Re-render the entire scene with improved image quality, cleaner light, better contrast, crisp roof edges, subtle atmospheric depth, and natural-looking shadows.
-Keep the property recognizable and preserve the building geometry, driveway layout, nearby roads, and major site features.
-Add realistic dark blue and black solar panels aligned in clean professional rows across practical usable roof areas.
-Leave setbacks, HVAC zones, parapet edges, access aisles, and maintenance corridors clear.
-Do not place panels on parking lots, roads, trees, grass, vehicles, facade walls, roof edges, or irregular unusable areas.
-Panels must have believable perspective, subtle reflection, depth, and soft contact shadows so they look installed rather than pasted on.
-Avoid the appearance of satellite map tiles, over-sharpened map texture, flat decals, dotted panel acne, neon outlines, labels, UI controls, or HUD graphics.
-Do not add text, people, vehicles, logos, icons, labels, pins, watermarks, borders, or interface elements.
-Return only the final image.`
+Use an elevated oblique aerial perspective with subtle isometric/axonometric architectural visualization characteristics. The roof and solar layout must remain clearly visible while the building retains dimensional depth and premium 3D massing. Avoid flat top-down GIS aesthetics and avoid ground-level cinematic hero-shot perspectives.
 
-export type PremiumSolarRenderSource = 'ai_generated' | 'fallback_roof_image'
+Recreate ONLY the target property and its immediate site context. Do not invent, expand, or add surrounding buildings, neighboring properties, extra roads, city blocks, skyline elements, or unrelated structures. Keep the composition focused on the subject building, its roof, its parking/lot area, and only the minimal adjacent context needed to understand the site.
+
+Recreate the scene as a clean CAD and architectural visualization render with commercial-grade presentation quality. The result should feel like an executive-ready solar infrastructure concept board: clean 3D massing, crisp roof planes, simplified premium materials, subtle realistic daylight, soft shadows, gentle depth, and a professional developer-style solar proposal aesthetic.
+
+Integrate the solar panel array naturally into the roof design. Panels should be clean dark blue or black commercial modules with believable perspective, consistent rows, subtle depth, and soft contact shadows. Keep panel placement stable and unwarped; do not slide panels onto parking lots, roads, trees, grass, facade walls, roof edges, or unusable areas.
+
+Preserve the recognizable building footprint, roof geometry, panel layout, parking and lot context, access paths, and overall commercial site scale. Reinterpret everything else in a refined architectural style.
+
+Do not preserve satellite textures, map artifacts, compression, cars, stains, labels, UI controls, watermarks, muddy roof imagery, or Google Maps visual style. Do not create a fake photorealistic drone edit. Avoid sticker-like panels, warped panel placement, cartoon style, anime style, SimCity style, neon outlines, HUD graphics, text, people, vehicles, logos, icons, pins, borders, or interface elements.
+
+Return only a polished 16:9 executive render image.`
+
+export type PremiumSolarRenderSource = 'ai_generated' | 'executive_render' | 'fallback_roof_image'
 
 export type ImageAsset = {
   buffer: Buffer
