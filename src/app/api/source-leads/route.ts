@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
+import { createAdminClient, createClient } from '@/lib/supabase-server'
 
 type SourceLeadsPayload = {
   location?: string
@@ -71,6 +71,18 @@ export async function POST(request: NextRequest) {
         { status: 502 }
       )
     }
+
+    const adminSupabase = await createAdminClient()
+    await adminSupabase.from('proposal_jobs').insert({
+      business_name: 'Gather proposals',
+      address: `${maxResults} ${category} · ${location}`,
+      lat: 0,
+      lng: 0,
+      slug: `batch-${Date.now()}`,
+      status: 'completed',
+      current_step: 'Workflow triggered',
+      progress_percent: 100,
+    })
 
     return NextResponse.json({
       success: true,

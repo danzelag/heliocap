@@ -99,9 +99,9 @@ export async function POST(request: NextRequest) {
       await updateProposalJobProgress(supabase, {
         jobId: job_id,
         businessName: business_name,
-        status: 'running',
+        status: 'completed',
         step: 'Proposal image complete',
-        progressPercent: 85,
+        progressPercent: 100,
       })
 
       console.log('[generate-proposal-image] Result: ai_generated')
@@ -114,9 +114,9 @@ export async function POST(request: NextRequest) {
       await updateProposalJobProgress(supabase, {
         jobId: job_id,
         businessName: business_name,
-        status: 'running',
-        step: 'AI render unavailable, using satellite roof image',
-        progressPercent: 85,
+        status: 'completed',
+        step: 'Image unavailable — using satellite roof image',
+        progressPercent: 100,
       })
 
       return NextResponse.json({
