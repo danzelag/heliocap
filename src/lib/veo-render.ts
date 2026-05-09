@@ -39,6 +39,7 @@ export async function submitVeoRender({
   if (durationSeconds !== 5) {
     throw new Error('Veo duration must remain fixed at 5 seconds')
   }
+  console.log('VEO_DURATION_SENT', durationSeconds)
 
   const res = await fetch(`${VEO_BASE}/models/${model}:predictLongRunning`, {
     method: 'POST',
