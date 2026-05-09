@@ -15,9 +15,14 @@ export async function POST(request: NextRequest) {
   const authError = verifyN8nRequest(request)
   if (authError) return authError
 
+  let jobId: string | undefined
+  let businessName: string | undefined
+
   try {
     const body = (await request.json()) as GenerateProposalVideoBody
     const { slug, render_preview_url, job_id, business_name } = body
+    jobId = job_id
+    businessName = business_name
 
     if (!slug || !render_preview_url) {
       return NextResponse.json({ error: 'slug and render_preview_url are required' }, { status: 400 })
@@ -54,6 +59,23 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     console.error('[generate-proposal-video]', message)
+
+    if (jobId) {
+      try {
+        const supabase = await createAdminClient()
+        await updateProposalJobProgress(supabase, {
+          jobId,
+          businessName,
+          status: 'failed',
+          step: 'Veo render failed',
+          progressPercent: 88,
+          errorMessage: message,
+        })
+      } catch (progressError) {
+        console.error('[generate-proposal-video/progress]', progressError)
+      }
+    }
+
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

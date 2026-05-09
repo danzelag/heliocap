@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase-server'
 import { verifyN8nRequest } from '@/lib/n8n-auth'
 import { finalizeVeoRender } from '@/lib/veo-render'
@@ -17,9 +18,14 @@ export async function POST(request: NextRequest) {
   const authError = verifyN8nRequest(request)
   if (authError) return authError
 
+  let jobId: string | undefined
+  let businessName: string | undefined
+
   try {
     const body = (await request.json()) as FinalizeProposalVideoBody
     const { operation_name, slug, job_id, business_name } = body
+    jobId = job_id
+    businessName = business_name
 
     if (!operation_name || !slug) {
       return NextResponse.json({ error: 'operation_name and slug are required' }, { status: 400 })
@@ -57,6 +63,8 @@ export async function POST(request: NextRequest) {
 
     if (dbError) throw dbError
 
+    revalidatePath(`/proposal/${slug}`)
+
     await updateProposalJobProgress(supabase, {
       jobId: job_id,
       businessName: business_name,
@@ -69,6 +77,23 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     console.error('[generate-proposal-video/finalize]', message)
+
+    if (jobId) {
+      try {
+        const supabase = await createAdminClient()
+        await updateProposalJobProgress(supabase, {
+          jobId,
+          businessName,
+          status: 'failed',
+          step: 'Video finalize skipped',
+          progressPercent: 94,
+          errorMessage: message,
+        })
+      } catch (progressError) {
+        console.error('[generate-proposal-video/finalize/progress]', progressError)
+      }
+    }
+
     // Non-fatal — the proposal already has a still image. Log and skip.
     return NextResponse.json({ skipped: true, reason: message })
   }
