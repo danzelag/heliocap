@@ -67,6 +67,24 @@ export async function POST(request: Request) {
     if (!business_name) {
       return NextResponse.json({ error: 'business_name is required' }, { status: 400 })
     }
+
+    if (!isUsableVideoUrl(video_url)) {
+      await updateProposalJobProgress(supabase, {
+        jobId: job_id,
+        businessName: business_name,
+        status: 'running',
+        step: 'Waiting for proposal video',
+        progressPercent: 92,
+      })
+
+      return NextResponse.json({
+        success: false,
+        pending: true,
+        source: 'pending_video',
+        reason: 'Proposal video is required before publishing',
+      }, { status: 202 })
+    }
+
     await updateProposalJobProgress(supabase, {
       jobId: job_id,
       businessName: business_name,
@@ -330,4 +348,8 @@ function getLeadsGeminiRenderTimeoutMs() {
   }
 
   return 18_000
+}
+
+function isUsableVideoUrl(value: unknown) {
+  return typeof value === 'string' && /^https?:\/\//i.test(value.trim())
 }
