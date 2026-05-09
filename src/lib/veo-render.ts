@@ -28,15 +28,17 @@ type VeoOperationResponse = {
 export async function submitVeoRender({
   seedBuffer,
   seedMimeType,
-  durationSeconds,
 }: {
   seedBuffer: Buffer
   seedMimeType: string
-  durationSeconds?: number | null
 }): Promise<{ operationName: string }> {
   const apiKey = getApiKey()
   const model = process.env.VEO_MODEL ?? DEFAULT_VEO_MODEL
-  const clampedDurationSeconds = Math.min(8, Math.max(4, durationSeconds ?? 5))
+  const requestedDurationSeconds = 5
+  const durationSeconds = Math.min(8, Math.max(4, requestedDurationSeconds ?? 5))
+  if (durationSeconds !== 5) {
+    throw new Error('Veo duration must remain fixed at 5 seconds')
+  }
 
   const res = await fetch(`${VEO_BASE}/models/${model}:predictLongRunning`, {
     method: 'POST',
@@ -56,7 +58,7 @@ export async function submitVeoRender({
       ],
       parameters: {
         aspectRatio: '16:9',
-        durationSeconds: clampedDurationSeconds,
+        durationSeconds: 5,
         sampleCount: 1,
       },
     }),
