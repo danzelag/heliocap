@@ -1,8 +1,9 @@
 const DEFAULT_VEO_MODEL = 'veo-3.0-generate-001'
 const VEO_BASE = 'https://generativelanguage.googleapis.com/v1beta'
+const FIXED_VEO_DURATION_SECONDS = 6
 
 const VEO_CINEMATIC_PROMPT =
-  'Cinematic aerial shot of a single commercial building. Smooth, slow drone-style flyover, gentle parallax, 5 seconds. Premium architectural visualization aesthetic — clean materials, soft natural daylight, subtle long shadows, gentle atmospheric depth. During the shot, dark commercial solar panels appear naturally across the roof in a clean grid layout. Preserve the building footprint and roof shape from the reference image. No text, no UI, no labels, no map artifacts, no Google Maps style, no people, no vehicles, no logos, no neon, no cartoon. Style: high-end infrastructure visualization, premium energy brand, calm and confident.'
+  'Cinematic aerial shot of a single commercial building. Smooth, slow drone-style flyover, gentle parallax, 6 seconds. Premium architectural visualization aesthetic — clean materials, soft natural daylight, subtle long shadows, gentle atmospheric depth. During the shot, dark commercial solar panels appear naturally across the roof in a clean grid layout. Preserve the building footprint and roof shape from the reference image. No text, no UI, no labels, no map artifacts, no Google Maps style, no people, no vehicles, no logos, no neon, no cartoon. Style: high-end infrastructure visualization, premium energy brand, calm and confident.'
 
 type VeoVideo = {
   uri?: string
@@ -34,10 +35,10 @@ export async function submitVeoRender({
 }): Promise<{ operationName: string }> {
   const apiKey = getApiKey()
   const model = process.env.VEO_MODEL ?? DEFAULT_VEO_MODEL
-  const requestedDurationSeconds = 5
-  const durationSeconds = Math.min(8, Math.max(4, requestedDurationSeconds ?? 5))
-  if (durationSeconds !== 5) {
-    throw new Error('Veo duration must remain fixed at 5 seconds')
+  const requestedDurationSeconds = FIXED_VEO_DURATION_SECONDS
+  const durationSeconds = Math.min(8, Math.max(4, requestedDurationSeconds ?? 6))
+  if (durationSeconds !== FIXED_VEO_DURATION_SECONDS) {
+    throw new Error('Veo duration must remain fixed at 6 seconds')
   }
   console.log('VEO_DURATION_SENT', durationSeconds)
 
@@ -59,7 +60,7 @@ export async function submitVeoRender({
       ],
       parameters: {
         aspectRatio: '16:9',
-        durationSeconds: 5,
+        durationSeconds: FIXED_VEO_DURATION_SECONDS,
         sampleCount: 1,
       },
     }),
