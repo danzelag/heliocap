@@ -5,23 +5,23 @@ const DEFAULT_TIMEOUT_MS = 45_000
 const PREVIEW_WIDTH = 1280
 const PREVIEW_HEIGHT = 720
 
-const PREMIUM_SOLAR_RENDER_PROMPT = `Transform this commercial property satellite reference into a premium architectural energy visualization.
+const PREMIUM_SOLAR_RENDER_PROMPT = `Create a faithful polished seed image for a commercial solar proposal video.
 
-Use the first image only for geometry, scale, roof shape, building footprint, parking layout, lot context, and commercial property scale. If a second image is provided, use it as the solar panel layout guide and preserve the array placement, row direction, spacing, setbacks, and usable-roof boundaries.
+Use the first image as the base image, not loose inspiration. Preserve the exact target property, building footprint, roof outline, roof proportions, roof orientation, parking layout, drive aisles, lot context, adjacent roads, nearby green areas, shadows, and overall camera angle. Keep the same crop and composition unless a tiny centering correction is needed.
 
-Use an elevated oblique aerial perspective with subtle isometric/axonometric architectural visualization characteristics. The roof and solar layout must remain clearly visible while the building retains dimensional depth and premium 3D massing. Avoid flat top-down GIS aesthetics and avoid ground-level cinematic hero-shot perspectives.
+If a second image is provided, use it only as the solar panel layout guide. Preserve the array placement, row direction, spacing, setbacks, and usable-roof boundaries. Do not move panels onto parking lots, roads, trees, grass, facade walls, roof edges, or unusable areas.
 
-Recreate ONLY the target property and its immediate site context. Do not invent, expand, or add surrounding buildings, neighboring properties, extra roads, city blocks, skyline elements, or unrelated structures. Keep the composition focused on the subject building, its roof, its parking/lot area, and only the minimal adjacent context needed to understand the site.
+This is an image-to-image cleanup of the same property. Do not substitute a different building. Do not redesign the building. Do not invent, expand, or add surrounding buildings, neighboring properties, extra roads, city blocks, skyline elements, unrelated structures, new entrances, new roof sections, new parking rows, or a different site.
 
-Recreate the scene as a clean CAD and architectural visualization render with commercial-grade presentation quality. The result should feel like an executive-ready solar infrastructure concept board: clean 3D massing, crisp roof planes, simplified premium materials, subtle realistic daylight, soft shadows, gentle depth, and a professional developer-style solar proposal aesthetic.
+Improve the source image quality while keeping it recognizable: reduce map compression, sharpen roof edges, clean muddy roof texture, improve contrast, clarify shadows, and make the site look premium enough to seed a cinematic Veo clip. Keep the original aerial perspective. Do not convert the scene into a new oblique/isometric 3D model if that changes the building identity.
 
-Integrate the solar panel array naturally into the roof design. Panels should be clean dark blue or black commercial modules with believable perspective, consistent rows, subtle depth, and soft contact shadows. Keep panel placement stable and unwarped; do not slide panels onto parking lots, roads, trees, grass, facade walls, roof edges, or unusable areas.
+Integrate clean dark blue or black commercial solar modules naturally into the existing roof. Panels must follow the provided layout guide when available, with believable perspective, consistent rows, subtle depth, and soft contact shadows. Keep panel placement stable and unwarped.
 
-Preserve the recognizable building footprint, roof geometry, panel layout, parking and lot context, access paths, and overall commercial site scale. Reinterpret everything else in a refined architectural style.
+The output must still look like the same property from the input image at a glance. Fidelity matters more than making it look impressive.
 
-Do not preserve satellite textures, map artifacts, compression, cars, stains, labels, UI controls, watermarks, muddy roof imagery, or Google Maps visual style. Do not create a fake photorealistic drone edit. Avoid sticker-like panels, warped panel placement, cartoon style, anime style, SimCity style, neon outlines, HUD graphics, text, people, vehicles, logos, icons, pins, borders, or interface elements.
+Remove labels, UI controls, watermarks, map artifacts, compression, cars, people, logos, icons, pins, borders, and interface elements. Avoid sticker-like panels, warped panel placement, cartoon style, anime style, SimCity style, neon outlines, HUD graphics, text, or fake unrelated architecture.
 
-Return only a polished 16:9 executive render image.`
+Return only a polished 16:9 image of the same commercial property for Veo video generation.`
 
 export type PremiumSolarRenderSource = 'ai_generated' | 'executive_render' | 'fallback_roof_image'
 
