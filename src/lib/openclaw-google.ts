@@ -97,15 +97,38 @@ export async function uploadLeadAsset({
   body,
   contentType,
 }: UploadAssetArgs) {
+  const resolvedBucket = await resolveStorageBucket(supabase, bucket)
   const filePath = `${slug}/${fileName}`
   const { error } = await supabase.storage
-    .from(bucket)
+    .from(resolvedBucket)
     .upload(filePath, body, { contentType, upsert: true })
 
   if (error) throw error
 
-  const { data } = supabase.storage.from(bucket).getPublicUrl(filePath)
+  const { data } = supabase.storage.from(resolvedBucket).getPublicUrl(filePath)
   return data.publicUrl
+}
+
+async function resolveStorageBucket(
+  supabase: SupabaseClient,
+  bucket: NonNullable<UploadAssetArgs['bucket']>,
+): Promise<string> {
+  const { data: buckets, error: listError } = await supabase.storage.listBuckets()
+  if (listError) throw listError
+
+  const exactMatch = buckets.find((candidate) => candidate.id === bucket || candidate.name === bucket)
+  if (exactMatch) return exactMatch.id
+
+  const caseMatch = buckets.find((candidate) => (
+    candidate.id.toLowerCase() === bucket.toLowerCase() ||
+    candidate.name.toLowerCase() === bucket.toLowerCase()
+  ))
+  if (caseMatch) return caseMatch.id
+
+  const { error: createError } = await supabase.storage.createBucket(bucket, { public: true })
+  if (createError) throw createError
+
+  return bucket
 }
 
 export async function buildRasterRenderPreview(renderSvg: string) {
