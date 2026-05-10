@@ -17,6 +17,31 @@ import {
 
 type RenderSource = PremiumSolarRenderSource | 'provided_preview' | 'technical_preview' | 'none'
 
+type ProposalJobLookup = {
+  id: string
+  business_name: string | null
+  address: string | null
+  slug: string | null
+  lead_id: string | null
+  receipt: Record<string, unknown> | null
+}
+
+type ProspectLookup = {
+  id: string
+  address: string | null
+  business_name: string | null
+  owner_name: string | null
+  sqft: number | null
+  annual_savings: number | null
+  payback_years: number | null
+  satellite_url: string | null
+  render_url: string | null
+  render_preview_url: string | null
+  lat: number | null
+  lng: number | null
+  use_code: string | null
+}
+
 /**
  * Automation Hook for external AIs like OpenClaw.
  * POST /api/leads
@@ -28,26 +53,50 @@ export async function POST(request: Request) {
 
     const supabase = await createAdminClient()
     const body = await request.json()
-    const {
-      business_name,
-      contact_name,
-      address,
-      roof_sqft,
-      utility_rate,
-      notes,
-      roof_image_url,
-      render_image_url,
-      render_preview_url,
-      video_url,
-      lat,
-      lng,
-      building_type,
-      job_id,
-      prospect_id,
-      solar_model,
-      filtered,
-      reason,
-    } = body
+    const requestedSlug = getString(body.slug)
+    const requestedVideoUrl = getString(body.video_url ?? body.videoUrl)
+    const requestedJobId = getString(body.job_id ?? body.jobId)
+    const requestedProspectId = getString(body.prospect_id ?? body.prospectId)
+    const filtered = body.filtered
+    const reason = body.reason
+
+    const job = await findProposalJob({
+      supabase,
+      jobId: requestedJobId,
+      slug: requestedSlug,
+    })
+    const receiptProspectId = getString(job?.receipt?.prospect_id ?? job?.receipt?.prospectId)
+    const prospect = await findProspect({
+      supabase,
+      prospectId: requestedProspectId || receiptProspectId,
+      address: getString(body.address) || job?.address || undefined,
+    })
+
+    const job_id = requestedJobId || job?.id
+    const prospect_id = requestedProspectId || prospect?.id || receiptProspectId
+    const business_name =
+      getString(body.business_name) ||
+      prospect?.business_name ||
+      job?.business_name ||
+      titleFromSlug(requestedSlug)
+    const contact_name = getString(body.contact_name) || prospect?.owner_name || null
+    const address = getString(body.address) || prospect?.address || job?.address || null
+    const roof_sqft = getNumber(body.roof_sqft) ?? prospect?.sqft ?? null
+    const utility_rate = getNumber(body.utility_rate) ?? 0.12
+    const notes = getString(body.notes) || null
+    const roof_image_url = getString(body.roof_image_url) || prospect?.satellite_url || null
+    const render_image_url = getString(body.render_image_url) || prospect?.render_url || null
+    const render_preview_url =
+      getString(body.render_preview_url) ||
+      prospect?.render_preview_url ||
+      prospect?.render_url ||
+      prospect?.satellite_url ||
+      null
+    const video_url = requestedVideoUrl || null
+    const lat = getNumber(body.lat) ?? prospect?.lat ?? null
+    const lng = getNumber(body.lng) ?? prospect?.lng ?? null
+    const building_type = getString(body.building_type) || prospect?.use_code || null
+    const solar_model = body.solar_model
 
     if (filtered) {
       const message = (typeof reason === 'string' && reason) || 'No valid roof found'
@@ -65,7 +114,9 @@ export async function POST(request: Request) {
     }
 
     if (!business_name) {
-      return NextResponse.json({ error: 'business_name is required' }, { status: 400 })
+      return NextResponse.json({
+        error: 'business_name is required unless slug matches a build queue item or prospect',
+      }, { status: 400 })
     }
 
     if (!isUsableVideoUrl(video_url)) {
@@ -94,8 +145,8 @@ export async function POST(request: Request) {
     })
 
     // AI-Powered Estimation if roof_sqft is provided
-    let savings = capCommercialSavings(body.estimated_savings)
-    let payback = body.estimated_payback
+    let savings = capCommercialSavings(body.estimated_savings ?? prospect?.annual_savings)
+    let payback = getNumber(body.estimated_payback) ?? prospect?.payback_years ?? null
 
     if (solar_model && typeof solar_model === 'object') {
       const model = solar_model as Record<string, unknown>
@@ -104,13 +155,14 @@ export async function POST(request: Request) {
     }
 
     if (roof_sqft && !savings) {
-      const estimation = SolarUtils.calculateEstimation(roof_sqft, utility_rate || 0.12)
+      const estimation = SolarUtils.calculateEstimation(roof_sqft, utility_rate)
       savings = estimation.savings
       payback = estimation.payback
     }
 
-    const baseSlug = body.slug ? SolarUtils.generateSlug(String(body.slug)) : SolarUtils.generateSlug(business_name)
+    const baseSlug = requestedSlug ? SolarUtils.generateSlug(requestedSlug) : SolarUtils.generateSlug(business_name)
     let slug = baseSlug
+    let existingLeadId: string | null = null
 
     for (let attempt = 1; attempt <= 8; attempt += 1) {
       const { data: existingLead, error: slugError } = await supabase
@@ -121,6 +173,10 @@ export async function POST(request: Request) {
 
       if (slugError) throw slugError
       if (!existingLead) break
+      if (requestedSlug && slug === baseSlug) {
+        existingLeadId = existingLead.id
+        break
+      }
       slug = `${baseSlug}-${attempt + 1}`
     }
 
@@ -230,53 +286,73 @@ export async function POST(request: Request) {
       renderSource = 'fallback_roof_image'
     }
 
-    const { data, error } = await supabase
-      .from('leads')
-      .insert([
-        {
-          business_name,
-          contact_name,
-          address,
-          slug,
-          roof_sqft,
-          utility_rate: utility_rate || 0.12,
-          estimated_savings: savings,
-          estimated_payback: payback,
-          roof_image_url: finalRoofImageUrl,
-          render_image_url: finalRenderImageUrl,
-          render_preview_url: finalRenderPreviewUrl,
-          video_url: video_url || null,
-          lat: lat ?? null,
-          lng: lng ?? null,
-          building_type: building_type || null,
-          notes,
-          status: 'published'
-        }
-      ])
-      .select()
-      .single()
+    const leadPayload = {
+      business_name,
+      contact_name,
+      address,
+      slug,
+      roof_sqft,
+      utility_rate,
+      estimated_savings: savings,
+      estimated_payback: payback,
+      roof_image_url: finalRoofImageUrl,
+      render_image_url: finalRenderImageUrl,
+      render_preview_url: finalRenderPreviewUrl,
+      video_url,
+      lat,
+      lng,
+      building_type,
+      notes,
+      status: 'published'
+    }
+
+    const leadMutation = existingLeadId
+      ? supabase
+        .from('leads')
+        .update(leadPayload)
+        .eq('id', existingLeadId)
+        .select()
+        .single()
+      : supabase
+        .from('leads')
+        .insert([leadPayload])
+        .select()
+        .single()
+
+    const { data, error } = await leadMutation
 
     if (error) throw error
 
     if (job_id) {
       const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || 'https://heliocap.vercel.app').replace(/\/$/, '')
       const proposalUrl = `${siteUrl}/proposal/${data.slug}`
+      const updatedReceipt = mergeMetadata(job?.receipt || null, {
+        build_status: 'proposal_published',
+        build_status_label: 'Proposal Ready',
+        video_complete: true,
+        video_url,
+        lead_id: data.id,
+        proposal_url: proposalUrl,
+        updated_by: 'api/leads',
+        updated_at: new Date().toISOString(),
+      })
 
       await supabase
         .from('proposal_jobs')
         .update({
           status: 'completed',
-          current_step: 'Proposal live',
+          current_step: 'Proposal Ready',
           progress_percent: 100,
           proposal_url: proposalUrl,
           lead_id: data.id,
+          receipt: updatedReceipt,
         })
         .eq('id', job_id)
       await recordProposalJobEvent(supabase, {
         jobId: job_id,
         businessName: data.business_name,
         status: 'completed',
-        step: 'Proposal live',
+        step: 'Proposal Ready',
         progressPercent: 100,
         proposalUrl,
       })
@@ -288,6 +364,7 @@ export async function POST(request: Request) {
         .update({
           lead_id: data.id,
           microsite_slug: data.slug,
+          video_url,
           pipeline_stage: 'microsite_live',
         })
         .eq('id', prospect_id)
@@ -299,6 +376,7 @@ export async function POST(request: Request) {
       slug: data.slug,
       render_preview_url: data.render_preview_url,
       source: renderSource,
+      video_url: data.video_url,
       url: `${process.env.NEXT_PUBLIC_SITE_URL || ''}/proposal/${data.slug}` 
     })
 
@@ -312,6 +390,93 @@ export async function POST(request: Request) {
 function capCommercialSavings(value: unknown) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
   return Math.min(Math.max(Math.round(value), 0), 375000)
+}
+
+async function findProposalJob({
+  supabase,
+  jobId,
+  slug,
+}: {
+  supabase: Awaited<ReturnType<typeof createAdminClient>>
+  jobId?: string
+  slug?: string
+}) {
+  if (!jobId && !slug) return null
+
+  let query = supabase
+    .from('proposal_jobs')
+    .select('id, business_name, address, slug, lead_id, receipt')
+
+  query = jobId ? query.eq('id', jobId) : query.eq('slug', slug)
+
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return (data as ProposalJobLookup | null) || null
+}
+
+async function findProspect({
+  supabase,
+  prospectId,
+  address,
+}: {
+  supabase: Awaited<ReturnType<typeof createAdminClient>>
+  prospectId?: string
+  address?: string
+}) {
+  if (!prospectId && !address) return null
+
+  let query = supabase
+    .from('prospects')
+    .select('id, address, business_name, owner_name, sqft, annual_savings, payback_years, satellite_url, render_url, render_preview_url, lat, lng, use_code')
+
+  query = prospectId ? query.eq('id', prospectId) : query.eq('address', address)
+
+  const { data, error } = await query
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return (data as ProspectLookup | null) || null
+}
+
+function mergeMetadata(
+  current: Record<string, unknown> | null,
+  next: Record<string, unknown>,
+) {
+  return Object.fromEntries(
+    Object.entries({
+      ...(current || {}),
+      ...next,
+    }).filter(([, value]) => value !== undefined),
+  )
+}
+
+function getString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function getNumber(value: unknown) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
+  }
+  return undefined
+}
+
+function titleFromSlug(value?: string) {
+  if (!value) return null
+
+  return value
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
 }
 
 function shouldAttemptPremiumRender({
