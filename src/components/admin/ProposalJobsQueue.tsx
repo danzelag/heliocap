@@ -76,7 +76,7 @@ function getDisplayStatus(job: ProposalJob): QueueDisplayStatus {
   if (buildStatus === 'proposal_published') return 'completed'
 
   const text = `${job.current_step || ''} ${job.error_message || ''}`
-  if (/not\s*qualified|disqualified|filter qualified solar targets/i.test(text)) return 'not_qualified'
+  if (/not\s*qualified|filtered\s*out|disqualified|filter qualified solar targets/i.test(text)) return 'not_qualified'
   if (
     job.status === 'running' &&
     new Date().getTime() - new Date(job.updated_at || job.created_at).getTime() > STALE_RUNNING_MS
@@ -364,7 +364,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
                       <div className="admin-divider mt-3 space-y-1.5 border-l pl-3">
                         {jobEvents.map((event) => {
                           const tone =
-                            /not\s*qualified|disqualified|filter qualified/i.test(`${event.step} ${event.error_message || ''}`) ? 'text-amber-300'
+                            /not\s*qualified|filtered\s*out|disqualified|filter qualified/i.test(`${event.step} ${event.error_message || ''}`) ? 'text-amber-300'
                             : event.status === 'failed' ? 'text-red-300/80'
                             : event.status === 'completed' ? 'text-emerald-300/80'
                             : event.status === 'running' ? 'text-primary'

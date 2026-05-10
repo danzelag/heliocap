@@ -55,6 +55,7 @@ export default async function AdminDashboard() {
   const flaggedSavings = leadRows.reduce((total, lead) => total + (lead.estimated_savings || 0), 0)
   const solarFetchedCount = prospectRows.filter((prospect) => prospect.pipeline_stage === 'solar_fetched').length
   const enrichedCount = prospectRows.filter((prospect) => prospect.pipeline_stage === 'enriched').length
+  const notQualifiedCount = prospectRows.filter((prospect) => prospect.pipeline_stage === 'dead').length
 
   const telemetry = [
     { label: 'Targets', value: (leadRows.length + prospectRows.length).toLocaleString(), icon: Target, tone: 'text-slate-200' },
@@ -67,6 +68,7 @@ export default async function AdminDashboard() {
     { label: 'Parcel intake', value: `${prospectRows.length} sourced`, active: prospectRows.length > 0 },
     { label: 'Solar geometry', value: `${solarFetchedCount} ready`, active: solarFetchedCount > 0 },
     { label: 'Owner data', value: `${enrichedCount} enriched`, active: enrichedCount > 0 },
+    { label: 'Not qualified', value: `${notQualifiedCount} filtered`, active: notQualifiedCount > 0 },
     { label: 'Published', value: `${publishedCount} live`, active: publishedCount > 0 },
   ]
 

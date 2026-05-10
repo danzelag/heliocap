@@ -30,6 +30,8 @@ type BuildQueueUpdateBody = {
 type ProposalJobRow = {
   id: string
   business_name: string
+  address: string
+  slug: string
   receipt: Record<string, unknown> | null
 }
 
@@ -87,7 +89,7 @@ export async function POST(request: NextRequest) {
     const supabase = await createAdminClient()
     let query = supabase
       .from('proposal_jobs')
-      .select('id, business_name, receipt')
+      .select('id, business_name, address, slug, receipt')
 
     query = buildId ? query.eq('id', buildId) : query.eq('slug', slug)
 
@@ -144,7 +146,7 @@ export async function POST(request: NextRequest) {
       await markProspectNotQualified({
         supabase,
         receipt: metadata,
-        slug,
+        job,
         reason,
       })
     }
@@ -194,12 +196,12 @@ function hasVideoComplete(data: Record<string, unknown> | undefined) {
 async function markProspectNotQualified({
   supabase,
   receipt,
-  slug,
+  job,
   reason,
 }: {
   supabase: Awaited<ReturnType<typeof createAdminClient>>
   receipt: Record<string, unknown>
-  slug: string | undefined
+  job: ProposalJobRow
   reason: string | null
 }) {
   const prospectId = getString(receipt.prospect_id ?? receipt.prospectId)
@@ -218,12 +220,12 @@ async function markProspectNotQualified({
     return
   }
 
-  if (slug) {
+  if (job.address) {
     const { error } = await supabase
       .from('prospects')
       .update(update)
-      .eq('microsite_slug', slug)
+      .eq('address', job.address)
 
-    if (error) console.error('[build-queue/update] prospect not-qualified slug update failed:', error.message)
+    if (error) console.error('[build-queue/update] prospect not-qualified address update failed:', error.message)
   }
 }
