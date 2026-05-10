@@ -37,7 +37,7 @@ export default async function AdminDashboard() {
 
   const { data: jobs } = await supabase
     .from('proposal_jobs')
-    .select('id, business_name, address, slug, status, current_step, progress_percent, proposal_url, error_message, created_at, updated_at')
+    .select('id, business_name, address, slug, status, current_step, progress_percent, proposal_url, error_message, receipt, created_at, updated_at')
     .order('created_at', { ascending: false })
     .limit(24)
 

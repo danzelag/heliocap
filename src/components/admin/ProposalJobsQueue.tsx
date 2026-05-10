@@ -17,6 +17,7 @@ export type ProposalJob = {
   progress_percent: number
   proposal_url: string | null
   error_message: string | null
+  receipt: Record<string, unknown> | null
   created_at: string
   updated_at: string
 }
@@ -43,6 +44,18 @@ const EVENTS_CACHE_KEY = 'admin:proposal-job-events'
 const STALE_RUNNING_MS = 20 * 60 * 1000
 
 type QueueDisplayStatus = ProposalJob['status'] | 'not_qualified' | 'stalled'
+type BuildDisplayStatus =
+  | 'queued'
+  | 'processing'
+  | 'qualified'
+  | 'filtered_out'
+  | 'image_generating'
+  | 'image_generated'
+  | 'video_rendering'
+  | 'video_complete'
+  | 'proposal_publishing'
+  | 'proposal_published'
+  | 'failed'
 
 function isBatchJob(job: ProposalJob) {
   return job.slug.startsWith('batch-')
@@ -57,6 +70,11 @@ function parseBatchAddress(address: string) {
 }
 
 function getDisplayStatus(job: ProposalJob): QueueDisplayStatus {
+  const buildStatus = getBuildStatus(job)
+  if (buildStatus === 'filtered_out') return 'not_qualified'
+  if (buildStatus === 'failed') return 'failed'
+  if (buildStatus === 'proposal_published') return 'completed'
+
   const text = `${job.current_step || ''} ${job.error_message || ''}`
   if (/not\s*qualified|disqualified|filter qualified solar targets/i.test(text)) return 'not_qualified'
   if (
@@ -66,6 +84,13 @@ function getDisplayStatus(job: ProposalJob): QueueDisplayStatus {
     return 'stalled'
   }
   return job.status
+}
+
+function getBuildStatus(job: ProposalJob): BuildDisplayStatus | null {
+  const value = job.receipt?.build_status
+  if (typeof value !== 'string') return null
+  if (!buildStatusLabels[value as BuildDisplayStatus]) return null
+  return value as BuildDisplayStatus
 }
 
 function statusClass(status: QueueDisplayStatus) {
@@ -78,9 +103,34 @@ function statusClass(status: QueueDisplayStatus) {
 }
 
 function statusLabel(status: QueueDisplayStatus) {
-  if (status === 'not_qualified') return 'not qualified'
+  if (status === 'not_qualified') return 'Filtered Out'
   if (status === 'stalled') return 'needs update'
   return status
+}
+
+const buildStatusLabels: Record<BuildDisplayStatus, string> = {
+  queued: 'Queued',
+  processing: 'Processing',
+  qualified: 'Qualified',
+  filtered_out: 'Filtered Out',
+  image_generating: 'Generating Image',
+  image_generated: 'Image Generated',
+  video_rendering: 'Rendering Video',
+  video_complete: 'Video Complete',
+  proposal_publishing: 'Publishing Proposal',
+  proposal_published: 'Proposal Ready',
+  failed: 'Failed',
+}
+
+function getQueueLabel(job: ProposalJob, displayStatus: QueueDisplayStatus) {
+  const buildStatus = getBuildStatus(job)
+  return buildStatus ? buildStatusLabels[buildStatus] : statusLabel(displayStatus)
+}
+
+function getQueueReason(job: ProposalJob) {
+  const reason = job.receipt?.reason
+  if (typeof reason === 'string' && reason.trim()) return reason.trim()
+  return job.error_message
 }
 
 function formatTime(value: string) {
@@ -173,7 +223,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
       const [{ data: jobData }, { data: eventData }] = await Promise.all([
         supabase
           .from('proposal_jobs')
-          .select('id, business_name, address, slug, status, current_step, progress_percent, proposal_url, error_message, created_at, updated_at')
+          .select('id, business_name, address, slug, status, current_step, progress_percent, proposal_url, error_message, receipt, created_at, updated_at')
           .order('created_at', { ascending: false })
           .limit(24),
         supabase
@@ -289,7 +339,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
                       <div className="flex shrink-0 flex-col items-end gap-1.5">
                         <span className="text-xs text-slate-500">{formatTime(job.updated_at || job.created_at)}</span>
                         <span className={statusClass(displayStatus)}>
-                          {statusLabel(displayStatus)}
+                          {getQueueLabel(job, displayStatus)}
                         </span>
                         {job.proposal_url ? (
                           <Link
@@ -303,6 +353,12 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
                         ) : null}
                       </div>
                     </div>
+
+                    {(displayStatus === 'not_qualified' || displayStatus === 'failed') && getQueueReason(job) ? (
+                      <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-200">
+                        {getQueueReason(job)}
+                      </div>
+                    ) : null}
 
                     {jobEvents.length > 0 && (
                       <div className="admin-divider mt-3 space-y-1.5 border-l pl-3">
