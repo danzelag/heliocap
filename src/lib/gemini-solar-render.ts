@@ -1,4 +1,9 @@
 import sharp from 'sharp'
+import {
+  getGoogleCloudAccessToken,
+  getGoogleCloudLocation,
+  getGoogleCloudProjectId,
+} from '@/lib/google-cloud-auth'
 
 const DEFAULT_GEMINI_IMAGE_MODEL = 'gemini-2.5-flash-image'
 const DEFAULT_TIMEOUT_MS = 45_000
@@ -90,13 +95,13 @@ async function generateGeminiImage({
   guideAsset: ImageAsset | null
   signal: AbortSignal
 }) {
-  const apiKey = getGoogleImageApiKey()
+  const accessToken = await getGoogleCloudAccessToken()
   const model = getGeminiImageModel()
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+  const endpoint = getVertexGeminiImageEndpoint(model)
 
   const response = await postGeminiRequest({
     endpoint,
-    apiKey,
+    accessToken,
     roofAsset,
     guideAsset,
     signal,
@@ -111,7 +116,7 @@ async function generateGeminiImage({
   if (response.status === 400) {
     const retry = await postGeminiRequest({
       endpoint,
-      apiKey,
+      accessToken,
       roofAsset,
       guideAsset,
       signal,
@@ -129,14 +134,14 @@ async function generateGeminiImage({
 
 async function postGeminiRequest({
   endpoint,
-  apiKey,
+  accessToken,
   roofAsset,
   guideAsset,
   signal,
   includeResponseModalities,
 }: {
   endpoint: string
-  apiKey: string
+  accessToken: string
   roofAsset: ImageAsset
   guideAsset: ImageAsset | null
   signal: AbortSignal
@@ -145,8 +150,8 @@ async function postGeminiRequest({
   const parts: GeminiPart[] = [
     { text: PREMIUM_SOLAR_RENDER_PROMPT },
     {
-      inline_data: {
-        mime_type: roofAsset.mimeType,
+      inlineData: {
+        mimeType: roofAsset.mimeType,
         data: roofAsset.buffer.toString('base64'),
       },
     },
@@ -154,8 +159,8 @@ async function postGeminiRequest({
 
   if (guideAsset) {
     parts.push({
-      inline_data: {
-        mime_type: guideAsset.mimeType,
+      inlineData: {
+        mimeType: guideAsset.mimeType,
         data: guideAsset.buffer.toString('base64'),
       },
     })
@@ -164,11 +169,14 @@ async function postGeminiRequest({
   return fetch(endpoint, {
     method: 'POST',
     headers: {
+      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey,
     },
     body: JSON.stringify({
-      contents: [{ parts }],
+      contents: {
+        role: 'USER',
+        parts,
+      },
       generationConfig: {
         ...(includeResponseModalities ? { responseModalities: ['TEXT', 'IMAGE'] } : {}),
         imageConfig: {
@@ -246,14 +254,14 @@ function getGeminiImageModel() {
   return process.env.GEMINI_IMAGE_MODEL || DEFAULT_GEMINI_IMAGE_MODEL
 }
 
-function getGoogleImageApiKey() {
-  const key = process.env.GEMINI_API_KEY
+function getVertexGeminiImageEndpoint(model: string) {
+  const project = getGoogleCloudProjectId()
+  const location = getGoogleCloudLocation()
+  const modelResource = model.startsWith('publishers/')
+    ? model
+    : `publishers/google/models/${model}`
 
-  if (!key) {
-    throw new Error('GEMINI_API_KEY is not configured')
-  }
-
-  return key
+  return `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/${modelResource}:generateContent`
 }
 
 function normalizeImageMimeType(value?: string | null) {

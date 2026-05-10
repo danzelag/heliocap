@@ -1,18 +1,14 @@
-import { createSign } from 'crypto'
+import {
+  getGoogleCloudAccessToken,
+  getGoogleCloudLocation,
+  getGoogleCloudProjectId,
+} from '@/lib/google-cloud-auth'
 
-const VERTEX_LOCATION = 'us-central1'
 const VERTEX_MODEL_RESOURCE = 'publishers/google/models/veo-3.1-generate-001'
-const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token'
-const CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform'
 const VEO_DURATION_SECONDS = 8
 
 export const DEFAULT_VEO_CINEMATIC_PROMPT =
   'Cinematic aerial shot of a single commercial building. Smooth, slow drone-style flyover, gentle parallax. Premium architectural visualization aesthetic, clean materials, soft natural daylight, subtle long shadows, gentle atmospheric depth. During the shot, dark commercial solar panels appear naturally across the roof in a clean grid layout. Preserve the building footprint and roof shape from the reference image. No text, no UI, no labels, no map artifacts, no Google Maps style, no people, no vehicles, no logos, no neon, no cartoon. Style: high-end infrastructure visualization, premium energy brand, calm and confident.'
-
-type CachedAccessToken = {
-  token: string
-  expiresAt: number
-}
 
 type VertexImageInput = {
   gcsUri?: string
@@ -67,8 +63,6 @@ type VertexVeoStatus = {
   raw: VertexVeoOperation
 }
 
-let cachedAccessToken: CachedAccessToken | null = null
-
 export async function submitVertexVeoRender({
   slug,
   prompt,
@@ -82,9 +76,9 @@ export async function submitVertexVeoRender({
   imageBuffer?: Buffer
   imageMimeType?: string
 }): Promise<{ slug?: string; operationName: string }> {
-  const project = getRequiredEnv('GOOGLE_CLOUD_PROJECT_ID')
-  const storageUri = getRequiredEnv('GOOGLE_CLOUD_STORAGE_URI')
-  const accessToken = await getAccessToken()
+  const project = getGoogleCloudProjectId()
+  const storageUri = getRequiredVeoEnv('GOOGLE_CLOUD_STORAGE_URI')
+  const accessToken = await getGoogleCloudAccessToken()
   const image = await buildImageInput({ imageUrl, imageBuffer, imageMimeType })
 
   const res = await fetch(`${getPublisherModelUrl(project)}:predictLongRunning`, {
@@ -125,8 +119,8 @@ export async function submitVertexVeoRender({
 }
 
 export async function fetchVertexVeoStatus(operationName: string): Promise<VertexVeoStatus> {
-  const project = getRequiredEnv('GOOGLE_CLOUD_PROJECT_ID')
-  const accessToken = await getAccessToken()
+  const project = getGoogleCloudProjectId()
+  const accessToken = await getGoogleCloudAccessToken()
 
   const res = await fetch(`${getPublisherModelUrl(project)}:fetchPredictOperation`, {
     method: 'POST',
@@ -276,7 +270,7 @@ async function downloadGcsObject(gcsUri: string): Promise<Buffer> {
   }
 
   const [, bucket, objectName] = match
-  const accessToken = await getAccessToken()
+  const accessToken = await getGoogleCloudAccessToken()
   const mediaUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(
     bucket,
   )}/o/${encodeURIComponent(objectName)}?alt=media`
@@ -302,78 +296,12 @@ async function downloadHttpUrl(url: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer())
 }
 
-async function getAccessToken(): Promise<string> {
-  if (cachedAccessToken && Date.now() < cachedAccessToken.expiresAt - 60_000) {
-    return cachedAccessToken.token
-  }
-
-  const clientEmail = getRequiredEnv('GOOGLE_CLOUD_CLIENT_EMAIL')
-  const privateKey = getRequiredEnv('GOOGLE_CLOUD_PRIVATE_KEY').replace(/\\n/g, '\n')
-  const now = Math.floor(Date.now() / 1000)
-  const assertion = signJwt(
-    {
-      alg: 'RS256',
-      typ: 'JWT',
-    },
-    {
-      iss: clientEmail,
-      scope: CLOUD_PLATFORM_SCOPE,
-      aud: OAUTH_TOKEN_URL,
-      iat: now,
-      exp: now + 3600,
-    },
-    privateKey,
-  )
-
-  const res = await fetch(OAUTH_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion,
-    }),
-    cache: 'no-store',
-  })
-
-  if (!res.ok) {
-    const text = await res.text()
-    throw new Error(`Google service account auth failed: ${res.status} ${text.slice(0, 240)}`)
-  }
-
-  const data = (await res.json()) as { access_token?: string; expires_in?: number }
-  if (!data.access_token) {
-    throw new Error('Google service account auth failed: no access token returned')
-  }
-
-  cachedAccessToken = {
-    token: data.access_token,
-    expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
-  }
-
-  return cachedAccessToken.token
-}
-
-function signJwt(header: Record<string, unknown>, payload: Record<string, unknown>, privateKey: string) {
-  const unsigned = `${base64UrlJson(header)}.${base64UrlJson(payload)}`
-  const signer = createSign('RSA-SHA256')
-  signer.update(unsigned)
-  signer.end()
-  return `${unsigned}.${base64Url(signer.sign(privateKey))}`
-}
-
-function base64UrlJson(value: Record<string, unknown>) {
-  return base64Url(Buffer.from(JSON.stringify(value)))
-}
-
-function base64Url(value: Buffer) {
-  return value.toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
-}
-
 function getPublisherModelUrl(project: string) {
-  return `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${project}/locations/${VERTEX_LOCATION}/${VERTEX_MODEL_RESOURCE}`
+  const location = getGoogleCloudLocation()
+  return `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}/${VERTEX_MODEL_RESOURCE}`
 }
 
-function getRequiredEnv(name: string) {
+function getRequiredVeoEnv(name: string) {
   const value = process.env[name]
   if (!value) {
     throw new Error(`${name} is not configured`)
