@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyN8nRequest } from '@/lib/n8n-auth'
-import { submitVertexVeoRender } from '@/lib/vertex-veo'
+import { DEFAULT_VEO_CINEMATIC_PROMPT, submitVertexVeoRender } from '@/lib/vertex-veo'
 
 type SubmitVeoBody = {
   slug?: unknown
   prompt?: unknown
   imageUrl?: unknown
+  image_url?: unknown
+  renderPreviewUrl?: unknown
+  render_preview_url?: unknown
 }
 
 export async function POST(request: NextRequest) {
@@ -15,17 +18,25 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as SubmitVeoBody
     const slug = typeof body.slug === 'string' ? body.slug.trim() : ''
-    const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : ''
-    const imageUrl = typeof body.imageUrl === 'string' ? body.imageUrl.trim() : ''
+    const prompt =
+      typeof body.prompt === 'string' && body.prompt.trim()
+        ? body.prompt.trim()
+        : DEFAULT_VEO_CINEMATIC_PROMPT
+    const imageUrl = getFirstString(
+      body.imageUrl,
+      body.image_url,
+      body.renderPreviewUrl,
+      body.render_preview_url,
+    )
 
     if (!slug) {
       return NextResponse.json({ error: 'slug is required' }, { status: 400 })
     }
-    if (!prompt) {
-      return NextResponse.json({ error: 'prompt is required' }, { status: 400 })
-    }
     if (!imageUrl) {
-      return NextResponse.json({ error: 'imageUrl is required' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'imageUrl or render_preview_url is required' },
+        { status: 400 },
+      )
     }
 
     const result = await submitVertexVeoRender({ slug, prompt, imageUrl })
@@ -33,10 +44,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       slug,
       operationName: result.operationName,
+      operation_name: result.operationName,
     })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     console.error('[api/veo/submit]', message)
     return NextResponse.json({ error: message }, { status: 500 })
   }
+}
+
+function getFirstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+
+  return ''
 }

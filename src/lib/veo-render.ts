@@ -1,11 +1,9 @@
 import {
+  DEFAULT_VEO_CINEMATIC_PROMPT,
   downloadVertexVeoVideo,
   fetchVertexVeoStatus,
   submitVertexVeoRender,
 } from '@/lib/vertex-veo'
-
-const VEO_CINEMATIC_PROMPT =
-  'Cinematic aerial shot of a single commercial building. Smooth, slow drone-style flyover, gentle parallax. Premium architectural visualization aesthetic, clean materials, soft natural daylight, subtle long shadows, gentle atmospheric depth. During the shot, dark commercial solar panels appear naturally across the roof in a clean grid layout. Preserve the building footprint and roof shape from the reference image. No text, no UI, no labels, no map artifacts, no Google Maps style, no people, no vehicles, no logos, no neon, no cartoon. Style: high-end infrastructure visualization, premium energy brand, calm and confident.'
 
 export async function submitVeoRender({
   seedBuffer,
@@ -15,7 +13,7 @@ export async function submitVeoRender({
   seedMimeType: string
 }): Promise<{ operationName: string }> {
   const { operationName } = await submitVertexVeoRender({
-    prompt: VEO_CINEMATIC_PROMPT,
+    prompt: DEFAULT_VEO_CINEMATIC_PROMPT,
     imageBuffer: seedBuffer,
     imageMimeType: seedMimeType,
   })

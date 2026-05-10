@@ -6,6 +6,9 @@ const OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const CLOUD_PLATFORM_SCOPE = 'https://www.googleapis.com/auth/cloud-platform'
 const VEO_DURATION_SECONDS = 8
 
+export const DEFAULT_VEO_CINEMATIC_PROMPT =
+  'Cinematic aerial shot of a single commercial building. Smooth, slow drone-style flyover, gentle parallax. Premium architectural visualization aesthetic, clean materials, soft natural daylight, subtle long shadows, gentle atmospheric depth. During the shot, dark commercial solar panels appear naturally across the roof in a clean grid layout. Preserve the building footprint and roof shape from the reference image. No text, no UI, no labels, no map artifacts, no Google Maps style, no people, no vehicles, no logos, no neon, no cartoon. Style: high-end infrastructure visualization, premium energy brand, calm and confident.'
+
 type CachedAccessToken = {
   token: string
   expiresAt: number

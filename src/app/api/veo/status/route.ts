@@ -4,6 +4,7 @@ import { fetchVertexVeoStatus } from '@/lib/vertex-veo'
 
 type VeoStatusBody = {
   operationName?: unknown
+  operation_name?: unknown
 }
 
 export async function POST(request: NextRequest) {
@@ -12,10 +13,18 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json()) as VeoStatusBody
-    const operationName = typeof body.operationName === 'string' ? body.operationName.trim() : ''
+    const operationName =
+      typeof body.operationName === 'string' && body.operationName.trim()
+        ? body.operationName.trim()
+        : typeof body.operation_name === 'string'
+          ? body.operation_name.trim()
+          : ''
 
     if (!operationName) {
-      return NextResponse.json({ error: 'operationName is required' }, { status: 400 })
+      return NextResponse.json(
+        { error: 'operationName or operation_name is required' },
+        { status: 400 },
+      )
     }
 
     const status = await fetchVertexVeoStatus(operationName)
