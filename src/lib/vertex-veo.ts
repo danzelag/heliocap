@@ -3,6 +3,7 @@ import {
   getGoogleCloudLocation,
   getGoogleCloudProjectId,
 } from '@/lib/google-cloud-auth'
+import sharp from 'sharp'
 
 const VERTEX_MODEL_RESOURCE = 'publishers/google/models/veo-3.1-generate-001'
 const VEO_DURATION_SECONDS = 8
@@ -13,6 +14,11 @@ export const DEFAULT_VEO_CINEMATIC_PROMPT =
 type VertexImageInput = {
   gcsUri?: string
   bytesBase64Encoded?: string
+  mimeType: string
+}
+
+type VeoImageAsset = {
+  buffer: Buffer
   mimeType: string
 }
 
@@ -190,14 +196,19 @@ async function buildImageInput({
   if (imageUrl?.startsWith('gs://')) {
     return {
       gcsUri: imageUrl,
-      mimeType: imageMimeType ?? inferMimeType(imageUrl),
+      mimeType: normalizeVeoImageMimeType(imageMimeType ?? inferMimeType(imageUrl)),
     }
   }
 
   if (imageBuffer) {
+    const asset = await toVeoCompatibleImage({
+      buffer: imageBuffer,
+      mimeType: imageMimeType,
+    })
+
     return {
-      bytesBase64Encoded: imageBuffer.toString('base64'),
-      mimeType: normalizeImageMimeType(imageMimeType),
+      bytesBase64Encoded: asset.buffer.toString('base64'),
+      mimeType: asset.mimeType,
     }
   }
 
@@ -214,13 +225,35 @@ async function buildImageInput({
     throw new Error(`Failed to fetch Veo input image: ${imageRes.status}`)
   }
 
-  const mimeType = normalizeImageMimeType(
-    imageMimeType ?? imageRes.headers.get('content-type')?.split(';')[0]?.trim(),
-  )
+  const asset = await toVeoCompatibleImage({
+    buffer: Buffer.from(await imageRes.arrayBuffer()),
+    mimeType: imageMimeType ?? imageRes.headers.get('content-type')?.split(';')[0]?.trim(),
+  })
 
   return {
-    bytesBase64Encoded: Buffer.from(await imageRes.arrayBuffer()).toString('base64'),
-    mimeType,
+    bytesBase64Encoded: asset.buffer.toString('base64'),
+    mimeType: asset.mimeType,
+  }
+}
+
+async function toVeoCompatibleImage({
+  buffer,
+  mimeType,
+}: {
+  buffer: Buffer
+  mimeType?: string | null
+}): Promise<VeoImageAsset> {
+  const normalized = normalizeVeoImageMimeType(mimeType)
+  if (normalized === 'image/jpeg' || normalized === 'image/png') {
+    return { buffer, mimeType: normalized }
+  }
+
+  return {
+    buffer: await sharp(buffer)
+      .resize(1280, 720, { fit: 'cover', position: 'center' })
+      .png()
+      .toBuffer(),
+    mimeType: 'image/png',
   }
 }
 
@@ -309,11 +342,12 @@ function getRequiredVeoEnv(name: string) {
   return value
 }
 
-function normalizeImageMimeType(mimeType?: string | null) {
-  if (mimeType === 'image/jpeg' || mimeType === 'image/png' || mimeType === 'image/webp') {
-    return mimeType
+function normalizeVeoImageMimeType(mimeType?: string | null) {
+  const normalized = mimeType?.split(';')[0]?.trim().toLowerCase()
+  if (normalized === 'image/jpeg' || normalized === 'image/png') {
+    return normalized
   }
-  return 'image/png'
+  return 'image/png-convert'
 }
 
 function inferMimeType(value: string) {
