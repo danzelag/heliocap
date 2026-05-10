@@ -29,9 +29,10 @@ const stageLabels: Record<ProspectStage, string> = {
   replied: 'Replied',
   booked: 'Booked',
   snoozed: 'Snoozed',
-  dead: 'Dead',
+  dead: 'Not Qualified',
 }
 const PROSPECTS_CACHE_KEY = 'admin:prospects'
+const activeStageOptions = prospectStages.filter((stage) => stage !== 'dead' && stage !== 'microsite_live')
 
 function formatUSD(value: number | null) {
   return new Intl.NumberFormat('en-US', {
@@ -47,7 +48,7 @@ function formatNumber(value: number | null) {
 
 function stageClass(stage: ProspectStage) {
   if (stage === 'booked' || stage === 'microsite_live') return 'admin-status admin-status-success px-2.5 py-1'
-  if (stage === 'dead') return 'admin-status admin-status-danger px-2.5 py-1'
+  if (stage === 'dead') return 'admin-status admin-status-warning px-2.5 py-1'
   if (stage === 'snoozed') return 'admin-status admin-status-warning px-2.5 py-1'
   if (stage === 'solar_fetched' || stage === 'enriched' || stage === 'emailed' || stage === 'replied') {
     return 'admin-status admin-status-running px-2.5 py-1'
@@ -55,9 +56,17 @@ function stageClass(stage: ProspectStage) {
   return 'admin-status px-2.5 py-1'
 }
 
+function isProposalTarget(prospect: Prospect) {
+  return Boolean(prospect.lead_id || prospect.microsite_slug || prospect.pipeline_stage === 'microsite_live')
+}
+
+function isNotQualified(prospect: Prospect) {
+  return prospect.pipeline_stage === 'dead'
+}
+
 export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTableProps) {
   const [prospects, setProspectsState] = useState(() => sortProspectsForAdmin(readClientCache<Prospect[]>(PROSPECTS_CACHE_KEY) || initialProspects))
-  const [activeStage, setActiveStage] = useState<ProspectStage | 'all'>('all')
+  const [activeStage, setActiveStage] = useState<ProspectStage | 'active' | 'not_qualified'>('active')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [message, setMessage] = useState<string | null>(null)
@@ -128,15 +137,30 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
 
   const counts = useMemo(() => {
     const initial = Object.fromEntries(prospectStages.map((stage) => [stage, 0])) as Record<ProspectStage, number>
-    prospects.forEach((prospect) => {
+    prospects.filter((prospect) => !isProposalTarget(prospect) && !isNotQualified(prospect)).forEach((prospect) => {
       initial[prospect.pipeline_stage] += 1
     })
     return initial
   }, [prospects])
 
-  const filteredProspects = activeStage === 'all'
-    ? prospects
-    : prospects.filter((prospect) => prospect.pipeline_stage === activeStage)
+  const activeProspects = useMemo(
+    () => prospects.filter((prospect) => !isProposalTarget(prospect) && !isNotQualified(prospect)),
+    [prospects],
+  )
+  const notQualifiedProspects = useMemo(
+    () => prospects.filter((prospect) => isNotQualified(prospect)),
+    [prospects],
+  )
+  const proposalTargetCount = useMemo(
+    () => prospects.filter((prospect) => isProposalTarget(prospect)).length,
+    [prospects],
+  )
+
+  const filteredProspects = activeStage === 'active'
+    ? activeProspects
+    : activeStage === 'not_qualified'
+      ? notQualifiedProspects
+      : activeProspects.filter((prospect) => prospect.pipeline_stage === activeStage)
   const filteredIds = filteredProspects.map((prospect) => prospect.id)
   const selectedInView = selectedIds.filter((id) => filteredIds.includes(id))
   const allVisibleSelected = filteredIds.length > 0 && selectedInView.length === filteredIds.length
@@ -309,12 +333,22 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
           </Button>
           <button
             type="button"
-            className={`admin-chip px-3 py-2 transition-colors ${activeStage === 'all' ? 'admin-chip-active' : 'hover:border-stone-600 hover:text-stone-300'}`}
-            onClick={() => setActiveStage('all')}
+            className={`admin-chip px-3 py-2 transition-colors ${activeStage === 'active' ? 'admin-chip-active' : 'hover:border-stone-600 hover:text-stone-300'}`}
+            onClick={() => setActiveStage('active')}
           >
-            All <span className="text-slate-500">{prospects.length}</span>
+            Active <span className="text-slate-500">{activeProspects.length}</span>
           </button>
-          {prospectStages.map((stage) => (
+          <button
+            type="button"
+            className={`admin-chip px-3 py-2 transition-colors ${activeStage === 'not_qualified' ? 'admin-chip-active' : 'hover:border-stone-600 hover:text-stone-300'}`}
+            onClick={() => setActiveStage('not_qualified')}
+          >
+            Not Qualified <span className="text-amber-400">{notQualifiedProspects.length}</span>
+          </button>
+          <Link href="/admin" prefetch className="admin-chip px-3 py-2 transition-colors hover:border-stone-600 hover:text-stone-300">
+            Proposal Targets <span className="text-emerald-400">{proposalTargetCount}</span>
+          </Link>
+          {activeStageOptions.map((stage) => (
             <button
               key={stage}
               type="button"
@@ -361,7 +395,9 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                 <td colSpan={7} className="px-4 py-12 text-center">
                   <div className="mx-auto max-w-sm rounded-lg border border-dashed border-stone-600 bg-stone-900/60 p-6">
                     <Rocket className="mx-auto h-7 w-7 text-slate-400" />
-                    <div className="mt-3 text-sm font-semibold text-stone-300">No prospects</div>
+                    <div className="mt-3 text-sm font-semibold text-stone-300">
+                      {activeStage === 'not_qualified' ? 'No filtered prospects' : 'No active prospects'}
+                    </div>
                   </div>
                 </td>
               </tr>

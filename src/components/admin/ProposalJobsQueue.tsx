@@ -103,7 +103,7 @@ function statusClass(status: QueueDisplayStatus) {
 }
 
 function statusLabel(status: QueueDisplayStatus) {
-  if (status === 'not_qualified') return 'Filtered Out'
+  if (status === 'not_qualified') return 'Not Qualified'
   if (status === 'stalled') return 'needs update'
   return status
 }
@@ -112,7 +112,7 @@ const buildStatusLabels: Record<BuildDisplayStatus, string> = {
   queued: 'Queued',
   processing: 'Processing',
   qualified: 'Qualified',
-  filtered_out: 'Filtered Out',
+  filtered_out: 'Not Qualified',
   image_generating: 'Generating Image',
   image_generated: 'Image Generated',
   video_rendering: 'Rendering Video',

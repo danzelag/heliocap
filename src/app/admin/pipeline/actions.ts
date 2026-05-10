@@ -145,6 +145,10 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
       status: 'queued',
       current_step: 'Queued from prospect table',
       progress_percent: 2,
+      receipt: {
+        prospect_id: prospect.id,
+        source: 'prospect_table',
+      },
     }])
     .select('id')
     .single()
@@ -208,7 +212,11 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
       status: 'running',
       current_step: 'n8n workflow started',
       progress_percent: 8,
-      receipt,
+      receipt: {
+        ...(receipt || {}),
+        prospect_id: prospect.id,
+        source: 'prospect_table',
+      },
     })
     .eq('id', job.id)
   await recordProposalJobEvent(supabase, {

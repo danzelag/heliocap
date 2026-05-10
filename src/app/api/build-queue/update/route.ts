@@ -42,7 +42,7 @@ const statusConfig: Record<BuildStatus, {
   queued: { jobStatus: 'queued', label: 'Queued', progress: 2 },
   processing: { jobStatus: 'running', label: 'Processing', progress: 12 },
   qualified: { jobStatus: 'running', label: 'Qualified', progress: 28 },
-  filtered_out: { jobStatus: 'failed', label: 'Filtered Out', progress: 100, terminalError: true },
+  filtered_out: { jobStatus: 'failed', label: 'Not Qualified', progress: 100, terminalError: true },
   image_generating: { jobStatus: 'running', label: 'Generating Image', progress: 45 },
   image_generated: { jobStatus: 'running', label: 'Image Generated', progress: 62 },
   video_rendering: { jobStatus: 'running', label: 'Rendering Video', progress: 82 },
@@ -140,6 +140,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Build queue item not found' }, { status: 404 })
     }
 
+    if (status === 'filtered_out') {
+      await markProspectNotQualified({
+        supabase,
+        receipt: metadata,
+        slug,
+        reason,
+      })
+    }
+
     await recordProposalJobEvent(supabase, {
       jobId: resolvedBuildId,
       businessName: job.business_name,
@@ -180,4 +189,41 @@ function getString(value: unknown) {
 function hasVideoComplete(data: Record<string, unknown> | undefined) {
   if (!data) return false
   return data.video_complete === true || getString(data.video_url ?? data.videoUrl) !== undefined
+}
+
+async function markProspectNotQualified({
+  supabase,
+  receipt,
+  slug,
+  reason,
+}: {
+  supabase: Awaited<ReturnType<typeof createAdminClient>>
+  receipt: Record<string, unknown>
+  slug: string | undefined
+  reason: string | null
+}) {
+  const prospectId = getString(receipt.prospect_id ?? receipt.prospectId)
+  const update = {
+    pipeline_stage: 'dead',
+    reply_classification: reason || 'Not qualified',
+  }
+
+  if (prospectId) {
+    const { error } = await supabase
+      .from('prospects')
+      .update(update)
+      .eq('id', prospectId)
+
+    if (error) console.error('[build-queue/update] prospect not-qualified update failed:', error.message)
+    return
+  }
+
+  if (slug) {
+    const { error } = await supabase
+      .from('prospects')
+      .update(update)
+      .eq('microsite_slug', slug)
+
+    if (error) console.error('[build-queue/update] prospect not-qualified slug update failed:', error.message)
+  }
 }

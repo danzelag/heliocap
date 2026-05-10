@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { ArrowLeft, Database, RadioTower, ShieldCheck, Sun, Target, Zap } from 'lucide-react'
+import { ArrowLeft, RadioTower, ShieldCheck, Sun, Target, Zap } from 'lucide-react'
 import { AdminRoutePrefetcher } from '@/components/admin/AdminRoutePrefetcher'
 import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle'
 import { createClient } from '@/lib/supabase-server'
@@ -41,15 +41,18 @@ export default async function PipelinePage() {
     .limit(100)
 
   const solarFetched = prospects.filter((prospect) => prospect.pipeline_stage === 'solar_fetched').length
-  const enriched = prospects.filter((prospect) => prospect.pipeline_stage === 'enriched').length
-  const live = prospects.filter((prospect) => prospect.pipeline_stage === 'microsite_live').length
+  const notQualified = prospects.filter((prospect) => prospect.pipeline_stage === 'dead').length
+  const proposalTargets = prospects.filter((prospect) => (
+    prospect.pipeline_stage === 'microsite_live' || prospect.lead_id || prospect.microsite_slug
+  )).length
+  const activeProspects = prospects.length - notQualified - proposalTargets
   const flaggedItc = prospects.reduce((total, prospect) => total + (prospect.federal_itc || 0), 0)
 
   const stats = [
-    { label: 'Prospects', value: prospects.length.toLocaleString(), icon: Target, tone: 'text-slate-200' },
+    { label: 'Active', value: activeProspects.toLocaleString(), icon: Target, tone: 'text-slate-200' },
     { label: 'Solar Ready', value: solarFetched.toLocaleString(), icon: Sun, tone: 'text-cyan-200' },
-    { label: 'Enriched', value: enriched.toLocaleString(), icon: Database, tone: 'text-amber-200' },
-    { label: 'Live', value: live.toLocaleString(), icon: RadioTower, tone: 'text-emerald-200' },
+    { label: 'Not Qualified', value: notQualified.toLocaleString(), icon: ShieldCheck, tone: 'text-amber-200' },
+    { label: 'Proposal Targets', value: proposalTargets.toLocaleString(), icon: RadioTower, tone: 'text-emerald-200' },
     { label: 'ITC Flagged', value: formatCompactUSD(flaggedItc), icon: Zap, tone: 'text-slate-200' },
   ]
 
