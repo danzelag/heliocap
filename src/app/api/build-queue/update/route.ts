@@ -21,6 +21,7 @@ type BuildStatus = (typeof buildStatuses)[number]
 
 type BuildQueueUpdateBody = {
   buildId?: string
+  slug?: string
   status?: string
   reason?: string
   data?: Record<string, unknown>
@@ -58,10 +59,12 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as BuildQueueUpdateBody
     const buildId = body.buildId?.trim()
+    const slug = body.slug?.trim() || getString(body.data?.slug)
+    const queueIdentifier = buildId || slug
     const status = body.status?.trim() as BuildStatus | undefined
 
-    if (!buildId) {
-      return NextResponse.json({ error: 'buildId is required' }, { status: 400 })
+    if (!queueIdentifier) {
+      return NextResponse.json({ error: 'buildId or slug is required' }, { status: 400 })
     }
 
     if (!status || !buildStatuses.includes(status)) {
@@ -82,10 +85,15 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createAdminClient()
-    const { data: existingJob, error: lookupError } = await supabase
+    let query = supabase
       .from('proposal_jobs')
       .select('id, business_name, receipt')
-      .eq('id', buildId)
+
+    query = buildId ? query.eq('id', buildId) : query.eq('slug', slug)
+
+    const { data: existingJob, error: lookupError } = await query
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle()
 
     if (lookupError) throw lookupError
@@ -94,6 +102,7 @@ export async function POST(request: NextRequest) {
     }
 
     const job = existingJob as ProposalJobRow
+    const resolvedBuildId = job.id
     const config = statusConfig[status]
     const metadata = mergeMetadata(job.receipt, {
       ...(body.data || {}),
@@ -122,7 +131,7 @@ export async function POST(request: NextRequest) {
     const { data: updatedJob, error: updateError } = await supabase
       .from('proposal_jobs')
       .update(update)
-      .eq('id', buildId)
+      .eq('id', resolvedBuildId)
       .select('id, business_name, status, current_step, progress_percent, proposal_url, error_message, receipt, updated_at')
       .maybeSingle()
 
@@ -132,7 +141,7 @@ export async function POST(request: NextRequest) {
     }
 
     await recordProposalJobEvent(supabase, {
-      jobId: buildId,
+      jobId: resolvedBuildId,
       businessName: job.business_name,
       status: config.jobStatus,
       step: String(update.current_step),
