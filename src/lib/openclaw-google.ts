@@ -7,6 +7,9 @@ const STATIC_MAP_SCALE = 2
 const STATIC_MAP_WIDTH = STATIC_MAP_REQUEST_WIDTH * STATIC_MAP_SCALE
 const STATIC_MAP_HEIGHT = STATIC_MAP_REQUEST_HEIGHT * STATIC_MAP_SCALE
 const DEFAULT_STATIC_MAP_ZOOM = 19
+const MAP_TILE_LOGICAL_SIZE = 256
+const MAP_TILE_TARGET_FORMAT = 'png'
+const MAX_GUIDE_PANEL_MARKERS = 260
 const PANEL_WIDTH_METERS = 1.045
 const PANEL_HEIGHT_METERS = 1.879
 const PANEL_WATTS = 400
@@ -79,6 +82,13 @@ type UploadAssetArgs = {
   fileName: string
   body: ArrayBuffer | Buffer | string
   contentType: string
+}
+
+type MapTilesSession = {
+  session?: string
+  tileWidth?: number
+  tileHeight?: number
+  imageFormat?: string
 }
 
 export function getGoogleMapsApiKey() {
@@ -170,10 +180,23 @@ export function selectStaticMapCenter(insights: GoogleSolarInsights | null, fall
   }
 }
 
-export async function fetchStaticSatelliteImage(lat: number, lng: number, zoom = DEFAULT_STATIC_MAP_ZOOM) {
+export async function fetchStaticSatelliteImage(
+  lat: number,
+  lng: number,
+  zoom = DEFAULT_STATIC_MAP_ZOOM,
+): Promise<Buffer> {
   const apiKey = getGoogleMapsApiKey()
   if (!apiKey) {
     throw new Error('GOOGLE_MAPS_API_KEY is not configured')
+  }
+
+  try {
+    const image = await fetchMapTilesSatelliteImage({ lat, lng, zoom, apiKey })
+    console.log(`[openclaw-google] Satellite source: map_tiles zoom=${zoom} lat=${lat} lng=${lng}`)
+    return image
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[openclaw-google] Map Tiles failed, using Static Maps fallback: ${message}`)
   }
 
   const url = new URL('https://maps.googleapis.com/maps/api/staticmap')
@@ -189,7 +212,142 @@ export async function fetchStaticSatelliteImage(lat: number, lng: number, zoom =
     throw new Error(`Google Maps Static API returned ${response.status}: ${await response.text()}`)
   }
 
-  return response.arrayBuffer()
+  console.log(`[openclaw-google] Satellite source: static_maps zoom=${zoom} lat=${lat} lng=${lng}`)
+  return Buffer.from(await response.arrayBuffer())
+}
+
+async function fetchMapTilesSatelliteImage({
+  lat,
+  lng,
+  zoom,
+  apiKey,
+}: {
+  lat: number
+  lng: number
+  zoom: number
+  apiKey: string
+}) {
+  const session = await createMapTilesSatelliteSession(apiKey)
+  const tileWidth = session.tileWidth || MAP_TILE_LOGICAL_SIZE
+  const tileHeight = session.tileHeight || tileWidth
+  const pixelScale = tileWidth / MAP_TILE_LOGICAL_SIZE
+  const centerWorld = latLngToWorldPixel(lat, lng, zoom)
+  const centerTileX = Math.floor(centerWorld.x / MAP_TILE_LOGICAL_SIZE)
+  const centerTileY = Math.floor(centerWorld.y / MAP_TILE_LOGICAL_SIZE)
+  const offsetX = (centerWorld.x - centerTileX * MAP_TILE_LOGICAL_SIZE) * pixelScale
+  const offsetY = (centerWorld.y - centerTileY * MAP_TILE_LOGICAL_SIZE) * pixelScale
+  const radiusX = Math.ceil(STATIC_MAP_WIDTH / tileWidth / 2) + 1
+  const radiusY = Math.ceil(STATIC_MAP_HEIGHT / tileHeight / 2) + 1
+  const startTileX = centerTileX - radiusX
+  const startTileY = centerTileY - radiusY
+  const columns = radiusX * 2 + 1
+  const rows = radiusY * 2 + 1
+  const tiles = await Promise.all(
+    Array.from({ length: columns * rows }, async (_, index) => {
+      const column = index % columns
+      const row = Math.floor(index / columns)
+      const x = startTileX + column
+      const y = startTileY + row
+      const input = await fetchMapTile({
+        apiKey,
+        session: session.session!,
+        zoom,
+        x,
+        y,
+      })
+
+      return {
+        input,
+        left: column * tileWidth,
+        top: row * tileHeight,
+      }
+    }),
+  )
+  const mosaicWidth = columns * tileWidth
+  const mosaicHeight = rows * tileHeight
+  const mosaicCenterX = (centerTileX - startTileX) * tileWidth + offsetX
+  const mosaicCenterY = (centerTileY - startTileY) * tileHeight + offsetY
+  const cropLeft = clamp(Math.round(mosaicCenterX - STATIC_MAP_WIDTH / 2), 0, mosaicWidth - STATIC_MAP_WIDTH)
+  const cropTop = clamp(Math.round(mosaicCenterY - STATIC_MAP_HEIGHT / 2), 0, mosaicHeight - STATIC_MAP_HEIGHT)
+
+  return sharp({
+    create: {
+      width: mosaicWidth,
+      height: mosaicHeight,
+      channels: 3,
+      background: '#111111',
+    },
+  })
+    .composite(tiles)
+    .extract({
+      left: cropLeft,
+      top: cropTop,
+      width: STATIC_MAP_WIDTH,
+      height: STATIC_MAP_HEIGHT,
+    })
+    .sharpen()
+    .png()
+    .toBuffer()
+}
+
+async function createMapTilesSatelliteSession(apiKey: string): Promise<Required<MapTilesSession>> {
+  const url = new URL('https://tile.googleapis.com/v1/createSession')
+  url.searchParams.set('key', apiKey)
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      mapType: 'satellite',
+      language: 'en-US',
+      region: 'US',
+      imageFormat: MAP_TILE_TARGET_FORMAT,
+      scale: 'scaleFactor2x',
+      highDpi: true,
+    }),
+    cache: 'no-store',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Map Tiles createSession returned ${response.status}: ${await response.text()}`)
+  }
+
+  const session = (await response.json()) as MapTilesSession
+  if (!session.session) {
+    throw new Error('Map Tiles createSession did not return a session token')
+  }
+
+  return {
+    session: session.session,
+    tileWidth: session.tileWidth || MAP_TILE_LOGICAL_SIZE,
+    tileHeight: session.tileHeight || session.tileWidth || MAP_TILE_LOGICAL_SIZE,
+    imageFormat: session.imageFormat || MAP_TILE_TARGET_FORMAT,
+  }
+}
+
+async function fetchMapTile({
+  apiKey,
+  session,
+  zoom,
+  x,
+  y,
+}: {
+  apiKey: string
+  session: string
+  zoom: number
+  x: number
+  y: number
+}) {
+  const url = new URL(`https://tile.googleapis.com/v1/2dtiles/${zoom}/${x}/${y}`)
+  url.searchParams.set('session', session)
+  url.searchParams.set('key', apiKey)
+
+  const response = await fetch(url, { cache: 'no-store' })
+  if (!response.ok) {
+    throw new Error(`Map Tiles tile ${zoom}/${x}/${y} returned ${response.status}: ${await response.text()}`)
+  }
+
+  return Buffer.from(await response.arrayBuffer())
 }
 
 export async function fetchSolarInsights(lat: number, lng: number): Promise<GoogleSolarInsights | null> {
@@ -284,13 +442,14 @@ export function buildSolarOverlaySvg({
   const panels = [...(insights?.solarPotential?.solarPanels || [])]
     .sort((a, b) => (b.yearlyEnergyDcKwh || 0) - (a.yearlyEnergyDcKwh || 0))
     .slice(0, model.panelCount)
+  const guidePanels = samplePanelsForGuide(panels, MAX_GUIDE_PANEL_MARKERS)
 
   const metersPerPixel =
     (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom) / STATIC_MAP_SCALE
   const panelWidthPx = Math.max(4, PANEL_WIDTH_METERS / metersPerPixel)
   const panelHeightPx = Math.max(7, PANEL_HEIGHT_METERS / metersPerPixel)
 
-  const panelRects = panels
+  const panelRects = guidePanels
     .map((panel) => {
       if (!panel.center) return ''
       const point = latLngToPixel(
@@ -309,7 +468,7 @@ export function buildSolarOverlaySvg({
       const azimuth = segment?.azimuthDegrees || 180
       const rotation = panel.orientation === 'LANDSCAPE' ? azimuth + 90 : azimuth
 
-      return `<rect x="${(-panelWidthPx / 2).toFixed(2)}" y="${(-panelHeightPx / 2).toFixed(2)}" width="${panelWidthPx.toFixed(2)}" height="${panelHeightPx.toFixed(2)}" rx="1.2" fill="#0f172a" stroke="#67e8f9" stroke-width="0.65" opacity="0.82" transform="translate(${point.x.toFixed(2)} ${point.y.toFixed(2)}) rotate(${rotation.toFixed(2)})" />`
+      return `<rect x="${(-panelWidthPx / 2).toFixed(2)}" y="${(-panelHeightPx / 2).toFixed(2)}" width="${panelWidthPx.toFixed(2)}" height="${panelHeightPx.toFixed(2)}" rx="1.2" fill="#0f172a" stroke="#bae6fd" stroke-width="0.35" opacity="0.58" transform="translate(${point.x.toFixed(2)} ${point.y.toFixed(2)}) rotate(${rotation.toFixed(2)})" />`
     })
     .join('')
 
@@ -326,6 +485,27 @@ export function buildSolarOverlaySvg({
   <rect width="${STATIC_MAP_WIDTH}" height="${STATIC_MAP_HEIGHT}" fill="url(#hud)"/>
   <g>${panelRects}</g>
 </svg>`
+}
+
+function samplePanelsForGuide(panels: GoogleSolarPanel[], maxPanels: number) {
+  if (panels.length <= maxPanels) return panels
+  const stride = Math.ceil(panels.length / maxPanels)
+  return panels.filter((_, index) => index % stride === 0).slice(0, maxPanels)
+}
+
+function latLngToWorldPixel(lat: number, lng: number, zoom: number) {
+  const scale = MAP_TILE_LOGICAL_SIZE * Math.pow(2, zoom)
+  const sinLat = Math.sin((lat * Math.PI) / 180)
+  const clampedSinLat = clamp(sinLat, -0.9999, 0.9999)
+
+  return {
+    x: ((lng + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + clampedSinLat) / (1 - clampedSinLat)) / (4 * Math.PI)) * scale,
+  }
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max)
 }
 
 function latLngToPixel(

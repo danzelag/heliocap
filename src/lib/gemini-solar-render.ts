@@ -10,17 +10,19 @@ const DEFAULT_TIMEOUT_MS = 45_000
 const PREVIEW_WIDTH = 1280
 const PREVIEW_HEIGHT = 720
 
-const PREMIUM_SOLAR_RENDER_PROMPT = `Create a faithful polished seed image for a commercial solar proposal video.
+const PREMIUM_SOLAR_RENDER_PROMPT = `Create a faithful premium architectural seed image for a commercial solar proposal video.
 
-Use the first image as the base image, not loose inspiration. Preserve the exact target property, building footprint, roof outline, roof proportions, roof orientation, parking layout, drive aisles, lot context, adjacent roads, nearby green areas, shadows, and overall camera angle. Keep the same crop and composition unless a tiny centering correction is needed.
+Use the first image as the base image, not loose inspiration. Preserve the exact target property, building footprint, roof outline, roof proportions, roof orientation, parking layout, drive aisles, lot context, adjacent roads, nearby green areas, shadows, and overall camera angle. Keep the same crop and composition unless a small centering or straightening correction is needed.
 
-If a second image is provided, use it only as the solar panel layout guide. Preserve the array placement, row direction, spacing, setbacks, and usable-roof boundaries. Do not move panels onto parking lots, roads, trees, grass, facade walls, roof edges, or unusable areas.
+If the building appears diagonal in the frame, gently rotate and crop the entire site so the dominant roof axes feel straight and presentation-ready. Preserve the same building geometry and site context. Do not change the actual footprint or invent new roof planes.
+
+If a second image is provided, use it only as a broad solar layout guide. Preserve usable-roof boundaries and row direction at a high level, but avoid excessive tiny panel details. Do not move panels onto parking lots, roads, trees, grass, facade walls, roof edges, or unusable areas.
 
 This is an image-to-image cleanup of the same property. Do not substitute a different building. Do not redesign the building. Do not invent, expand, or add surrounding buildings, neighboring properties, extra roads, city blocks, skyline elements, unrelated structures, new entrances, new roof sections, new parking rows, or a different site.
 
-Improve the source image quality while keeping it recognizable: reduce map compression, sharpen roof edges, clean muddy roof texture, improve contrast, clarify shadows, and make the site look premium enough to seed a cinematic Veo clip. Keep the original aerial perspective. Do not convert the scene into a new oblique/isometric 3D model if that changes the building identity.
+Improve the source image quality while keeping it recognizable: reduce map compression, sharpen roof edges, clean muddy roof texture, improve contrast, clarify shadows, and reinterpret the visible materials as a clean architectural proposal render. The result should feel like an architect-rendered aerial concept board, not a raw map screenshot. Keep geometry faithful.
 
-Integrate clean dark blue or black commercial solar modules naturally into the existing roof. Panels must follow the provided layout guide when available, with believable perspective, consistent rows, subtle depth, and soft contact shadows. Keep panel placement stable and unwarped.
+Integrate clean dark blue or black commercial solar modules naturally into the existing roof. Panels should appear as professional grouped arrays with believable perspective, consistent rows, subtle depth, and soft contact shadows. Keep panel placement stable and unwarped. This is cinematic proposal imagery, not engineering as-built documentation.
 
 The output must still look like the same property from the input image at a glance. Fidelity matters more than making it look impressive.
 
