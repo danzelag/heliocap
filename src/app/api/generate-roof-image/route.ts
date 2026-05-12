@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
     const solarModel = buildSolarModel(solarInsights)
     const mapZoom = selectStaticMapZoom(solarModel)
     const mapCenter = selectStaticMapCenter(solarInsights, Number(lat), Number(lng))
+    console.log('[generate-roof-image] Visual target center selected', mapCenter)
     const imageBuffer = await fetchStaticSatelliteImage(mapCenter.lat, mapCenter.lng, mapZoom)
 
     const roofImageUrl = await uploadLeadAsset({
@@ -163,6 +164,7 @@ export async function POST(request: NextRequest) {
         mapTilesImageUrl: visualReferences.mapTilesImageUrl,
         aerialViewReferenceUrl: visualReferences.aerialViewReferenceUrl,
         streetViewReferenceUrls: visualReferences.streetViewReferenceUrls,
+        visual_target: mapCenter,
       })
     }
 
@@ -174,6 +176,7 @@ export async function POST(request: NextRequest) {
       aerialViewReferenceUrl: visualReferences.aerialViewReferenceUrl,
       streetViewReferenceUrls: visualReferences.streetViewReferenceUrls,
       reference_set: visualReferences,
+      visual_target: mapCenter,
       solar_model: solarModel,
       solar_insights_available: Boolean(solarInsights),
     })

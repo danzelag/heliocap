@@ -181,12 +181,12 @@ function selectPrimaryVeoReference(referenceSet: VisualReferenceSet) {
     return { source: 'cleanedPreviewImageUrl', url: referenceSet.cleanedPreviewImageUrl }
   }
 
-  if (isLikelyImageUrl(referenceSet.aerialViewReferenceUrl)) {
-    return { source: 'aerialViewReferenceUrl', url: referenceSet.aerialViewReferenceUrl || '' }
-  }
-
   if (referenceSet.mapTilesImageUrl) {
     return { source: 'mapTilesImageUrl', url: referenceSet.mapTilesImageUrl }
+  }
+
+  if (isLikelyImageUrl(referenceSet.aerialViewReferenceUrl)) {
+    return { source: 'aerialViewReferenceUrl', url: referenceSet.aerialViewReferenceUrl || '' }
   }
 
   const streetViewImage = referenceSet.streetViewReferenceUrls.find(Boolean)

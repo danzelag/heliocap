@@ -10,6 +10,7 @@ const DEFAULT_STATIC_MAP_ZOOM = 19
 const MAP_TILE_LOGICAL_SIZE = 256
 const MAP_TILE_TARGET_FORMAT = 'png'
 const MAX_GUIDE_PANEL_MARKERS = 260
+const MAX_SOLAR_CENTER_DRIFT_METERS = 30
 const PANEL_WIDTH_METERS = 1.045
 const PANEL_HEIGHT_METERS = 1.879
 const PANEL_WATTS = 400
@@ -245,15 +246,55 @@ export function selectStaticMapCenter(insights: GoogleSolarInsights | null, fall
   const center = insights?.center
 
   if (typeof center?.latitude === 'number' && typeof center?.longitude === 'number') {
+    const driftMeters = calculateDistanceMeters(
+      fallbackLat,
+      fallbackLng,
+      center.latitude,
+      center.longitude,
+    )
+
+    if (driftMeters <= MAX_SOLAR_CENTER_DRIFT_METERS) {
+      console.log('[openclaw-google] Solar center accepted for visual target', {
+        requestedLat: fallbackLat,
+        requestedLng: fallbackLng,
+        solarLat: center.latitude,
+        solarLng: center.longitude,
+        driftMeters: Math.round(driftMeters),
+      })
+
+      return {
+        lat: center.latitude,
+        lng: center.longitude,
+        source: 'google_solar' as const,
+        driftMeters,
+      }
+    }
+
+    console.warn('[openclaw-google] Solar center rejected for visual target; using prospect coordinates', {
+      requestedLat: fallbackLat,
+      requestedLng: fallbackLng,
+      solarLat: center.latitude,
+      solarLng: center.longitude,
+      driftMeters: Math.round(driftMeters),
+      maxAllowedMeters: MAX_SOLAR_CENTER_DRIFT_METERS,
+    })
+
     return {
-      lat: center.latitude,
-      lng: center.longitude,
+      lat: fallbackLat,
+      lng: fallbackLng,
+      source: 'prospect_coordinates' as const,
+      rejectedSolarCenter: {
+        lat: center.latitude,
+        lng: center.longitude,
+        driftMeters,
+      },
     }
   }
 
   return {
     lat: fallbackLat,
     lng: fallbackLng,
+    source: 'prospect_coordinates' as const,
   }
 }
 
@@ -703,6 +744,21 @@ function latLngToWorldPixel(lat: number, lng: number, zoom: number) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
+}
+
+function calculateDistanceMeters(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const earthRadiusMeters = 6371000
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180
+  const deltaLat = toRadians(lat2 - lat1)
+  const deltaLng = toRadians(lng2 - lng1)
+  const a =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(deltaLng / 2) *
+      Math.sin(deltaLng / 2)
+
+  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
 function latLngToPixel(
