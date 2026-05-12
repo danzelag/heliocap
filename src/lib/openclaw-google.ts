@@ -10,7 +10,8 @@ const DEFAULT_STATIC_MAP_ZOOM = 19
 const MAP_TILE_LOGICAL_SIZE = 256
 const MAP_TILE_TARGET_FORMAT = 'png'
 const MAX_GUIDE_PANEL_MARKERS = 260
-const MAX_SOLAR_CENTER_DRIFT_METERS = 30
+const MAX_SOLAR_CENTER_DRIFT_METERS = 75
+const WARN_SOLAR_CENTER_DRIFT_METERS = 30
 const PANEL_WIDTH_METERS = 1.045
 const PANEL_HEIGHT_METERS = 1.879
 const PANEL_WATTS = 400
@@ -254,19 +255,22 @@ export function selectStaticMapCenter(insights: GoogleSolarInsights | null, fall
     )
 
     if (driftMeters <= MAX_SOLAR_CENTER_DRIFT_METERS) {
+      const isModerateDrift = driftMeters > WARN_SOLAR_CENTER_DRIFT_METERS
       console.log('[openclaw-google] Solar center accepted for visual target', {
         requestedLat: fallbackLat,
         requestedLng: fallbackLng,
         solarLat: center.latitude,
         solarLng: center.longitude,
         driftMeters: Math.round(driftMeters),
+        moderateDrift: isModerateDrift,
       })
 
       return {
         lat: center.latitude,
         lng: center.longitude,
-        source: 'google_solar' as const,
+        source: isModerateDrift ? 'google_solar_moderate_drift' as const : 'google_solar' as const,
         driftMeters,
+        needsReview: isModerateDrift,
       }
     }
 
