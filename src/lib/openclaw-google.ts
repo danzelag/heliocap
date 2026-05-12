@@ -91,6 +91,37 @@ type MapTilesSession = {
   imageFormat?: string
 }
 
+export type VisualReferenceSet = {
+  mapTilesImageUrl: string | null
+  aerialViewReferenceUrl: string | null
+  streetViewReferenceUrls: string[]
+  cleanedPreviewImageUrl: string | null
+}
+
+type CollectVisualReferencesArgs = {
+  supabase: SupabaseClient
+  bucket?: 'leads' | 'prospects'
+  slug: string
+  lat: number
+  lng: number
+  address?: string | null
+  mapTilesImageUrl?: string | null
+  cleanedPreviewImageUrl?: string | null
+}
+
+type AerialViewLookupResponse = {
+  state?: string
+  uris?: Record<string, {
+    landscapeUri?: string
+    portraitUri?: string
+  }>
+}
+
+type StreetViewMetadataResponse = {
+  status?: string
+  error_message?: string
+}
+
 export function getGoogleMapsApiKey() {
   return (
     process.env.GOOGLE_MAPS_API_KEY ||
@@ -117,6 +148,52 @@ export async function uploadLeadAsset({
 
   const { data } = supabase.storage.from(resolvedBucket).getPublicUrl(filePath)
   return data.publicUrl
+}
+
+export async function collectVisualReferences({
+  supabase,
+  bucket = 'leads',
+  slug,
+  lat,
+  lng,
+  address,
+  mapTilesImageUrl = null,
+  cleanedPreviewImageUrl = null,
+}: CollectVisualReferencesArgs): Promise<VisualReferenceSet> {
+  const aerialViewReferenceUrl = await fetchAerialViewReference({ address, lat, lng }).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[openclaw-google] Aerial View reference unavailable: ${message}`)
+    return null
+  })
+
+  const streetViewReferenceUrls = await fetchStreetViewReferenceImages({
+    supabase,
+    bucket,
+    slug,
+    lat,
+    lng,
+    address,
+  }).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[openclaw-google] Street View references unavailable: ${message}`)
+    return []
+  })
+
+  const referenceSet = {
+    mapTilesImageUrl,
+    aerialViewReferenceUrl,
+    streetViewReferenceUrls,
+    cleanedPreviewImageUrl,
+  }
+
+  console.log('[openclaw-google] Visual references available', {
+    mapTiles: Boolean(referenceSet.mapTilesImageUrl),
+    aerialView: Boolean(referenceSet.aerialViewReferenceUrl),
+    streetViewCount: referenceSet.streetViewReferenceUrls.length,
+    cleanedPreview: Boolean(referenceSet.cleanedPreviewImageUrl),
+  })
+
+  return referenceSet
 }
 
 async function resolveStorageBucket(
@@ -214,6 +291,126 @@ export async function fetchStaticSatelliteImage(
 
   console.log(`[openclaw-google] Satellite source: static_maps zoom=${zoom} lat=${lat} lng=${lng}`)
   return Buffer.from(await response.arrayBuffer())
+}
+
+async function fetchAerialViewReference({
+  address,
+  lat,
+  lng,
+}: {
+  address?: string | null
+  lat: number
+  lng: number
+}) {
+  const apiKey = getGoogleMapsApiKey()
+  if (!apiKey) return null
+
+  const lookupAddress = address?.trim() || `${lat},${lng}`
+  const url = new URL('https://aerialview.googleapis.com/v1/videos:lookupVideo')
+  url.searchParams.set('address', lookupAddress)
+  url.searchParams.set('key', apiKey)
+
+  const response = await fetch(url, { cache: 'no-store' })
+  if (response.status === 404) {
+    console.log('[openclaw-google] Aerial View reference unavailable: no active video for address')
+    return null
+  }
+  if (!response.ok) {
+    throw new Error(`Aerial View lookup returned ${response.status}: ${await response.text()}`)
+  }
+
+  const data = (await response.json()) as AerialViewLookupResponse
+  if (data.state && data.state !== 'ACTIVE') {
+    console.log(`[openclaw-google] Aerial View reference unavailable: state=${data.state}`)
+    return null
+  }
+
+  const media = Object.values(data.uris || {})
+  const landscapeUri = media.find((entry) => entry.landscapeUri)?.landscapeUri || null
+  if (landscapeUri) {
+    console.log('[openclaw-google] Aerial View reference available')
+  }
+
+  return landscapeUri
+}
+
+async function fetchStreetViewReferenceImages({
+  supabase,
+  bucket,
+  slug,
+  lat,
+  lng,
+  address,
+}: {
+  supabase: SupabaseClient
+  bucket: 'leads' | 'prospects'
+  slug: string
+  lat: number
+  lng: number
+  address?: string | null
+}) {
+  const apiKey = getGoogleMapsApiKey()
+  if (!apiKey) return []
+
+  const headings = [0, 90, 180, 270]
+  const uploadedUrls: string[] = []
+  const location = address?.trim() || `${lat},${lng}`
+
+  for (const heading of headings) {
+    try {
+      const metadataUrl = new URL('https://maps.googleapis.com/maps/api/streetview/metadata')
+      metadataUrl.searchParams.set('location', location)
+      metadataUrl.searchParams.set('heading', String(heading))
+      metadataUrl.searchParams.set('fov', '80')
+      metadataUrl.searchParams.set('pitch', '0')
+      metadataUrl.searchParams.set('key', apiKey)
+
+      const metadataResponse = await fetch(metadataUrl, { cache: 'no-store' })
+      if (!metadataResponse.ok) {
+        throw new Error(`metadata returned ${metadataResponse.status}: ${await metadataResponse.text()}`)
+      }
+
+      const metadata = (await metadataResponse.json()) as StreetViewMetadataResponse
+      if (metadata.status !== 'OK') {
+        console.log(`[openclaw-google] Street View heading ${heading} unavailable: ${metadata.status || 'unknown'}`)
+        continue
+      }
+
+      const imageUrl = new URL('https://maps.googleapis.com/maps/api/streetview')
+      imageUrl.searchParams.set('size', '640x360')
+      imageUrl.searchParams.set('location', location)
+      imageUrl.searchParams.set('heading', String(heading))
+      imageUrl.searchParams.set('fov', '80')
+      imageUrl.searchParams.set('pitch', '0')
+      imageUrl.searchParams.set('source', 'outdoor')
+      imageUrl.searchParams.set('key', apiKey)
+
+      const imageResponse = await fetch(imageUrl, { cache: 'no-store' })
+      if (!imageResponse.ok) {
+        throw new Error(`image returned ${imageResponse.status}: ${await imageResponse.text()}`)
+      }
+
+      const buffer = Buffer.from(await imageResponse.arrayBuffer())
+      const publicUrl = await uploadLeadAsset({
+        supabase,
+        bucket,
+        slug,
+        fileName: `references/street-view-${heading}.jpg`,
+        body: buffer,
+        contentType: imageResponse.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg',
+      })
+      uploadedUrls.push(publicUrl)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(`[openclaw-google] Street View heading ${heading} failed: ${message}`)
+    }
+  }
+
+  if (uploadedUrls.length) {
+    console.log(`[openclaw-google] Street View references available: ${uploadedUrls.length}`)
+  }
+
+  return uploadedUrls
 }
 
 async function fetchMapTilesSatelliteImage({

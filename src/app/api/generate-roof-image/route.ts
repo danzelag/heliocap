@@ -6,6 +6,7 @@ import {
   buildRasterRenderPreview,
   buildSolarModel,
   buildSolarOverlaySvg,
+  collectVisualReferences,
   fetchSolarInsights,
   fetchStaticSatelliteImage,
   selectStaticMapCenter,
@@ -35,6 +36,9 @@ export async function POST(request: NextRequest) {
       prospectId,
       place_id,
       placeId,
+      formattedAddress,
+      formatted_address,
+      address,
     } = await request.json()
 
     if (bucket !== 'leads' && bucket !== 'prospects') {
@@ -78,6 +82,15 @@ export async function POST(request: NextRequest) {
       fileName: 'roof.png',
       body: imageBuffer,
       contentType: 'image/png',
+    })
+    const visualReferences = await collectVisualReferences({
+      supabase,
+      bucket,
+      slug,
+      lat: mapCenter.lat,
+      lng: mapCenter.lng,
+      address: getFirstString(formattedAddress, formatted_address, address),
+      mapTilesImageUrl: roofImageUrl,
     })
 
     const satelliteBase64 = `data:image/png;base64,${Buffer.from(imageBuffer).toString('base64')}`
@@ -143,10 +156,24 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (job_id) {
+      await mergeProposalJobReceipt(supabase, job_id, {
+        visual_references: visualReferences,
+        reference_set: visualReferences,
+        mapTilesImageUrl: visualReferences.mapTilesImageUrl,
+        aerialViewReferenceUrl: visualReferences.aerialViewReferenceUrl,
+        streetViewReferenceUrls: visualReferences.streetViewReferenceUrls,
+      })
+    }
+
     return NextResponse.json({
       roof_image_url: roofImageUrl,
       render_image_url: renderImageUrl,
       render_preview_url: renderPreviewUrl,
+      mapTilesImageUrl: visualReferences.mapTilesImageUrl,
+      aerialViewReferenceUrl: visualReferences.aerialViewReferenceUrl,
+      streetViewReferenceUrls: visualReferences.streetViewReferenceUrls,
+      reference_set: visualReferences,
       solar_model: solarModel,
       solar_insights_available: Boolean(solarInsights),
     })
@@ -159,4 +186,48 @@ export async function POST(request: NextRequest) {
 
 function isUuid(value: unknown) {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+}
+
+function getFirstString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+
+  return null
+}
+
+async function mergeProposalJobReceipt(
+  supabase: Awaited<ReturnType<typeof createAdminClient>>,
+  jobId: string,
+  metadata: Record<string, unknown>,
+) {
+  const { data, error } = await supabase
+    .from('proposal_jobs')
+    .select('receipt')
+    .eq('id', jobId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[generate-roof-image] receipt lookup:', error.message)
+    return
+  }
+
+  const current = data?.receipt && typeof data.receipt === 'object'
+    ? data.receipt as Record<string, unknown>
+    : {}
+
+  const { error: updateError } = await supabase
+    .from('proposal_jobs')
+    .update({
+      receipt: {
+        ...current,
+        ...metadata,
+        updated_at: new Date().toISOString(),
+      },
+    })
+    .eq('id', jobId)
+
+  if (updateError) {
+    console.error('[generate-roof-image] receipt update:', updateError.message)
+  }
 }

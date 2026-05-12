@@ -9,7 +9,11 @@ const VERTEX_MODEL_RESOURCE = 'publishers/google/models/veo-3.1-generate-001'
 const VEO_DURATION_SECONDS = 8
 
 export const DEFAULT_VEO_CINEMATIC_PROMPT =
-  `Image-to-video from the provided reference image only.
+  `REFERENCE LOCK: The provided images show the exact target property. Treat them as factual constraints, not inspiration. Preserve the real building and site. Do not hallucinate. Do not create buildings that arent there.
+
+Use the provided reference images as strict visual anchors for the exact target property. The video must preserve the same building, roof shape, footprint, lot layout, parking areas, roads, and surrounding site context shown in the references. Do not invent, redesign, replace, simplify, expand, or substitute the building. Do not create a generic commercial building. Do not use adjacent or nearby buildings. The output must remain recognizable as the exact same property from the references in every frame.
+
+Image-to-video from the provided reference image only.
 
 Create a slow cinematic aerial motion shot of the exact same commercial property shown in the input image.
 
@@ -31,13 +35,29 @@ Priority order:
 3. Add premium cinematic lighting.
 4. Add clean rooftop solar arrays.`
 
-export function buildDefaultVeoCinematicPrompt(address?: string | null) {
+export function buildDefaultVeoCinematicPrompt(
+  address?: string | null,
+  referenceContext?: string | null,
+) {
   const cleanAddress = address?.trim()
-  if (!cleanAddress) return DEFAULT_VEO_CINEMATIC_PROMPT
+  const cleanReferenceContext = referenceContext?.trim()
+  const additions: string[] = []
+
+  if (cleanAddress) {
+    additions.push(
+      `The reference image shows the target property at: ${cleanAddress}. Preserve only the building and site shown in the reference image.`,
+    )
+  }
+
+  if (cleanReferenceContext) {
+    additions.push(`Available identity references collected before video generation: ${cleanReferenceContext}. Use these as building-identity constraints.`)
+  }
+
+  if (!additions.length) return DEFAULT_VEO_CINEMATIC_PROMPT
 
   return `${DEFAULT_VEO_CINEMATIC_PROMPT}
 
-The reference image shows the target property at: ${cleanAddress}. Preserve only the building and site shown in the reference image.`
+${additions.join('\n')}`
 }
 
 type VertexImageInput = {

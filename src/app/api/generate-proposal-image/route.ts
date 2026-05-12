@@ -10,6 +10,13 @@ const PROPOSAL_IMAGE_TIMEOUT_MS = 45_000
 type GenerateProposalImageBody = {
   roof_image_url?: string
   render_image_url?: string
+  mapTilesImageUrl?: string
+  map_tiles_image_url?: string
+  aerialViewReferenceUrl?: string | null
+  aerial_view_reference_url?: string | null
+  streetViewReferenceUrls?: string[]
+  street_view_reference_urls?: string[]
+  reference_set?: Record<string, unknown> | null
   business_name?: string
   address?: string
   slug?: string
@@ -95,6 +102,17 @@ export async function POST(request: NextRequest) {
       if (error) throw error
 
       const { data } = supabase.storage.from(PROPOSALS_BUCKET).getPublicUrl(filePath)
+      const referenceSet = buildReferenceSet(body, {
+        mapTilesImageUrl: body.mapTilesImageUrl || body.map_tiles_image_url || roof_image_url,
+        cleanedPreviewImageUrl: data.publicUrl,
+      })
+      if (job_id) {
+        await mergeProposalJobReceipt(supabase, job_id, {
+          visual_references: referenceSet,
+          reference_set: referenceSet,
+          cleanedPreviewImageUrl: data.publicUrl,
+        })
+      }
       
       await updateProposalJobProgress(supabase, {
         jobId: job_id,
@@ -107,10 +125,24 @@ export async function POST(request: NextRequest) {
       console.log('[generate-proposal-image] Result: ai_generated')
       return NextResponse.json({
         render_preview_url: data.publicUrl,
+        cleanedPreviewImageUrl: data.publicUrl,
+        reference_set: referenceSet,
         source: 'ai_generated',
       })
     } catch (error) {
       console.error('[generate-proposal-image] Gemini render failed, falling back to roof image:', error)
+      const fallbackReferenceSet = buildReferenceSet(body, {
+        mapTilesImageUrl: body.mapTilesImageUrl || body.map_tiles_image_url || roof_image_url,
+        cleanedPreviewImageUrl: roof_image_url,
+      })
+      if (job_id) {
+        await mergeProposalJobReceipt(supabase, job_id, {
+          visual_references: fallbackReferenceSet,
+          reference_set: fallbackReferenceSet,
+          cleanedPreviewImageUrl: roof_image_url,
+        })
+      }
+
       await updateProposalJobProgress(supabase, {
         jobId: job_id,
         businessName: business_name,
@@ -121,6 +153,8 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         render_preview_url: roof_image_url,
+        cleanedPreviewImageUrl: roof_image_url,
+        reference_set: fallbackReferenceSet,
         source: 'fallback_roof_image',
       })
     }
@@ -128,5 +162,79 @@ export async function POST(request: NextRequest) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     console.error('[generate-proposal-image]', message)
     return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
+function buildReferenceSet(
+  body: GenerateProposalImageBody,
+  {
+    mapTilesImageUrl,
+    cleanedPreviewImageUrl,
+  }: {
+    mapTilesImageUrl?: string | null
+    cleanedPreviewImageUrl?: string | null
+  },
+) {
+  const existing = body.reference_set && typeof body.reference_set === 'object' ? body.reference_set : {}
+  const streetViewReferenceUrls = getStringArray(
+    body.streetViewReferenceUrls ||
+    body.street_view_reference_urls ||
+    existing.streetViewReferenceUrls,
+  )
+
+  return {
+    mapTilesImageUrl: getString(mapTilesImageUrl) || getString(existing.mapTilesImageUrl) || null,
+    aerialViewReferenceUrl:
+      getString(body.aerialViewReferenceUrl) ||
+      getString(body.aerial_view_reference_url) ||
+      getString(existing.aerialViewReferenceUrl) ||
+      null,
+    streetViewReferenceUrls,
+    cleanedPreviewImageUrl: getString(cleanedPreviewImageUrl) || getString(existing.cleanedPreviewImageUrl) || null,
+  }
+}
+
+function getString(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function getStringArray(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is string => typeof entry === 'string' && Boolean(entry.trim()))
+}
+
+async function mergeProposalJobReceipt(
+  supabase: Awaited<ReturnType<typeof createAdminClient>>,
+  jobId: string,
+  metadata: Record<string, unknown>,
+) {
+  const { data, error } = await supabase
+    .from('proposal_jobs')
+    .select('receipt')
+    .eq('id', jobId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[generate-proposal-image] receipt lookup:', error.message)
+    return
+  }
+
+  const current = data?.receipt && typeof data.receipt === 'object'
+    ? data.receipt as Record<string, unknown>
+    : {}
+
+  const { error: updateError } = await supabase
+    .from('proposal_jobs')
+    .update({
+      receipt: {
+        ...current,
+        ...metadata,
+        updated_at: new Date().toISOString(),
+      },
+    })
+    .eq('id', jobId)
+
+  if (updateError) {
+    console.error('[generate-proposal-image] receipt update:', updateError.message)
   }
 }
