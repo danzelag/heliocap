@@ -9,7 +9,36 @@ const VERTEX_MODEL_RESOURCE = 'publishers/google/models/veo-3.1-generate-001'
 const VEO_DURATION_SECONDS = 8
 
 export const DEFAULT_VEO_CINEMATIC_PROMPT =
-  'Purely cinematic aerial shot of a single commercial building. Smooth, slow drone-style flyover, gentle parallax, premium architectural visualization aesthetic, clean materials, soft natural daylight, subtle long shadows, gentle atmospheric depth. Dark commercial solar panels may appear naturally across usable rooftop areas in broad professional rows, but never on parking lots, roads, grass, trees, facade walls, roof edges, or unusable areas. Preserve the building footprint, roof shape, and site scale from the reference image. Do not invent a different building. No text, no UI, no labels, no map artifacts, no Google Maps style, no people, no vehicles, no logos, no neon, no cartoon. Style: high-end infrastructure visualization, premium energy brand, calm and confident.'
+  `Image-to-video from the provided reference image only.
+
+Create a slow cinematic aerial motion shot of the exact same commercial property shown in the input image.
+
+Do not change the building, roof shape, building footprint, surrounding roads, parking lot, lot boundaries, or site layout. Do not invent nearby buildings. Do not use adjacent or nearby buildings. Do not replace the property with a generic building. The video must remain visually recognizable as the same input property in every frame.
+
+Use only subtle drone-style motion: slow push-in, slight parallax, gentle tilt. Maintain the same site geometry and roof proportions.
+
+Add solar panels only during this video step. Solar panels may appear only as clean, broad, flat, pure black or very dark charcoal rectangular rooftop arrays on the existing roof surfaces, with subtle glossy reflections. No blue panels.
+
+Panels must be aligned in straight, clean rectangular rows parallel to the roof edges or dominant roof axis. No slanted, crooked, warped, scattered, diagonal, random, or speckled panel placement.
+
+Do not place panels on parking lots, roads, grass, trees, facades, walls, roof edges, or neighboring properties.
+
+No text, labels, UI, logos, cars, people, map artifacts, neon, cartoon, or HUD graphics.
+
+Priority order:
+1. Preserve the exact input building and site.
+2. Keep geometry stable.
+3. Add premium cinematic lighting.
+4. Add clean rooftop solar arrays.`
+
+export function buildDefaultVeoCinematicPrompt(address?: string | null) {
+  const cleanAddress = address?.trim()
+  if (!cleanAddress) return DEFAULT_VEO_CINEMATIC_PROMPT
+
+  return `${DEFAULT_VEO_CINEMATIC_PROMPT}
+
+The reference image shows the target property at: ${cleanAddress}. Preserve only the building and site shown in the reference image.`
+}
 
 type VertexImageInput = {
   gcsUri?: string

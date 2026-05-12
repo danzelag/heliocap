@@ -10,25 +10,23 @@ const DEFAULT_TIMEOUT_MS = 45_000
 const PREVIEW_WIDTH = 1280
 const PREVIEW_HEIGHT = 720
 
-const PREMIUM_SOLAR_RENDER_PROMPT = `Create a faithful premium architectural seed image for a commercial solar proposal video.
+const PREMIUM_SOLAR_RENDER_PROMPT = `This is a strict image-to-image cleanup. The output must be the exact same property from the input image, not a redesigned or substituted building.
 
-Use the first image as the base image, not loose inspiration. Preserve the exact target property, building footprint, roof outline, roof proportions, roof orientation, parking layout, drive aisles, lot context, adjacent roads, nearby green areas, shadows, and overall camera angle. Keep the same crop and composition unless a small centering or straightening correction is needed.
+Treat the input image as the exact target property, not inspiration. Preserve the same building footprint, roof outline, roof angles, roof proportions, parking lot, roads, lot boundaries, surrounding context, shadows, and camera angle.
 
-If the building appears diagonal in the frame, gently rotate and crop the entire site so the dominant roof axes feel straight and presentation-ready. Preserve the same building geometry and site context. Do not change the actual footprint or invent new roof planes.
+Do not redesign, replace, expand, simplify, or invent the building. Do not add nearby buildings, extra roads, new lots, city blocks, entrances, roof sections, roof planes, parking rows, or unrelated structures. Do not create a new architectural concept.
 
-If a second image is provided, use it only as a broad solar layout guide. Preserve usable-roof boundaries and row direction at a high level, but avoid excessive tiny panel details. Do not move panels onto parking lots, roads, trees, grass, facade walls, roof edges, or unusable areas.
+Do not add solar panels. Do not add solar arrays, solar modules, rooftop rectangles, panel guides, blue panels, black panels, or any proposed equipment. The image-generation step is cleanup only.
 
-This is an image-to-image cleanup of the same property. Do not substitute a different building. Do not redesign the building. Do not invent, expand, or add surrounding buildings, neighboring properties, extra roads, city blocks, skyline elements, unrelated structures, new entrances, new roof sections, new parking rows, or a different site.
+Remove map artifacts, labels, UI controls, watermarks, cars, people, logos, icons, pins, borders, and compression artifacts.
 
-Improve the source image quality while keeping it recognizable: reduce map compression, sharpen roof edges, clean muddy roof texture, improve contrast, clarify shadows, and reinterpret the visible materials as a clean architectural proposal render. The result should feel like an architect-rendered aerial concept board, not a raw map screenshot. Keep geometry faithful.
+Improve clarity only: sharpen roof edges, clean muddy texture, improve contrast, clarify shadows, and reduce map compression while preserving the same camera angle and site geometry.
 
-Integrate clean dark blue or black commercial solar modules naturally into the existing roof. Panels should appear as professional grouped arrays with believable perspective, consistent rows, subtle depth, and soft contact shadows. Keep panel placement stable and unwarped. This is cinematic proposal imagery, not engineering as-built documentation.
+If a second image is provided, do not copy any solar panels from it. Use it only to understand the same target property boundaries if helpful, while keeping the output free of solar panels.
 
-The output must still look like the same property from the input image at a glance. Fidelity matters more than making it look impressive.
+The output must look like a cleaned high-quality satellite/aerial proposal image of the exact same property, not a new architectural render.
 
-Remove labels, UI controls, watermarks, map artifacts, compression, cars, people, logos, icons, pins, borders, and interface elements. Avoid sticker-like panels, warped panel placement, cartoon style, anime style, SimCity style, neon outlines, HUD graphics, text, or fake unrelated architecture.
-
-Return only a polished 16:9 image of the same commercial property for Veo video generation.`
+Return only a clean 16:9 aerial image of the same commercial property for Veo video generation.`
 
 export type PremiumSolarRenderSource = 'ai_generated' | 'executive_render' | 'fallback_roof_image'
 

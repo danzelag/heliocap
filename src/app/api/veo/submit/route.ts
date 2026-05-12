@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyN8nRequest } from '@/lib/n8n-auth'
-import { DEFAULT_VEO_CINEMATIC_PROMPT, submitVertexVeoRender } from '@/lib/vertex-veo'
+import { buildDefaultVeoCinematicPrompt, submitVertexVeoRender } from '@/lib/vertex-veo'
 
 type SubmitVeoBody = {
   slug?: unknown
   prompt?: unknown
+  address?: unknown
+  formattedAddress?: unknown
+  formatted_address?: unknown
   imageUrl?: unknown
   image_url?: unknown
   renderPreviewUrl?: unknown
@@ -18,10 +21,11 @@ export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as SubmitVeoBody
     const slug = typeof body.slug === 'string' ? body.slug.trim() : ''
+    const address = getFirstString(body.formattedAddress, body.formatted_address, body.address)
     const prompt =
       typeof body.prompt === 'string' && body.prompt.trim()
         ? body.prompt.trim()
-        : DEFAULT_VEO_CINEMATIC_PROMPT
+        : buildDefaultVeoCinematicPrompt(address)
     const imageUrl = getFirstString(
       body.imageUrl,
       body.image_url,
@@ -37,6 +41,10 @@ export async function POST(request: NextRequest) {
         { error: 'imageUrl or render_preview_url is required' },
         { status: 400 },
       )
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[api/veo/submit] final Veo prompt', prompt)
     }
 
     const result = await submitVertexVeoRender({ slug, prompt, imageUrl })
