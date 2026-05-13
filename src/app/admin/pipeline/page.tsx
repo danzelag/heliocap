@@ -42,6 +42,9 @@ export default async function PipelinePage() {
 
   const solarFetched = prospects.filter((prospect) => prospect.pipeline_stage === 'solar_fetched').length
   const notQualified = prospects.filter((prospect) => prospect.pipeline_stage === 'dead').length
+  const coordinateReview = prospects.filter((prospect) => (
+    prospect.pipeline_stage === 'coordinate_review' || prospect.needs_review
+  )).length
   const proposalTargets = prospects.filter((prospect) => (
     prospect.pipeline_stage === 'microsite_live' || prospect.lead_id || prospect.microsite_slug
   )).length
@@ -51,6 +54,7 @@ export default async function PipelinePage() {
   const stats = [
     { label: 'Active', value: activeProspects.toLocaleString(), icon: Target, tone: 'text-slate-200' },
     { label: 'Solar Ready', value: solarFetched.toLocaleString(), icon: Sun, tone: 'text-cyan-200' },
+    { label: 'Coord Review', value: coordinateReview.toLocaleString(), icon: ShieldCheck, tone: 'text-amber-200' },
     { label: 'Not Qualified', value: notQualified.toLocaleString(), icon: ShieldCheck, tone: 'text-amber-200' },
     { label: 'Proposal Targets', value: proposalTargets.toLocaleString(), icon: RadioTower, tone: 'text-emerald-200' },
     { label: 'ITC Flagged', value: formatCompactUSD(flaggedItc), icon: Zap, tone: 'text-slate-200' },

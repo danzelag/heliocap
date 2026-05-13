@@ -1,5 +1,6 @@
 export const prospectStages = [
   'sourced',
+  'coordinate_review',
   'solar_fetched',
   'enriched',
   'microsite_live',
@@ -23,6 +24,13 @@ export interface Prospect {
   category: string | null
   location: string | null
   source: string | null
+  coordinate_quality: string | null
+  coordinate_drift_meters: number | null
+  needs_review: boolean | null
+  review_reason: string | null
+  geocode_address: string | null
+  geocode_lat: number | null
+  geocode_lng: number | null
   owner_llc: string | null
   sqft: number | null
   year_built: number | null
@@ -69,8 +77,9 @@ const prospectStageRank: Record<string, number> = {
   enriched: 4,
   solar_fetched: 5,
   sourced: 6,
-  snoozed: 7,
-  dead: 8,
+  coordinate_review: 7,
+  snoozed: 8,
+  dead: 9,
 }
 
 export function sortProspectsForAdmin(prospects: Prospect[]) {

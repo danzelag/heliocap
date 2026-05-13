@@ -22,6 +22,7 @@ type ProspectPipelineTableProps = {
 
 const stageLabels: Record<ProspectStage, string> = {
   sourced: 'Sourced',
+  coordinate_review: 'Coordinate Review',
   solar_fetched: 'Solar Fetched',
   enriched: 'Enriched',
   microsite_live: 'Live',
@@ -48,6 +49,7 @@ function formatNumber(value: number | null) {
 
 function stageClass(stage: ProspectStage) {
   if (stage === 'booked' || stage === 'microsite_live') return 'admin-status admin-status-success px-2.5 py-1'
+  if (stage === 'coordinate_review') return 'admin-status admin-status-warning px-2.5 py-1'
   if (stage === 'dead') return 'admin-status admin-status-warning px-2.5 py-1'
   if (stage === 'snoozed') return 'admin-status admin-status-warning px-2.5 py-1'
   if (stage === 'solar_fetched' || stage === 'enriched' || stage === 'emailed' || stage === 'replied') {
@@ -62,6 +64,10 @@ function isProposalTarget(prospect: Prospect) {
 
 function isNotQualified(prospect: Prospect) {
   return prospect.pipeline_stage === 'dead'
+}
+
+function isCoordinateReview(prospect: Prospect) {
+  return prospect.pipeline_stage === 'coordinate_review' || Boolean(prospect.needs_review)
 }
 
 export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTableProps) {
@@ -430,8 +436,15 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                       <div className="mt-1 max-w-xs text-xs text-slate-500">{prospect.address}</div>
                       <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-400">
                         {hasProposal && <span className="admin-status admin-status-success px-2 py-1">proposal made</span>}
+                        {isCoordinateReview(prospect) && <span className="admin-status admin-status-warning px-2 py-1">check coordinates</span>}
                         <span>{prospect.metro || 'Metro pending'} · {prospect.county || 'County pending'}</span>
                       </div>
+                      {isCoordinateReview(prospect) && (
+                        <div className="mt-2 max-w-xs text-xs text-amber-300">
+                          {prospect.review_reason || 'Coordinate validation needs review'}
+                          {prospect.coordinate_drift_meters != null ? ` · ${Math.round(prospect.coordinate_drift_meters)}m drift` : ''}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-4 align-top">
                       <div className="text-xs font-medium text-stone-300">{prospect.place_id || prospect.parcel_id || 'No ID'}</div>
@@ -506,9 +519,9 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                           type="button"
                           size="sm"
                           className="rounded-md bg-amber-300 text-stone-950 hover:bg-amber-200"
-                          disabled={busy || prospect.pipeline_stage === 'dead' || hasProposal}
+                          disabled={busy || prospect.pipeline_stage === 'dead' || isCoordinateReview(prospect) || hasProposal}
                           onClick={() => handlePromote(prospect.id)}
-                          title={hasProposal ? 'Proposal already made' : 'Promote prospect to proposal worker'}
+                          title={isCoordinateReview(prospect) ? 'Coordinate review required before proposal generation' : hasProposal ? 'Proposal already made' : 'Promote prospect to proposal worker'}
                         >
                           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : hasProposal ? <ExternalLink className="h-4 w-4" /> : <Send className="h-4 w-4" />}
                         </Button>

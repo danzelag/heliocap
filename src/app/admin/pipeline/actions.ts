@@ -105,6 +105,13 @@ export async function bulkPromoteProspectsToLeadsAction(ids: string[]) {
 }
 
 async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof createAdminClient>>, prospect: Prospect) {
+  if (prospect.pipeline_stage === 'coordinate_review' || prospect.needs_review) {
+    return {
+      success: false,
+      error: prospect.review_reason || 'Prospect needs coordinate review before proposal generation.',
+    }
+  }
+
   if (prospect.lead_id && prospect.microsite_slug) {
     if (prospect.pipeline_stage !== 'microsite_live') {
       await supabase
