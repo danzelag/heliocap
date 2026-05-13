@@ -255,26 +255,29 @@ export function selectStaticMapCenter(insights: GoogleSolarInsights | null, fall
     )
 
     if (driftMeters <= MAX_SOLAR_CENTER_DRIFT_METERS) {
-      const isModerateDrift = driftMeters > WARN_SOLAR_CENTER_DRIFT_METERS
-      console.log('[openclaw-google] Solar center accepted for visual target', {
+      console.log('[openclaw-google] Solar center observed; keeping prospect coordinates for visual target', {
         requestedLat: fallbackLat,
         requestedLng: fallbackLng,
         solarLat: center.latitude,
         solarLng: center.longitude,
         driftMeters: Math.round(driftMeters),
-        moderateDrift: isModerateDrift,
+        moderateDrift: driftMeters > WARN_SOLAR_CENTER_DRIFT_METERS,
       })
 
       return {
-        lat: center.latitude,
-        lng: center.longitude,
-        source: isModerateDrift ? 'google_solar_moderate_drift' as const : 'google_solar' as const,
-        driftMeters,
-        needsReview: isModerateDrift,
+        lat: fallbackLat,
+        lng: fallbackLng,
+        source: 'prospect_coordinates' as const,
+        observedSolarCenter: {
+          lat: center.latitude,
+          lng: center.longitude,
+          driftMeters,
+        },
+        needsReview: driftMeters > WARN_SOLAR_CENTER_DRIFT_METERS,
       }
     }
 
-    console.warn('[openclaw-google] Solar center rejected for visual target; using prospect coordinates', {
+    console.warn('[openclaw-google] Solar center too far from prospect coordinates; keeping prospect visual target', {
       requestedLat: fallbackLat,
       requestedLng: fallbackLng,
       solarLat: center.latitude,
