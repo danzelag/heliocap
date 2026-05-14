@@ -82,7 +82,7 @@ function blocksProposalGeneration(prospect: Prospect) {
 }
 
 function formatCoordinate(value: number | null | undefined) {
-  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(6) : ''
+  return typeof value === 'number' && Number.isFinite(value) ? String(value) : ''
 }
 
 function parseCoordinate(value: string) {

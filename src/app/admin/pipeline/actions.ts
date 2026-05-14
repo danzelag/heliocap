@@ -80,7 +80,7 @@ export async function getProspectVisualPreviewAction(id: string, lat?: number, l
   if (!candidate) return { success: false, error: 'No coordinates available for preview.' }
 
   try {
-    const image = await fetchStaticSatelliteImage(candidate.lat, candidate.lng, 18)
+    const image = await fetchStaticSatelliteImage(candidate.lat, candidate.lng, 20)
     const preview = await sharp(image)
       .resize(960, 540, { fit: 'cover', position: 'center' })
       .jpeg({ quality: 82 })
