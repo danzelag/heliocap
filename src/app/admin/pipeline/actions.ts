@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase-server'
 import { SolarUtils } from '@/lib/solar-utils'
-import { prospectStages, type Prospect, type ProspectStage } from '@/lib/prospect'
+import { prospectStages, resolveProspectVisualTarget, type Prospect, type ProspectStage } from '@/lib/prospect'
 import { recordProposalJobEvent } from '@/lib/proposal-job-events'
 
 const DEFAULT_SITE_URL = 'https://heliocap.vercel.app'
@@ -136,6 +136,11 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
     return { success: false, error: 'Prospect needs lat/lng before it can be promoted.' }
   }
 
+  const visualTarget = resolveProspectVisualTarget(prospect)
+  if (!visualTarget) {
+    return { success: false, error: 'Prospect needs valid visual coordinates before it can be promoted.' }
+  }
+
   const webhookUrl = process.env.N8N_CREATE_PROPOSAL_WEBHOOK_URL
   if (!webhookUrl) {
     return { success: false, error: 'N8N_CREATE_PROPOSAL_WEBHOOK_URL is not configured' }
@@ -146,8 +151,8 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
     .insert([{
       business_name: businessName,
       address: prospect.address,
-      lat: prospect.lat,
-      lng: prospect.lng,
+      lat: visualTarget.lat,
+      lng: visualTarget.lng,
       slug,
       status: 'queued',
       current_step: 'Queued from prospect table',
@@ -155,6 +160,7 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
       receipt: {
         prospect_id: prospect.id,
         source: 'prospect_table',
+        visual_target: visualTarget,
       },
     }])
     .select('id')
@@ -175,11 +181,12 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
     body: JSON.stringify({
       business_name: businessName,
       address: prospect.address,
-      lat: prospect.lat,
-      lng: prospect.lng,
+      lat: visualTarget.lat,
+      lng: visualTarget.lng,
       slug,
       prospect_id: prospect.id,
       job_id: job.id,
+      visual_target: visualTarget,
     }),
     cache: 'no-store',
   })
@@ -223,6 +230,7 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
         ...(receipt || {}),
         prospect_id: prospect.id,
         source: 'prospect_table',
+        visual_target: visualTarget,
       },
     })
     .eq('id', job.id)

@@ -69,6 +69,18 @@ export interface Prospect {
   updated_at: string
 }
 
+export type ProspectVisualTarget = {
+  lat: number
+  lng: number
+  source: 'geocode_coordinates' | 'prospect_coordinates'
+  originalLat: number
+  originalLng: number
+  geocodeLat: number | null
+  geocodeLng: number | null
+  coordinateQuality: string | null
+  driftMeters: number | null
+}
+
 const prospectStageRank: Record<string, number> = {
   microsite_live: 0,
   booked: 1,
@@ -93,4 +105,25 @@ export function sortProspectsForAdmin(prospects: Prospect[]) {
 
     return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
   })
+}
+
+export function resolveProspectVisualTarget(prospect: Prospect): ProspectVisualTarget | null {
+  if (typeof prospect.lat !== 'number' || typeof prospect.lng !== 'number') return null
+
+  const hasValidatedGeocode =
+    (prospect.coordinate_quality === 'validated' || prospect.coordinate_quality === 'moderate_drift') &&
+    typeof prospect.geocode_lat === 'number' &&
+    typeof prospect.geocode_lng === 'number'
+
+  return {
+    lat: hasValidatedGeocode ? prospect.geocode_lat! : prospect.lat,
+    lng: hasValidatedGeocode ? prospect.geocode_lng! : prospect.lng,
+    source: hasValidatedGeocode ? 'geocode_coordinates' : 'prospect_coordinates',
+    originalLat: prospect.lat,
+    originalLng: prospect.lng,
+    geocodeLat: prospect.geocode_lat,
+    geocodeLng: prospect.geocode_lng,
+    coordinateQuality: prospect.coordinate_quality,
+    driftMeters: prospect.coordinate_drift_meters,
+  }
 }

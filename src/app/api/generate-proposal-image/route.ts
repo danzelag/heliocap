@@ -33,7 +33,7 @@ type GenerateProposalImageBody = {
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as GenerateProposalImageBody
-    const { roof_image_url, render_image_url, business_name, address, job_id, filtered, reason } = body
+    const { roof_image_url, business_name, address, job_id, filtered, reason } = body
 
     const supabase = await createAdminClient()
 
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
       const aiRender = await generatePremiumSolarRender({
         roofImageUrl: roof_image_url,
-        renderImageUrl: render_image_url,
+        renderImageUrl: null,
         timeoutMs: PROPOSAL_IMAGE_TIMEOUT_MS,
       })
       
