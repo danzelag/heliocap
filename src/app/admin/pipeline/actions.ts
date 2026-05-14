@@ -3,8 +3,16 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase-server'
 import { SolarUtils } from '@/lib/solar-utils'
-import { prospectStages, resolveProspectVisualTarget, type Prospect, type ProspectStage } from '@/lib/prospect'
+import {
+  getProspectVisualCandidate,
+  prospectStages,
+  resolveProspectVisualTarget,
+  type Prospect,
+  type ProspectStage,
+} from '@/lib/prospect'
 import { recordProposalJobEvent } from '@/lib/proposal-job-events'
+import { fetchStaticSatelliteImage } from '@/lib/openclaw-google'
+import sharp from 'sharp'
 
 const DEFAULT_SITE_URL = 'https://heliocap.vercel.app'
 const BULK_PROPOSAL_LIMIT = 25
@@ -48,6 +56,90 @@ export async function updateProspectStageAction(id: string, stage: ProspectStage
   revalidatePath('/admin')
   revalidatePath('/admin/pipeline')
   return { success: true }
+}
+
+export async function getProspectVisualPreviewAction(id: string, lat?: number, lng?: number) {
+  if (!id) return { success: false, error: 'Missing prospect ID' }
+
+  const supabase = await createAdminClient()
+  const { data: prospect, error } = await supabase
+    .from('prospects')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error) return { success: false, error: error.message }
+  if (!prospect) return { success: false, error: 'Prospect not found' }
+
+  const requestedLat = Number(lat)
+  const requestedLng = Number(lng)
+  const candidate = Number.isFinite(requestedLat) && Number.isFinite(requestedLng)
+    ? { lat: requestedLat, lng: requestedLng, source: 'manual_input' as const }
+    : getProspectVisualCandidate(prospect as Prospect)
+
+  if (!candidate) return { success: false, error: 'No coordinates available for preview.' }
+
+  try {
+    const image = await fetchStaticSatelliteImage(candidate.lat, candidate.lng, 18)
+    const preview = await sharp(image)
+      .resize(960, 540, { fit: 'cover', position: 'center' })
+      .jpeg({ quality: 82 })
+      .toBuffer()
+
+    return {
+      success: true,
+      imageDataUrl: `data:image/jpeg;base64,${preview.toString('base64')}`,
+      lat: candidate.lat,
+      lng: candidate.lng,
+      source: candidate.source,
+    }
+  } catch (previewError) {
+    const message = previewError instanceof Error ? previewError.message : 'Failed to generate visual preview.'
+    return { success: false, error: message }
+  }
+}
+
+export async function saveProspectVisualTargetAction({
+  id,
+  lat,
+  lng,
+  note,
+}: {
+  id: string
+  lat: number
+  lng: number
+  note?: string
+}) {
+  if (!id) return { success: false, error: 'Missing prospect ID' }
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return { success: false, error: 'Enter valid visual latitude and longitude.' }
+  }
+
+  const supabase = await createAdminClient()
+  const verifiedAt = new Date().toISOString()
+  const { error } = await supabase
+    .from('prospects')
+    .update({
+      visual_lat: lat,
+      visual_lng: lng,
+      visual_verified: true,
+      visual_verified_at: verifiedAt,
+      visual_review_note: note?.trim() || null,
+    })
+    .eq('id', id)
+
+  if (error) return { success: false, error: error.message }
+
+  revalidatePath('/admin')
+  revalidatePath('/admin/pipeline')
+  return {
+    success: true,
+    visual_lat: lat,
+    visual_lng: lng,
+    visual_verified: true,
+    visual_verified_at: verifiedAt,
+    visual_review_note: note?.trim() || null,
+  }
 }
 
 export async function promoteProspectToLeadAction(id: string) {
@@ -105,7 +197,7 @@ export async function bulkPromoteProspectsToLeadsAction(ids: string[]) {
 }
 
 async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof createAdminClient>>, prospect: Prospect) {
-  if (prospect.pipeline_stage === 'coordinate_review' || prospect.needs_review) {
+  if ((prospect.pipeline_stage === 'coordinate_review' || prospect.needs_review) && prospect.visual_verified !== true) {
     return {
       success: false,
       error: prospect.review_reason || 'Prospect needs coordinate review before proposal generation.',
@@ -132,13 +224,9 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
   const businessName = prospect.owner_llc || prospect.owner_name || prospect.address.split(',')[0] || 'Helio Cap Prospect'
   const slug = await getUniqueSlug(businessName)
 
-  if (prospect.lat == null || prospect.lng == null) {
-    return { success: false, error: 'Prospect needs lat/lng before it can be promoted.' }
-  }
-
   const visualTarget = resolveProspectVisualTarget(prospect)
   if (!visualTarget) {
-    return { success: false, error: 'Prospect needs valid visual coordinates before it can be promoted.' }
+    return { success: false, error: 'Verify target building before creating proposal.' }
   }
 
   const webhookUrl = process.env.N8N_CREATE_PROPOSAL_WEBHOOK_URL

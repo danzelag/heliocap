@@ -31,6 +31,11 @@ export interface Prospect {
   geocode_address: string | null
   geocode_lat: number | null
   geocode_lng: number | null
+  visual_lat: number | null
+  visual_lng: number | null
+  visual_verified: boolean | null
+  visual_verified_at: string | null
+  visual_review_note: string | null
   owner_llc: string | null
   sqft: number | null
   year_built: number | null
@@ -72,11 +77,13 @@ export interface Prospect {
 export type ProspectVisualTarget = {
   lat: number
   lng: number
-  source: 'geocode_coordinates' | 'prospect_coordinates'
+  source: 'visual_verified'
   originalLat: number
   originalLng: number
   geocodeLat: number | null
   geocodeLng: number | null
+  visualLat: number | null
+  visualLng: number | null
   coordinateQuality: string | null
   driftMeters: number | null
 }
@@ -108,22 +115,70 @@ export function sortProspectsForAdmin(prospects: Prospect[]) {
 }
 
 export function resolveProspectVisualTarget(prospect: Prospect): ProspectVisualTarget | null {
-  if (typeof prospect.lat !== 'number' || typeof prospect.lng !== 'number') return null
-
-  const hasValidatedGeocode =
-    (prospect.coordinate_quality === 'validated' || prospect.coordinate_quality === 'moderate_drift') &&
-    typeof prospect.geocode_lat === 'number' &&
-    typeof prospect.geocode_lng === 'number'
+  if (
+    prospect.visual_verified !== true ||
+    typeof prospect.visual_lat !== 'number' ||
+    typeof prospect.visual_lng !== 'number'
+  ) {
+    return null
+  }
 
   return {
-    lat: hasValidatedGeocode ? prospect.geocode_lat! : prospect.lat,
-    lng: hasValidatedGeocode ? prospect.geocode_lng! : prospect.lng,
-    source: hasValidatedGeocode ? 'geocode_coordinates' : 'prospect_coordinates',
-    originalLat: prospect.lat,
-    originalLng: prospect.lng,
+    lat: prospect.visual_lat,
+    lng: prospect.visual_lng,
+    source: 'visual_verified',
+    originalLat: typeof prospect.lat === 'number' ? prospect.lat : prospect.visual_lat,
+    originalLng: typeof prospect.lng === 'number' ? prospect.lng : prospect.visual_lng,
     geocodeLat: prospect.geocode_lat,
     geocodeLng: prospect.geocode_lng,
+    visualLat: prospect.visual_lat,
+    visualLng: prospect.visual_lng,
     coordinateQuality: prospect.coordinate_quality,
     driftMeters: prospect.coordinate_drift_meters,
   }
+}
+
+export function getProspectVisualCandidate(prospect: Prospect) {
+  if (
+    prospect.visual_lat != null &&
+    prospect.visual_lng != null &&
+    Number.isFinite(prospect.visual_lat) &&
+    Number.isFinite(prospect.visual_lng)
+  ) {
+    return {
+      lat: prospect.visual_lat,
+      lng: prospect.visual_lng,
+      source: 'saved_visual' as const,
+    }
+  }
+
+  const canUseGeocode =
+    (prospect.coordinate_quality === 'validated' || prospect.coordinate_quality === 'moderate_drift') &&
+    prospect.geocode_lat != null &&
+    prospect.geocode_lng != null &&
+    Number.isFinite(prospect.geocode_lat) &&
+    Number.isFinite(prospect.geocode_lng)
+
+  if (canUseGeocode) {
+    return {
+      lat: prospect.geocode_lat!,
+      lng: prospect.geocode_lng!,
+      source: 'geocode_coordinates' as const,
+    }
+  }
+
+  if (
+    prospect.lat != null &&
+    prospect.lng != null &&
+    Number.isFinite(prospect.lat) &&
+    Number.isFinite(prospect.lng)
+  ) {
+    return {
+      lat: prospect.lat,
+      lng: prospect.lng,
+      source: 'prospect_coordinates' as const,
+    }
+  }
+
+  return null
 }

@@ -2,14 +2,17 @@
 
 import { useEffect, useMemo, useState, useTransition, type SetStateAction } from 'react'
 import Link from 'next/link'
-import { ExternalLink, Loader2, RadioTower, Rocket, Send, Trash2, TriangleAlert, Wand2 } from 'lucide-react'
+import { Crosshair, ExternalLink, Loader2, RadioTower, Rocket, Send, Trash2, TriangleAlert, Wand2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { sortProspectsForAdmin, type Prospect, type ProspectStage, prospectStages } from '@/lib/prospect'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { getProspectVisualCandidate, sortProspectsForAdmin, type Prospect, type ProspectStage, prospectStages } from '@/lib/prospect'
 import {
   bulkDeleteProspectsAction,
   bulkPromoteProspectsToLeadsAction,
   deleteProspectAction,
+  getProspectVisualPreviewAction,
   promoteProspectToLeadAction,
+  saveProspectVisualTargetAction,
   triggerProspectEnrichmentAction,
   updateProspectStageAction,
 } from '@/app/admin/pipeline/actions'
@@ -70,12 +73,37 @@ function isCoordinateReview(prospect: Prospect) {
   return prospect.pipeline_stage === 'coordinate_review' || Boolean(prospect.needs_review)
 }
 
+function needsVisualVerification(prospect: Prospect) {
+  return prospect.visual_verified !== true
+}
+
+function blocksProposalGeneration(prospect: Prospect) {
+  return prospect.pipeline_stage === 'dead' || needsVisualVerification(prospect)
+}
+
+function formatCoordinate(value: number | null | undefined) {
+  return typeof value === 'number' && Number.isFinite(value) ? value.toFixed(6) : ''
+}
+
+function parseCoordinate(value: string) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTableProps) {
   const [prospects, setProspectsState] = useState(() => sortProspectsForAdmin(readClientCache<Prospect[]>(PROSPECTS_CACHE_KEY) || initialProspects))
   const [activeStage, setActiveStage] = useState<ProspectStage | 'active' | 'not_qualified'>('active')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [message, setMessage] = useState<string | null>(null)
+  const [visualProspect, setVisualProspect] = useState<Prospect | null>(null)
+  const [visualLat, setVisualLat] = useState('')
+  const [visualLng, setVisualLng] = useState('')
+  const [visualNote, setVisualNote] = useState('')
+  const [visualPreviewUrl, setVisualPreviewUrl] = useState<string | null>(null)
+  const [visualPreviewSource, setVisualPreviewSource] = useState<string | null>(null)
+  const [visualError, setVisualError] = useState<string | null>(null)
+  const [visualLoading, setVisualLoading] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   const setProspects = (next: SetStateAction<Prospect[]>) => {
@@ -216,6 +244,89 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
         }
       }
       setActiveId(null)
+    })
+  }
+
+  const openVisualVerifier = (prospect: Prospect) => {
+    const candidate = getProspectVisualCandidate(prospect)
+    setVisualProspect(prospect)
+    setVisualLat(formatCoordinate(candidate?.lat))
+    setVisualLng(formatCoordinate(candidate?.lng))
+    setVisualNote(prospect.visual_review_note || '')
+    setVisualPreviewUrl(null)
+    setVisualPreviewSource(candidate?.source || null)
+    setVisualError(null)
+
+    if (candidate) {
+      void refreshVisualPreview(prospect.id, candidate.lat, candidate.lng)
+    } else {
+      setVisualError('No coordinates available for this prospect.')
+    }
+  }
+
+  const refreshVisualPreview = async (id = visualProspect?.id, latValue = parseCoordinate(visualLat), lngValue = parseCoordinate(visualLng)) => {
+    if (!id) return
+    if (latValue == null || lngValue == null) {
+      setVisualError('Enter valid latitude and longitude first.')
+      return
+    }
+
+    setVisualLoading(true)
+    setVisualError(null)
+
+    const result = await getProspectVisualPreviewAction(id, latValue, lngValue)
+    if (result.success) {
+      setVisualPreviewUrl(result.imageDataUrl || null)
+      setVisualPreviewSource(result.source || null)
+      setVisualLat(formatCoordinate(result.lat))
+      setVisualLng(formatCoordinate(result.lng))
+    } else {
+      setVisualPreviewUrl(null)
+      setVisualError(result.error || 'Failed to load visual preview.')
+    }
+
+    setVisualLoading(false)
+  }
+
+  const saveVisualTarget = () => {
+    if (!visualProspect) return
+    const latValue = parseCoordinate(visualLat)
+    const lngValue = parseCoordinate(visualLng)
+
+    if (latValue == null || lngValue == null) {
+      setVisualError('Enter valid latitude and longitude before saving.')
+      return
+    }
+
+    setVisualLoading(true)
+    setVisualError(null)
+    startTransition(async () => {
+      const result = await saveProspectVisualTargetAction({
+        id: visualProspect.id,
+        lat: latValue,
+        lng: lngValue,
+        note: visualNote,
+      })
+
+      if (!result.success) {
+        setVisualError(result.error || 'Failed to save visual target.')
+      } else {
+        setProspects((prev) => prev.map((prospect) => (
+          prospect.id === visualProspect.id
+            ? {
+              ...prospect,
+              visual_lat: result.visual_lat ?? latValue,
+              visual_lng: result.visual_lng ?? lngValue,
+              visual_verified: true,
+              visual_verified_at: result.visual_verified_at ?? new Date().toISOString(),
+              visual_review_note: result.visual_review_note ?? (visualNote.trim() || null),
+            }
+            : prospect
+        )))
+        setMessage(`Visual target verified for ${visualProspect.business_name || visualProspect.address}.`)
+        setVisualProspect(null)
+      }
+      setVisualLoading(false)
     })
   }
 
@@ -436,6 +547,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                       <div className="mt-1 max-w-xs text-xs text-slate-500">{prospect.address}</div>
                       <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-400">
                         {hasProposal && <span className="admin-status admin-status-success px-2 py-1">proposal made</span>}
+                        {prospect.visual_verified && <span className="admin-status admin-status-success px-2 py-1">visual verified</span>}
                         {isCoordinateReview(prospect) && <span className="admin-status admin-status-warning px-2 py-1">check coordinates</span>}
                         <span>{prospect.metro || 'Metro pending'} · {prospect.county || 'County pending'}</span>
                       </div>
@@ -453,6 +565,9 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                       </div>
                       <div className="mt-1 text-xs text-slate-500">
                         {prospect.use_code || prospect.category || 'Use code pending'}
+                      </div>
+                      <div className="mt-2 text-xs text-slate-500">
+                        Visual: {prospect.visual_verified ? `${formatCoordinate(prospect.visual_lat)}, ${formatCoordinate(prospect.visual_lng)}` : 'not verified'}
                       </div>
                     </td>
                     <td className="px-4 py-4 align-top">
@@ -518,10 +633,27 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                         <Button
                           type="button"
                           size="sm"
+                          variant="outline"
+                          className="rounded-md border-stone-700/70 bg-stone-950/70 text-stone-400 hover:bg-stone-900/60"
+                          disabled={busy}
+                          onClick={() => openVisualVerifier(prospect)}
+                          title="Preview and verify the exact building before proposal generation"
+                        >
+                          <Crosshair className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
                           className="rounded-md bg-amber-300 text-stone-950 hover:bg-amber-200"
-                          disabled={busy || prospect.pipeline_stage === 'dead' || isCoordinateReview(prospect) || hasProposal}
+                          disabled={busy || blocksProposalGeneration(prospect) || hasProposal}
                           onClick={() => handlePromote(prospect.id)}
-                          title={isCoordinateReview(prospect) ? 'Coordinate review required before proposal generation' : hasProposal ? 'Proposal already made' : 'Promote prospect to proposal worker'}
+                          title={
+                            needsVisualVerification(prospect)
+                                ? 'Verify target building before proposal generation'
+                              : prospect.pipeline_stage === 'dead'
+                                ? 'Prospect is marked not qualified'
+                                : hasProposal ? 'Proposal already made' : 'Promote prospect to proposal worker'
+                          }
                         >
                           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : hasProposal ? <ExternalLink className="h-4 w-4" /> : <Send className="h-4 w-4" />}
                         </Button>
@@ -554,6 +686,124 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
           </tbody>
         </table>
       </div>
+
+      <Dialog
+        open={Boolean(visualProspect)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setVisualProspect(null)
+            setVisualPreviewUrl(null)
+            setVisualError(null)
+          }
+        }}
+      >
+        <DialogContent className="border border-stone-700/70 bg-stone-950 text-stone-50 shadow-[0_24px_70px_rgba(15,23,42,0.35)] sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl text-stone-50">Verify target building</DialogTitle>
+            <DialogDescription className="text-slate-500">
+              Confirm this satellite image shows the exact building before creating a proposal. If it is a field, neighbour, or wrong roof, paste corrected Google Maps coordinates and refresh.
+            </DialogDescription>
+          </DialogHeader>
+
+          {visualProspect && (
+            <div className="grid gap-5 lg:grid-cols-[1.4fr_0.9fr]">
+              <div className="overflow-hidden rounded-xl border border-stone-700/70 bg-stone-900/60">
+                <div className="flex items-center justify-between border-b border-stone-700/70 px-3 py-2 text-xs text-slate-500">
+                  <span>{visualPreviewSource ? `Preview source: ${visualPreviewSource}` : 'Satellite preview'}</span>
+                  {visualLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-300" />}
+                </div>
+                <div className="flex aspect-video items-center justify-center bg-stone-950">
+                  {visualPreviewUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={visualPreviewUrl}
+                      alt={`Satellite preview for ${visualProspect.business_name || visualProspect.address}`}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="px-6 text-center text-sm text-slate-500">
+                      {visualLoading ? 'Loading satellite preview...' : 'Refresh preview to load the target image.'}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-xl border border-stone-700/70 bg-stone-900/60 p-4">
+                  <div className="text-sm font-semibold text-stone-100">
+                    {visualProspect.business_name || visualProspect.address.split(',')[0]}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">{visualProspect.address}</div>
+                  <div className="mt-3 text-xs text-slate-500">
+                    Places coords: {formatCoordinate(visualProspect.lat)}, {formatCoordinate(visualProspect.lng)}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Geocode coords: {formatCoordinate(visualProspect.geocode_lat)}, {formatCoordinate(visualProspect.geocode_lng)}
+                  </div>
+                </div>
+
+                <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Visual latitude
+                  <input
+                    value={visualLat}
+                    onChange={(event) => setVisualLat(event.target.value)}
+                    className="admin-input mt-2 px-3 py-2.5 text-sm text-stone-100"
+                    placeholder="43.123456"
+                  />
+                </label>
+
+                <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Visual longitude
+                  <input
+                    value={visualLng}
+                    onChange={(event) => setVisualLng(event.target.value)}
+                    className="admin-input mt-2 px-3 py-2.5 text-sm text-stone-100"
+                    placeholder="-79.123456"
+                  />
+                </label>
+
+                <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Review note
+                  <textarea
+                    value={visualNote}
+                    onChange={(event) => setVisualNote(event.target.value)}
+                    className="admin-input mt-2 min-h-20 px-3 py-2.5 text-sm text-stone-100"
+                    placeholder="Optional note, e.g. corrected from Google Maps pin"
+                  />
+                </label>
+
+                {visualError && (
+                  <div className="rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
+                    {visualError}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="mt-2 gap-2 sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-lg border-stone-700/70 bg-stone-950/70 text-stone-300 hover:bg-stone-900/60"
+              disabled={visualLoading || isPending}
+              onClick={() => void refreshVisualPreview()}
+            >
+              {visualLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Crosshair className="mr-2 h-4 w-4" />}
+              Refresh Preview
+            </Button>
+            <Button
+              type="button"
+              className="rounded-lg bg-amber-300 px-4 font-semibold text-stone-950 hover:bg-amber-200"
+              disabled={visualLoading || isPending || !visualProspect}
+              onClick={saveVisualTarget}
+            >
+              {(visualLoading || isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save + Mark Verified
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   )
 }
