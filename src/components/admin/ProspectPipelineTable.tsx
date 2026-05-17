@@ -90,6 +90,16 @@ function parseCoordinate(value: string) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function nudgeCoordinate(lat: number, lng: number, eastMeters: number, northMeters: number) {
+  const metersPerDegreeLat = 111_320
+  const metersPerDegreeLng = metersPerDegreeLat * Math.cos((lat * Math.PI) / 180)
+
+  return {
+    lat: lat + northMeters / metersPerDegreeLat,
+    lng: lng + eastMeters / metersPerDegreeLng,
+  }
+}
+
 export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTableProps) {
   const [prospects, setProspectsState] = useState(() => sortProspectsForAdmin(readClientCache<Prospect[]>(PROSPECTS_CACHE_KEY) || initialProspects))
   const [activeStage, setActiveStage] = useState<ProspectStage | 'active' | 'not_qualified'>('active')
@@ -328,6 +338,21 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
       }
       setVisualLoading(false)
     })
+  }
+
+  const handleNudgeVisualTarget = (eastMeters: number, northMeters: number) => {
+    const latValue = parseCoordinate(visualLat)
+    const lngValue = parseCoordinate(visualLng)
+
+    if (latValue == null || lngValue == null) {
+      setVisualError('Enter valid latitude and longitude before nudging.')
+      return
+    }
+
+    const next = nudgeCoordinate(latValue, lngValue, eastMeters, northMeters)
+    setVisualLat(String(next.lat))
+    setVisualLng(String(next.lng))
+    void refreshVisualPreview(visualProspect?.id, next.lat, next.lng)
   }
 
   const handleToggleSelection = (id: string) => {
@@ -712,14 +737,21 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                   <span>{visualPreviewSource ? `Preview source: ${visualPreviewSource}` : 'Satellite preview'}</span>
                   {visualLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-300" />}
                 </div>
-                <div className="flex aspect-video items-center justify-center bg-stone-950">
+                <div className="relative flex aspect-video items-center justify-center bg-stone-950">
                   {visualPreviewUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={visualPreviewUrl}
-                      alt={`Satellite preview for ${visualProspect.business_name || visualProspect.address}`}
-                      className="h-full w-full object-cover"
-                    />
+                    <>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={visualPreviewUrl}
+                        alt={`Satellite preview for ${visualProspect.business_name || visualProspect.address}`}
+                        className="h-full w-full object-cover"
+                      />
+                      <div className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-300/80 bg-amber-300/10 shadow-[0_0_30px_rgba(252,211,77,0.35)]">
+                        <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-amber-200/80" />
+                        <span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-amber-200/80" />
+                        <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-200" />
+                      </div>
+                    </>
                   ) : (
                     <div className="px-6 text-center text-sm text-slate-500">
                       {visualLoading ? 'Loading satellite preview...' : 'Refresh preview to load the target image.'}
@@ -771,6 +803,58 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                     placeholder="Optional note, e.g. corrected from Google Maps pin"
                   />
                 </label>
+
+                <div className="rounded-xl border border-stone-700/70 bg-stone-900/60 p-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Nudge coordinate</div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                    <span />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-8 rounded-md border-stone-700/70 bg-stone-950/70 px-2 text-xs text-stone-300 hover:bg-stone-900/60"
+                      disabled={visualLoading || isPending}
+                      onClick={() => handleNudgeVisualTarget(0, 5)}
+                    >
+                      North 5m
+                    </Button>
+                    <span />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-8 rounded-md border-stone-700/70 bg-stone-950/70 px-2 text-xs text-stone-300 hover:bg-stone-900/60"
+                      disabled={visualLoading || isPending}
+                      onClick={() => handleNudgeVisualTarget(-5, 0)}
+                    >
+                      West 5m
+                    </Button>
+                    <div className="flex items-center justify-center rounded-md border border-amber-900/50 bg-amber-950/20 text-amber-200">
+                      center
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-8 rounded-md border-stone-700/70 bg-stone-950/70 px-2 text-xs text-stone-300 hover:bg-stone-900/60"
+                      disabled={visualLoading || isPending}
+                      onClick={() => handleNudgeVisualTarget(5, 0)}
+                    >
+                      East 5m
+                    </Button>
+                    <span />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-8 rounded-md border-stone-700/70 bg-stone-950/70 px-2 text-xs text-stone-300 hover:bg-stone-900/60"
+                      disabled={visualLoading || isPending}
+                      onClick={() => handleNudgeVisualTarget(0, -5)}
+                    >
+                      South 5m
+                    </Button>
+                    <span />
+                  </div>
+                  <p className="mt-2 text-xs text-slate-500">
+                    Put the amber reticle on the roof center, then save.
+                  </p>
+                </div>
 
                 {visualError && (
                   <div className="rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
