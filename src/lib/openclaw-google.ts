@@ -315,15 +315,6 @@ export async function fetchStaticSatelliteImage(
     throw new Error('GOOGLE_MAPS_API_KEY is not configured')
   }
 
-  try {
-    const image = await fetchMapTilesSatelliteImage({ lat, lng, zoom, apiKey })
-    console.log(`[openclaw-google] Satellite source: map_tiles zoom=${zoom} lat=${lat} lng=${lng}`)
-    return image
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(`[openclaw-google] Map Tiles failed, using Static Maps fallback: ${message}`)
-  }
-
   const url = new URL('https://maps.googleapis.com/maps/api/staticmap')
   url.searchParams.set('center', `${lat},${lng}`)
   url.searchParams.set('zoom', String(zoom))
@@ -332,13 +323,22 @@ export async function fetchStaticSatelliteImage(
   url.searchParams.set('scale', String(STATIC_MAP_SCALE))
   url.searchParams.set('key', apiKey)
 
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Google Maps Static API returned ${response.status}: ${await response.text()}`)
+  try {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`Google Maps Static API returned ${response.status}: ${await response.text()}`)
+    }
+
+    console.log(`[openclaw-google] Satellite source: static_maps zoom=${zoom} lat=${lat} lng=${lng}`)
+    return Buffer.from(await response.arrayBuffer())
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[openclaw-google] Static Maps failed, using Map Tiles fallback: ${message}`)
   }
 
-  console.log(`[openclaw-google] Satellite source: static_maps zoom=${zoom} lat=${lat} lng=${lng}`)
-  return Buffer.from(await response.arrayBuffer())
+  const image = await fetchMapTilesSatelliteImage({ lat, lng, zoom, apiKey })
+  console.log(`[openclaw-google] Satellite source: map_tiles_fallback zoom=${zoom} lat=${lat} lng=${lng}`)
+  return image
 }
 
 async function fetchAerialViewReference({
