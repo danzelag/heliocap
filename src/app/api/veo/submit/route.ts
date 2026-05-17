@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json()) as SubmitVeoBody
-    const slug = typeof body.slug === 'string' ? body.slug.trim() : ''
+    const slug = getFirstString(body.slug)
     const address = getFirstString(body.formattedAddress, body.formatted_address, body.address)
     const receiptReferences = slug ? await findReceiptReferences(slug) : emptyReferenceSet()
     const bodyReferences = extractReferenceSet(body)
@@ -100,11 +100,19 @@ export async function POST(request: NextRequest) {
 function getFirstString(...values: unknown[]) {
   for (const value of values) {
     if (typeof value === 'string' && value.trim()) {
-      return value.trim()
+      return sanitizeN8nString(value)
     }
   }
 
   return ''
+}
+
+function sanitizeN8nString(value: string) {
+  return value
+    .trim()
+    .replace(/^=+/, '')
+    .replace(/^"+|"+$/g, '')
+    .trim()
 }
 
 function extractReferenceSet(body: SubmitVeoBody): VisualReferenceSet {
@@ -227,9 +235,11 @@ function getRecord(value: unknown): Record<string, unknown> | null {
 
 function getFirstStringArray(value: unknown) {
   if (!Array.isArray(value)) return []
-  return value.filter((entry): entry is string => typeof entry === 'string' && Boolean(entry.trim()))
+  return value
+    .filter((entry): entry is string => typeof entry === 'string' && Boolean(entry.trim()))
+    .map((entry) => sanitizeN8nString(entry))
 }
 
 function isLikelyImageUrl(value: unknown) {
-  return typeof value === 'string' && /\.(png|jpe?g|webp)(\?|#|$)/i.test(value)
+  return typeof value === 'string' && /\.(png|jpe?g|webp)(\?|#|$)/i.test(sanitizeN8nString(value))
 }
