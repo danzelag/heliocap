@@ -57,6 +57,26 @@ export interface Prospect {
   owner_title: string | null
   owner_email: string | null
   owner_phone: string | null
+  first_name: string | null
+  last_name: string | null
+  homeowner_email: string | null
+  homeowner_phone: string | null
+  monthly_hydro_bill: number | null
+  annual_kwh: number | null
+  heating_type: string | null
+  has_ev: boolean | null
+  ev_interest: boolean | null
+  heat_pump_interest: boolean | null
+  solar_interest: boolean | null
+  ev_charger_interest: boolean | null
+  home_type: string | null
+  owns_home: boolean | null
+  timeline: string | null
+  financing_interest: boolean | null
+  consent_to_contact: boolean | null
+  intake_notes: string | null
+  lead_source: string | null
+  bundle_interest: Record<string, unknown> | null
   owner_linkedin: string | null
   email_confidence: number | null
   enrichment_source: string | null

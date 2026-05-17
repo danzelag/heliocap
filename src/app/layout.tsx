@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Helio Cap",
-  description: "Personalized commercial solar lead generation",
+  title: "Helio Cap | Home Energy Savings",
+  description: "Residential solar, heat pump, and EV charging proposal intake",
 };
 
 export default function RootLayout({
