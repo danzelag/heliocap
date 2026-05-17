@@ -122,6 +122,11 @@ type AerialViewLookupResponse = {
 type StreetViewMetadataResponse = {
   status?: string
   error_message?: string
+  pano_id?: string
+  location?: {
+    lat?: number
+    lng?: number
+  }
 }
 
 export function getGoogleMapsApiKey() {
@@ -399,38 +404,61 @@ async function fetchStreetViewReferenceImages({
   const apiKey = getGoogleMapsApiKey()
   if (!apiKey) return []
 
-  const headings = [0, 90, 180, 270]
   const uploadedUrls: string[] = []
   // Use the verified visual coordinates, not address text, so Street View anchors
   // stay tied to the exact roof the admin selected.
   const location = `${lat},${lng}`
 
-  for (const heading of headings) {
-    try {
-      const metadataUrl = new URL('https://maps.googleapis.com/maps/api/streetview/metadata')
-      metadataUrl.searchParams.set('location', location)
-      metadataUrl.searchParams.set('heading', String(heading))
-      metadataUrl.searchParams.set('fov', '80')
-      metadataUrl.searchParams.set('pitch', '0')
-      metadataUrl.searchParams.set('key', apiKey)
+  try {
+    const metadataUrl = new URL('https://maps.googleapis.com/maps/api/streetview/metadata')
+    metadataUrl.searchParams.set('location', location)
+    metadataUrl.searchParams.set('source', 'outdoor')
+    metadataUrl.searchParams.set('key', apiKey)
 
-      const metadataResponse = await fetch(metadataUrl, { cache: 'no-store' })
-      if (!metadataResponse.ok) {
-        throw new Error(`metadata returned ${metadataResponse.status}: ${await metadataResponse.text()}`)
-      }
+    const metadataResponse = await fetch(metadataUrl, { cache: 'no-store' })
+    if (!metadataResponse.ok) {
+      throw new Error(`metadata returned ${metadataResponse.status}: ${await metadataResponse.text()}`)
+    }
 
-      const metadata = (await metadataResponse.json()) as StreetViewMetadataResponse
-      if (metadata.status !== 'OK') {
-        console.log(`[openclaw-google] Street View heading ${heading} unavailable: ${metadata.status || 'unknown'}`)
-        continue
-      }
+    const metadata = (await metadataResponse.json()) as StreetViewMetadataResponse
+    if (metadata.status !== 'OK') {
+      console.log(`[openclaw-google] Street View unavailable: ${metadata.status || 'unknown'}`)
+      return []
+    }
 
+    const panoLat = metadata.location?.lat
+    const panoLng = metadata.location?.lng
+    const baseHeading = typeof panoLat === 'number' && typeof panoLng === 'number'
+      ? calculateHeadingDegrees(panoLat, panoLng, lat, lng)
+      : 0
+    const headings = [
+      baseHeading,
+      baseHeading - 28,
+      baseHeading + 28,
+      baseHeading - 55,
+      baseHeading + 55,
+    ].map(normalizeHeadingDegrees)
+
+    console.log('[openclaw-google] Street View panorama selected', {
+      panoId: metadata.pano_id,
+      targetLat: lat,
+      targetLng: lng,
+      panoLat,
+      panoLng,
+      facingHeading: Math.round(baseHeading),
+    })
+
+    for (const heading of headings) {
       const imageUrl = new URL('https://maps.googleapis.com/maps/api/streetview')
       imageUrl.searchParams.set('size', '640x360')
-      imageUrl.searchParams.set('location', location)
+      if (metadata.pano_id) {
+        imageUrl.searchParams.set('pano', metadata.pano_id)
+      } else {
+        imageUrl.searchParams.set('location', location)
+      }
       imageUrl.searchParams.set('heading', String(heading))
-      imageUrl.searchParams.set('fov', '80')
-      imageUrl.searchParams.set('pitch', '0')
+      imageUrl.searchParams.set('fov', '70')
+      imageUrl.searchParams.set('pitch', '4')
       imageUrl.searchParams.set('source', 'outdoor')
       imageUrl.searchParams.set('key', apiKey)
 
@@ -444,15 +472,15 @@ async function fetchStreetViewReferenceImages({
         supabase,
         bucket,
         slug,
-        fileName: `references/street-view-${heading}.jpg`,
+        fileName: `references/street-view-facing-${Math.round(heading)}.jpg`,
         body: buffer,
         contentType: imageResponse.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg',
       })
       uploadedUrls.push(publicUrl)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.error(`[openclaw-google] Street View heading ${heading} failed: ${message}`)
     }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[openclaw-google] Street View reference collection failed: ${message}`)
   }
 
   if (uploadedUrls.length) {
@@ -460,6 +488,22 @@ async function fetchStreetViewReferenceImages({
   }
 
   return uploadedUrls
+}
+
+function calculateHeadingDegrees(fromLat: number, fromLng: number, toLat: number, toLng: number) {
+  const toRad = (degrees: number) => (degrees * Math.PI) / 180
+  const toDeg = (radians: number) => (radians * 180) / Math.PI
+  const lat1 = toRad(fromLat)
+  const lat2 = toRad(toLat)
+  const deltaLng = toRad(toLng - fromLng)
+  const y = Math.sin(deltaLng) * Math.cos(lat2)
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLng)
+
+  return normalizeHeadingDegrees(toDeg(Math.atan2(y, x)))
+}
+
+function normalizeHeadingDegrees(heading: number) {
+  return ((heading % 360) + 360) % 360
 }
 
 async function fetchMapTilesSatelliteImage({
