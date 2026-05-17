@@ -1,308 +1,296 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Check, ChevronRight, Copy, LayoutDashboard, Loader2, RadioTower, TriangleAlert } from 'lucide-react'
-import { SolarUtils } from '@/lib/solar-utils'
-import AddressAutocomplete, { type PlaceResult } from '@/components/AddressAutocomplete'
+import { useState } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase'
+import { CheckCircle2, ChevronRight, Home, Loader2, RadioTower, TriangleAlert } from 'lucide-react'
+import AddressAutocomplete, { type PlaceResult } from '@/components/AddressAutocomplete'
+import { Button } from '@/components/ui/button'
 
-const inputClass = 'admin-input px-3 py-2.5 text-sm placeholder:text-slate-400'
-const labelClass = 'text-xs font-semibold text-stone-400'
+const inputClass = 'admin-input px-3 py-2.5 text-sm placeholder:text-slate-500'
+const selectClass = `${inputClass} appearance-none`
+const labelClass = 'text-xs font-semibold uppercase tracking-[0.18em] text-slate-500'
 
-type CreateProposalResponse = {
+type SubmitState = {
+  status: 'idle' | 'submitting' | 'success' | 'error'
+  message: string | null
+  prospectId?: string | null
+}
+
+type ResidentialIntakeResponse = {
   success?: boolean
-  job_id?: string
-  job?: ProposalJob
-  slug?: string
+  prospect_id?: string
   error?: string
 }
 
-type ProposalJob = {
-  id: string
-  status: 'queued' | 'running' | 'completed' | 'failed'
-  current_step: string
-  progress_percent: number
-  proposal_url: string | null
-  slug: string
-  error_message: string | null
-}
-
 export default function LeadGeneratorForm() {
-  const [loading, setLoading] = useState(false)
-  const [job, setJob] = useState<ProposalJob | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [place, setPlace] = useState<PlaceResult | null>(null)
+  const [state, setState] = useState<SubmitState>({ status: 'idle', message: null })
 
-  const latRef = useRef<HTMLInputElement>(null)
-  const lngRef = useRef<HTMLInputElement>(null)
-  const businessNameRef = useRef<HTMLInputElement>(null)
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = event.currentTarget
+    const formData = new FormData(form)
 
-  async function geocodeAddress(address: string) {
-    const google = window.google
-    if (!google?.maps?.Geocoder) return null
-
-    const geocoder = new google.maps.Geocoder()
-    const response = await geocoder.geocode({ address })
-    const result = response.results?.[0]
-    const location = result?.geometry?.location
-    if (!location) return null
-
-    return {
-      formattedAddress: result.formatted_address || address,
-      lat: location.lat(),
-      lng: location.lng(),
-    }
-  }
-
-  async function handlePlaceSelect({ lat, lng, name }: PlaceResult) {
-    if (latRef.current) latRef.current.value = String(lat)
-    if (lngRef.current) lngRef.current.value = String(lng)
-
-    if (businessNameRef.current && !businessNameRef.current.value && name) {
-      businessNameRef.current.value = name
-    }
-  }
-
-  useEffect(() => {
-    if (!job?.id || job.status === 'completed' || job.status === 'failed') return
-
-    const supabase = createClient()
-    const channel = supabase
-      .channel(`proposal-job-${job.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'proposal_jobs',
-          filter: `id=eq.${job.id}`,
-        },
-        (payload) => {
-          setJob(payload.new as ProposalJob)
-        },
-      )
-      .subscribe()
-
-    supabase
-      .from('proposal_jobs')
-      .select('id, status, current_step, progress_percent, proposal_url, slug, error_message')
-      .eq('id', job.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setJob(data as ProposalJob)
+    if (!place) {
+      setState({
+        status: 'error',
+        message: 'Pick the address from autocomplete so the prospect saves with roof coordinates.',
       })
-
-    return () => {
-      supabase.removeChannel(channel)
+      return
     }
-  }, [job?.id, job?.status])
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setLoading(true)
-    setErrorMessage(null)
-    setJob(null)
+    setState({ status: 'submitting', message: null })
 
-    const formData = new FormData(e.currentTarget)
-    const businessName = String(formData.get('business_name') || '').trim()
-    let address = String(formData.get('address') || '').trim()
-    let lat = latRef.current?.value ? Number(latRef.current.value) : null
-    let lng = lngRef.current?.value ? Number(lngRef.current.value) : null
+    const payload = {
+      first_name: String(formData.get('first_name') || ''),
+      last_name: String(formData.get('last_name') || ''),
+      email: String(formData.get('email') || ''),
+      phone: String(formData.get('phone') || ''),
+      address: place.formattedAddress,
+      lat: place.lat,
+      lng: place.lng,
+      monthly_hydro_bill: Number(formData.get('monthly_hydro_bill') || 0),
+      annual_kwh: Number(formData.get('annual_kwh') || 0) || null,
+      heating_type: String(formData.get('heating_type') || ''),
+      home_type: String(formData.get('home_type') || ''),
+      owns_home: formData.get('owns_home') === 'yes',
+      has_ev: formData.get('has_ev') === 'yes',
+      ev_interest: formData.get('ev_interest') === 'on',
+      ev_charger_interest: formData.get('ev_charger_interest') === 'on',
+      heat_pump_interest: formData.get('heat_pump_interest') === 'on',
+      solar_interest: true,
+      financing_interest: formData.get('financing_interest') === 'on',
+      timeline: String(formData.get('timeline') || ''),
+      intake_notes: String(formData.get('intake_notes') || ''),
+      consent_to_contact: true,
+      lead_source: 'admin_manual_residential_intake',
+      website: '',
+    }
 
     try {
-      if (!businessName) throw new Error('Business name is required.')
-      if (!address) throw new Error('Address is required.')
-
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        const geocoded = await geocodeAddress(address)
-        if (!geocoded) {
-          throw new Error('Choose an address from autocomplete so we can send coordinates to n8n.')
-        }
-
-        address = geocoded.formattedAddress
-        lat = geocoded.lat
-        lng = geocoded.lng
-        if (latRef.current) latRef.current.value = String(lat)
-        if (lngRef.current) lngRef.current.value = String(lng)
-      }
-
-      const slug = SolarUtils.generateSlug(businessName)
-      const res = await fetch('/api/create-proposal', {
+      const response = await fetch('/api/residential-intake', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          business_name: businessName,
-          address,
-          lat,
-          lng,
-          slug,
-        }),
+        body: JSON.stringify(payload),
       })
+      const result = (await response.json()) as ResidentialIntakeResponse
 
-      const data = (await res.json()) as CreateProposalResponse
-      if (!res.ok || !data.success || !data.job_id) {
-        throw new Error(data.error || 'n8n failed to create the proposal.')
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Could not save this residential prospect.')
       }
 
-      setJob(data.job || {
-        id: data.job_id,
-        status: 'queued',
-        current_step: 'Queued in Helio Cap',
-        progress_percent: 2,
-        proposal_url: null,
-        slug: data.slug || slug,
-        error_message: null,
+      form.reset()
+      setPlace(null)
+      setState({
+        status: 'success',
+        message: 'Residential prospect saved. You can verify the target roof from the prospects table before creating a proposal.',
+        prospectId: result.prospect_id || null,
       })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to create proposal.'
-      setErrorMessage(message)
-    } finally {
-      setLoading(false)
+    } catch (error) {
+      setState({
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Could not save this residential prospect.',
+      })
     }
-  }
-
-  const copyToClipboard = () => {
-    if (job?.proposal_url) {
-      navigator.clipboard.writeText(job.proposal_url)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
-  }
-
-  if (job) {
-    const isComplete = job.status === 'completed' && job.proposal_url
-    const isFailed = job.status === 'failed'
-
-    return (
-      <div className={`admin-panel p-5 lg:p-6 ${isFailed ? 'border-red-900/60' : isComplete ? 'border-emerald-900/60' : 'border-sky-900/60'}`}>
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <div className={`mb-4 grid h-12 w-12 place-items-center rounded-lg border ${isFailed ? 'border-red-900/60 bg-red-950/25' : isComplete ? 'border-emerald-900/60 bg-emerald-950/25' : 'border-sky-900/60 bg-sky-950/25'}`}>
-              {isFailed ? (
-                <TriangleAlert className="h-6 w-6 text-red-300" />
-              ) : isComplete ? (
-                <Check className="h-6 w-6 text-emerald-300" />
-              ) : (
-                <RadioTower className="h-6 w-6 text-sky-300" />
-              )}
-            </div>
-            <div className="admin-eyebrow">Proposal job</div>
-            <h2 className="mt-1 text-2xl font-semibold text-stone-50">
-              {isFailed ? 'Proposal failed' : isComplete ? 'Proposal created' : 'Proposal generating'}
-            </h2>
-            <p className="mt-2 text-sm text-slate-500">
-              {isFailed ? job.error_message || 'The n8n workflow reported a failure.' : job.current_step}
-            </p>
-          </div>
-          <Link href="/admin" prefetch className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-stone-700/70 bg-stone-950/70 px-4 text-sm font-semibold text-stone-300 transition-colors hover:bg-stone-900/60">
-            <LayoutDashboard className="h-3.5 w-3.5" />
-            Dashboard
-          </Link>
-        </div>
-
-        <div className="admin-panel-muted mt-6 p-4">
-          <div className="mb-3 flex items-center justify-between gap-4 text-xs font-semibold text-slate-500">
-            <span>{job.current_step}</span>
-            <span>{job.progress_percent}%</span>
-          </div>
-          <div className="h-2 overflow-hidden rounded-full bg-stone-800">
-            <div
-              className={`h-full transition-all duration-500 ${isFailed ? 'bg-red-400' : isComplete ? 'bg-emerald-400' : 'bg-sky-400'}`}
-              style={{ width: `${job.progress_percent}%` }}
-            />
-          </div>
-          <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-3">
-            <span>Job {job.id.slice(0, 8)}</span>
-            <span>Status {job.status}</span>
-            <span>Slug {job.slug}</span>
-          </div>
-        </div>
-
-        {job.proposal_url && (
-          <div className="mt-5 flex items-center gap-2 rounded-lg border border-stone-700/70 bg-stone-900/60 p-3">
-            <code className="min-w-0 flex-1 truncate font-mono text-xs text-stone-400">{job.proposal_url}</code>
-            <Button onClick={copyToClipboard} size="sm" className="rounded-lg bg-amber-300 text-stone-950 hover:bg-amber-200">
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              <span className="ml-2">{copied ? 'Copied' : 'Copy'}</span>
-            </Button>
-          </div>
-        )}
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {job.proposal_url ? (
-            <a href={job.proposal_url} target="_blank" className="flex h-11 items-center justify-center rounded-lg bg-amber-300 text-sm font-semibold text-stone-950 transition-colors hover:bg-amber-200">
-              View live page
-            </a>
-          ) : (
-            <Link href="/admin" prefetch className="flex h-11 items-center justify-center rounded-lg bg-amber-300 text-sm font-semibold text-stone-950 transition-colors hover:bg-amber-200">
-              Check dashboard
-            </Link>
-          )}
-          <Button
-            variant="outline"
-            onClick={() => {
-              setJob(null)
-              setErrorMessage(null)
-            }}
-            className="h-11 rounded-lg border-stone-700/70 bg-stone-950/70 text-stone-300 hover:bg-stone-900/60"
-          >
-            Create another
-          </Button>
-        </div>
-      </div>
-    )
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      <input type="hidden" name="lat" ref={latRef} />
-      <input type="hidden" name="lng" ref={lngRef} />
-
       <section className="admin-panel overflow-hidden">
         <div className="border-b border-stone-700/70 px-4 py-3">
-          <div className="admin-eyebrow">Target</div>
-          <h2 className="mt-1 text-xl font-semibold text-stone-50">Business details</h2>
+          <div className="admin-eyebrow">Manual residential intake</div>
+          <h2 className="mt-1 text-xl font-semibold text-stone-50">Homeowner details</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-500">
+            Same fields as the landing page, saved directly into the prospects table.
+          </p>
         </div>
 
         <div className="space-y-5 p-4">
           <div className="grid gap-5 md:grid-cols-2">
-            <div className="space-y-2">
-              <label className={labelClass}>Business name</label>
-              <input ref={businessNameRef} name="business_name" required placeholder="Apex Logistics Center" className={inputClass} />
-            </div>
-            <div className="space-y-2">
-              <label className={labelClass}>Business address</label>
-              <AddressAutocomplete
-                name="address"
-                required
-                placeholder="Start typing an address"
-                onPlaceSelect={handlePlaceSelect}
-                className={inputClass}
-              />
-            </div>
+            <Field label="First name">
+              <input name="first_name" required placeholder="Danzel" className={inputClass} />
+            </Field>
+            <Field label="Last name">
+              <input name="last_name" required placeholder="Gaminde" className={inputClass} />
+            </Field>
+            <Field label="Email">
+              <input name="email" required type="email" placeholder="homeowner@email.com" className={inputClass} />
+            </Field>
+            <Field label="Phone">
+              <input name="phone" required type="tel" placeholder="(416) 555-0199" className={inputClass} />
+            </Field>
+          </div>
+
+          <Field label="Home address">
+            <AddressAutocomplete
+              name="address"
+              required
+              placeholder="Start typing the home address"
+              onPlaceSelect={setPlace}
+              className={inputClass}
+            />
+            {place && (
+              <p className="mt-2 text-xs text-emerald-300">
+                Roof coordinates captured: {place.formattedAddress}
+              </p>
+            )}
+          </Field>
+        </div>
+      </section>
+
+      <section className="admin-panel overflow-hidden">
+        <div className="border-b border-stone-700/70 px-4 py-3">
+          <div className="admin-eyebrow">Energy profile</div>
+          <h2 className="mt-1 text-xl font-semibold text-stone-50">Savings inputs</h2>
+        </div>
+
+        <div className="grid gap-5 p-4 md:grid-cols-2">
+          <Field label="Average monthly hydro bill">
+            <input
+              name="monthly_hydro_bill"
+              required
+              type="number"
+              min="1"
+              inputMode="decimal"
+              placeholder="250"
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Annual kWh, optional">
+            <input
+              name="annual_kwh"
+              type="number"
+              min="1"
+              inputMode="decimal"
+              placeholder="12000"
+              className={inputClass}
+            />
+          </Field>
+          <Field label="Current heating">
+            <select name="heating_type" required defaultValue="" className={selectClass}>
+              <option value="" disabled>Choose heating type</option>
+              <option value="natural_gas">Natural gas</option>
+              <option value="electric_baseboard">Electric baseboard</option>
+              <option value="propane">Propane</option>
+              <option value="oil">Oil</option>
+              <option value="heat_pump">Heat pump</option>
+              <option value="not_sure">Not sure</option>
+            </select>
+          </Field>
+          <Field label="Home type">
+            <select name="home_type" required defaultValue="" className={selectClass}>
+              <option value="" disabled>Choose home type</option>
+              <option value="detached">Detached</option>
+              <option value="semi_detached">Semi-detached</option>
+              <option value="townhome">Townhome</option>
+              <option value="duplex">Duplex</option>
+              <option value="other">Other</option>
+            </select>
+          </Field>
+          <Field label="Owns the home?">
+            <select name="owns_home" required defaultValue="" className={selectClass}>
+              <option value="" disabled>Choose one</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </Field>
+          <Field label="Has an EV?">
+            <select name="has_ev" required defaultValue="" className={selectClass}>
+              <option value="" disabled>Choose one</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </Field>
+        </div>
+      </section>
+
+      <section className="admin-panel overflow-hidden">
+        <div className="border-b border-stone-700/70 px-4 py-3">
+          <div className="admin-eyebrow">Bundle</div>
+          <h2 className="mt-1 text-xl font-semibold text-stone-50">Products to include</h2>
+        </div>
+
+        <div className="space-y-5 p-4">
+          <div className="grid gap-3 rounded-xl border border-stone-700/70 bg-stone-900/60 p-4 text-sm text-stone-200 sm:grid-cols-2">
+            <label className="flex items-center gap-3">
+              <input name="heat_pump_interest" type="checkbox" className="h-4 w-4 accent-amber-300" />
+              Include heat pump savings
+            </label>
+            <label className="flex items-center gap-3">
+              <input name="ev_charger_interest" type="checkbox" className="h-4 w-4 accent-amber-300" />
+              Include EV charger
+            </label>
+            <label className="flex items-center gap-3">
+              <input name="ev_interest" type="checkbox" className="h-4 w-4 accent-amber-300" />
+              Planning to buy an EV
+            </label>
+            <label className="flex items-center gap-3">
+              <input name="financing_interest" type="checkbox" className="h-4 w-4 accent-amber-300" />
+              Show financing options
+            </label>
+          </div>
+
+          <div className="grid gap-5 md:grid-cols-[0.8fr_1.2fr]">
+            <Field label="Timeline">
+              <select name="timeline" required defaultValue="" className={selectClass}>
+                <option value="" disabled>Choose timeline</option>
+                <option value="asap">As soon as possible</option>
+                <option value="1_3_months">1-3 months</option>
+                <option value="3_6_months">3-6 months</option>
+                <option value="researching">Just researching</option>
+              </select>
+            </Field>
+            <Field label="Notes">
+              <input name="intake_notes" placeholder="Anything useful for the proposal?" className={inputClass} />
+            </Field>
           </div>
         </div>
       </section>
 
-      {errorMessage && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-900/60 bg-red-950/25 px-4 py-3 text-sm text-red-300">
-          <TriangleAlert className="h-4 w-4" />
-          {errorMessage}
+      {state.message && (
+        <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${
+          state.status === 'success'
+            ? 'border-emerald-900/60 bg-emerald-950/25 text-emerald-200'
+            : 'border-red-900/60 bg-red-950/25 text-red-300'
+        }`}>
+          {state.status === 'success' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />}
+          <div>
+            <div>{state.message}</div>
+            {state.status === 'success' && (
+              <Link href="/admin/pipeline" prefetch className="mt-2 inline-flex items-center gap-2 font-semibold text-amber-200 hover:text-amber-100">
+                <RadioTower className="h-3.5 w-3.5" />
+                Open prospects table
+              </Link>
+            )}
+          </div>
         </div>
       )}
 
       <div className="admin-panel p-4">
         <Button
           type="submit"
-          disabled={loading}
+          disabled={state.status === 'submitting'}
           className="h-12 w-full rounded-lg bg-amber-300 text-sm font-semibold text-stone-950 hover:bg-amber-200 disabled:opacity-50"
         >
-          {loading ? <Loader2 className="mr-3 h-5 w-5 animate-spin" /> : <ChevronRight className="mr-3 h-5 w-5" />}
-          {loading ? 'Creating' : 'Create proposal'}
+          {state.status === 'submitting' ? <Loader2 className="mr-3 h-5 w-5 animate-spin" /> : <ChevronRight className="mr-3 h-5 w-5" />}
+          {state.status === 'submitting' ? 'Saving prospect' : 'Save residential prospect'}
         </Button>
+
+        <div className="mt-3 flex items-center justify-center gap-2 text-xs text-slate-500">
+          <Home className="h-3.5 w-3.5" />
+          Proposal creation still happens from the prospects table after target verification.
+        </div>
       </div>
     </form>
+  )
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block space-y-2">
+      <span className={labelClass}>{label}</span>
+      {children}
+    </label>
   )
 }

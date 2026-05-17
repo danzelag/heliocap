@@ -107,7 +107,7 @@ export default async function AdminDashboard() {
             <Link href="/admin/leads/new" prefetch>
               <Button className="admin-primary-button h-10 px-4 text-sm">
                 <Plus className="mr-2 h-4 w-4" />
-                New proposal
+                Add prospect
               </Button>
             </Link>
           </div>
