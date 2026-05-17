@@ -18,6 +18,7 @@ import {
 } from '@/app/admin/pipeline/actions'
 import { readClientCache, writeClientCache } from '@/lib/client-cache'
 import { createClient } from '@/lib/supabase'
+import { VisualTargetMap } from '@/components/admin/VisualTargetMap'
 
 type ProspectPipelineTableProps = {
   initialProspects: Prospect[]
@@ -90,16 +91,6 @@ function parseCoordinate(value: string) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function nudgeCoordinate(lat: number, lng: number, eastMeters: number, northMeters: number) {
-  const metersPerDegreeLat = 111_320
-  const metersPerDegreeLng = metersPerDegreeLat * Math.cos((lat * Math.PI) / 180)
-
-  return {
-    lat: lat + northMeters / metersPerDegreeLat,
-    lng: lng + eastMeters / metersPerDegreeLng,
-  }
-}
-
 export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTableProps) {
   const [prospects, setProspectsState] = useState(() => sortProspectsForAdmin(readClientCache<Prospect[]>(PROSPECTS_CACHE_KEY) || initialProspects))
   const [activeStage, setActiveStage] = useState<ProspectStage | 'active' | 'not_qualified'>('active')
@@ -109,6 +100,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
   const [visualProspect, setVisualProspect] = useState<Prospect | null>(null)
   const [visualLat, setVisualLat] = useState('')
   const [visualLng, setVisualLng] = useState('')
+  const [visualZoom, setVisualZoom] = useState(19)
   const [visualNote, setVisualNote] = useState('')
   const [visualPreviewUrl, setVisualPreviewUrl] = useState<string | null>(null)
   const [visualPreviewSource, setVisualPreviewSource] = useState<string | null>(null)
@@ -262,19 +254,25 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
     setVisualProspect(prospect)
     setVisualLat(formatCoordinate(candidate?.lat))
     setVisualLng(formatCoordinate(candidate?.lng))
+    setVisualZoom(prospect.visual_zoom || 19)
     setVisualNote(prospect.visual_review_note || '')
     setVisualPreviewUrl(null)
     setVisualPreviewSource(candidate?.source || null)
     setVisualError(null)
 
     if (candidate) {
-      void refreshVisualPreview(prospect.id, candidate.lat, candidate.lng)
+      void refreshVisualPreview(prospect.id, candidate.lat, candidate.lng, prospect.visual_zoom || 19)
     } else {
       setVisualError('No coordinates available for this prospect.')
     }
   }
 
-  const refreshVisualPreview = async (id = visualProspect?.id, latValue = parseCoordinate(visualLat), lngValue = parseCoordinate(visualLng)) => {
+  const refreshVisualPreview = async (
+    id = visualProspect?.id,
+    latValue = parseCoordinate(visualLat),
+    lngValue = parseCoordinate(visualLng),
+    zoomValue = visualZoom,
+  ) => {
     if (!id) return
     if (latValue == null || lngValue == null) {
       setVisualError('Enter valid latitude and longitude first.')
@@ -284,12 +282,13 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
     setVisualLoading(true)
     setVisualError(null)
 
-    const result = await getProspectVisualPreviewAction(id, latValue, lngValue)
+    const result = await getProspectVisualPreviewAction(id, latValue, lngValue, zoomValue)
     if (result.success) {
       setVisualPreviewUrl(result.imageDataUrl || null)
       setVisualPreviewSource(result.source || null)
       setVisualLat(formatCoordinate(result.lat))
       setVisualLng(formatCoordinate(result.lng))
+      setVisualZoom(result.zoom || zoomValue)
     } else {
       setVisualPreviewUrl(null)
       setVisualError(result.error || 'Failed to load visual preview.')
@@ -316,11 +315,13 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
         lat: latValue,
         lng: lngValue,
         note: visualNote,
+        zoom: visualZoom,
       })
 
       if (!result.success) {
         setVisualError(result.error || 'Failed to save visual target.')
       } else {
+        setVisualPreviewUrl(result.visual_preview_url ?? visualPreviewUrl)
         setProspects((prev) => prev.map((prospect) => (
           prospect.id === visualProspect.id
             ? {
@@ -330,6 +331,8 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
               visual_verified: true,
               visual_verified_at: result.visual_verified_at ?? new Date().toISOString(),
               visual_review_note: result.visual_review_note ?? (visualNote.trim() || null),
+              visual_zoom: result.visual_zoom ?? visualZoom,
+              visual_preview_url: result.visual_preview_url ?? prospect.visual_preview_url,
             }
             : prospect
         )))
@@ -338,21 +341,6 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
       }
       setVisualLoading(false)
     })
-  }
-
-  const handleNudgeVisualTarget = (eastMeters: number, northMeters: number) => {
-    const latValue = parseCoordinate(visualLat)
-    const lngValue = parseCoordinate(visualLng)
-
-    if (latValue == null || lngValue == null) {
-      setVisualError('Enter valid latitude and longitude before nudging.')
-      return
-    }
-
-    const next = nudgeCoordinate(latValue, lngValue, eastMeters, northMeters)
-    setVisualLat(String(next.lat))
-    setVisualLng(String(next.lng))
-    void refreshVisualPreview(visualProspect?.id, next.lat, next.lng)
   }
 
   const handleToggleSelection = (id: string) => {
@@ -726,7 +714,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
           <DialogHeader>
             <DialogTitle className="text-xl text-stone-50">Verify target building</DialogTitle>
             <DialogDescription className="text-slate-500">
-              Confirm this satellite image shows the exact building before creating a proposal. If it is a field, neighbour, or wrong roof, paste corrected Google Maps coordinates and refresh.
+              Drag and zoom the map until the amber reticle sits on the target home roof. This saved framing is what the proposal workflow uses.
             </DialogDescription>
           </DialogHeader>
 
@@ -734,30 +722,26 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
             <div className="grid gap-5 lg:grid-cols-[1.4fr_0.9fr]">
               <div className="overflow-hidden rounded-xl border border-stone-700/70 bg-stone-900/60">
                 <div className="flex items-center justify-between border-b border-stone-700/70 px-3 py-2 text-xs text-slate-500">
-                  <span>{visualPreviewSource ? `Preview source: ${visualPreviewSource}` : 'Satellite preview'}</span>
+                  <span>{visualPreviewSource ? `Map source: ${visualPreviewSource}` : 'Interactive satellite map'}</span>
                   {visualLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-300" />}
                 </div>
-                <div className="relative flex aspect-video items-center justify-center bg-stone-950">
-                  {visualPreviewUrl ? (
-                    <>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={visualPreviewUrl}
-                        alt={`Satellite preview for ${visualProspect.business_name || visualProspect.address}`}
-                        className="h-full w-full object-cover"
-                      />
-                      <div className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-300/80 bg-amber-300/10 shadow-[0_0_30px_rgba(252,211,77,0.35)]">
-                        <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-amber-200/80" />
-                        <span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-amber-200/80" />
-                        <span className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-200" />
-                      </div>
-                    </>
-                  ) : (
-                    <div className="px-6 text-center text-sm text-slate-500">
-                      {visualLoading ? 'Loading satellite preview...' : 'Refresh preview to load the target image.'}
-                    </div>
-                  )}
-                </div>
+                {parseCoordinate(visualLat) != null && parseCoordinate(visualLng) != null ? (
+                  <VisualTargetMap
+                    lat={parseCoordinate(visualLat)!}
+                    lng={parseCoordinate(visualLng)!}
+                    zoom={visualZoom}
+                    onChange={(target) => {
+                      setVisualLat(String(target.lat))
+                      setVisualLng(String(target.lng))
+                      setVisualZoom(target.zoom)
+                      setVisualPreviewUrl(null)
+                    }}
+                  />
+                ) : (
+                  <div className="flex aspect-video items-center justify-center bg-stone-950 px-6 text-center text-sm text-slate-500">
+                    No coordinates available. Paste latitude and longitude, then refresh.
+                  </div>
+                )}
               </div>
 
               <div className="space-y-4">
@@ -795,6 +779,18 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                 </label>
 
                 <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  Map zoom
+                  <input
+                    value={visualZoom}
+                    onChange={(event) => setVisualZoom(Number(event.target.value))}
+                    type="number"
+                    min="16"
+                    max="21"
+                    className="admin-input mt-2 px-3 py-2.5 text-sm text-stone-100"
+                  />
+                </label>
+
+                <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
                   Review note
                   <textarea
                     value={visualNote}
@@ -804,57 +800,17 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                   />
                 </label>
 
-                <div className="rounded-xl border border-stone-700/70 bg-stone-900/60 p-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Nudge coordinate</div>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                    <span />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-8 rounded-md border-stone-700/70 bg-stone-950/70 px-2 text-xs text-stone-300 hover:bg-stone-900/60"
-                      disabled={visualLoading || isPending}
-                      onClick={() => handleNudgeVisualTarget(0, 5)}
-                    >
-                      North 5m
-                    </Button>
-                    <span />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-8 rounded-md border-stone-700/70 bg-stone-950/70 px-2 text-xs text-stone-300 hover:bg-stone-900/60"
-                      disabled={visualLoading || isPending}
-                      onClick={() => handleNudgeVisualTarget(-5, 0)}
-                    >
-                      West 5m
-                    </Button>
-                    <div className="flex items-center justify-center rounded-md border border-amber-900/50 bg-amber-950/20 text-amber-200">
-                      center
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-8 rounded-md border-stone-700/70 bg-stone-950/70 px-2 text-xs text-stone-300 hover:bg-stone-900/60"
-                      disabled={visualLoading || isPending}
-                      onClick={() => handleNudgeVisualTarget(5, 0)}
-                    >
-                      East 5m
-                    </Button>
-                    <span />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-8 rounded-md border-stone-700/70 bg-stone-950/70 px-2 text-xs text-stone-300 hover:bg-stone-900/60"
-                      disabled={visualLoading || isPending}
-                      onClick={() => handleNudgeVisualTarget(0, -5)}
-                    >
-                      South 5m
-                    </Button>
-                    <span />
+                {visualPreviewUrl && (
+                  <div className="rounded-xl border border-stone-700/70 bg-stone-900/60 p-3">
+                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Saved preview check</div>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={visualPreviewUrl}
+                      alt={`Saved satellite preview for ${visualProspect.business_name || visualProspect.address}`}
+                      className="mt-3 aspect-video w-full rounded-lg object-cover"
+                    />
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Put the amber reticle on the roof center, then save.
-                  </p>
-                </div>
+                )}
 
                 {visualError && (
                   <div className="rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
@@ -874,7 +830,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
               onClick={() => void refreshVisualPreview()}
             >
               {visualLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Crosshair className="mr-2 h-4 w-4" />}
-              Refresh Preview
+              Generate Preview
             </Button>
             <Button
               type="button"

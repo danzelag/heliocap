@@ -15,9 +15,9 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as VeoStatusBody
     const operationName =
       typeof body.operationName === 'string' && body.operationName.trim()
-        ? body.operationName.trim()
+        ? sanitizeN8nString(body.operationName)
         : typeof body.operation_name === 'string'
-          ? body.operation_name.trim()
+          ? sanitizeN8nString(body.operation_name)
           : ''
 
     if (!operationName) {
@@ -40,4 +40,12 @@ export async function POST(request: NextRequest) {
     console.error('[api/veo/status]', message)
     return NextResponse.json({ error: message }, { status: 500 })
   }
+}
+
+function sanitizeN8nString(value: string) {
+  return value
+    .trim()
+    .replace(/^=+/, '')
+    .replace(/^"+|"+$/g, '')
+    .trim()
 }

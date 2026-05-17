@@ -11,7 +11,7 @@ import {
   type ProspectStage,
 } from '@/lib/prospect'
 import { recordProposalJobEvent } from '@/lib/proposal-job-events'
-import { fetchSolarInsights, fetchStaticSatelliteImage } from '@/lib/openclaw-google'
+import { fetchSolarInsights, fetchStaticSatelliteImage, uploadLeadAsset } from '@/lib/openclaw-google'
 import sharp from 'sharp'
 
 const DEFAULT_SITE_URL = 'https://heliocap.vercel.app'
@@ -61,7 +61,7 @@ export async function updateProspectStageAction(id: string, stage: ProspectStage
   return { success: true }
 }
 
-export async function getProspectVisualPreviewAction(id: string, lat?: number, lng?: number) {
+export async function getProspectVisualPreviewAction(id: string, lat?: number, lng?: number, zoom?: number) {
   if (!id) return { success: false, error: 'Missing prospect ID' }
 
   const supabase = await createAdminClient()
@@ -83,7 +83,8 @@ export async function getProspectVisualPreviewAction(id: string, lat?: number, l
   if (!candidate) return { success: false, error: 'No coordinates available for preview.' }
 
   try {
-    const image = await fetchStaticSatelliteImage(candidate.lat, candidate.lng, 19)
+    const previewZoom = clampZoom(zoom)
+    const image = await fetchStaticSatelliteImage(candidate.lat, candidate.lng, previewZoom)
     const preview = await sharp(image)
       .resize(960, 540, { fit: 'cover', position: 'center' })
       .jpeg({ quality: 82 })
@@ -94,6 +95,7 @@ export async function getProspectVisualPreviewAction(id: string, lat?: number, l
       imageDataUrl: `data:image/jpeg;base64,${preview.toString('base64')}`,
       lat: candidate.lat,
       lng: candidate.lng,
+      zoom: previewZoom,
       source: candidate.source,
     }
   } catch (previewError) {
@@ -107,11 +109,13 @@ export async function saveProspectVisualTargetAction({
   lat,
   lng,
   note,
+  zoom,
 }: {
   id: string
   lat: number
   lng: number
   note?: string
+  zoom?: number
 }) {
   if (!id) return { success: false, error: 'Missing prospect ID' }
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -120,6 +124,24 @@ export async function saveProspectVisualTargetAction({
 
   const supabase = await createAdminClient()
   const verifiedAt = new Date().toISOString()
+  const visualZoom = clampZoom(zoom)
+  let visualPreviewUrl: string | null = null
+
+  try {
+    const previewBuffer = await fetchStaticSatelliteImage(lat, lng, visualZoom)
+    visualPreviewUrl = await uploadLeadAsset({
+      supabase,
+      bucket: 'prospects',
+      slug: id,
+      fileName: 'visual-target.png',
+      body: previewBuffer,
+      contentType: 'image/png',
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[pipeline] Visual target preview save failed: ${message}`)
+  }
+
   const { error } = await supabase
     .from('prospects')
     .update({
@@ -128,6 +150,8 @@ export async function saveProspectVisualTargetAction({
       visual_verified: true,
       visual_verified_at: verifiedAt,
       visual_review_note: note?.trim() || null,
+      visual_zoom: visualZoom,
+      visual_preview_url: visualPreviewUrl,
     })
     .eq('id', id)
 
@@ -142,6 +166,8 @@ export async function saveProspectVisualTargetAction({
     visual_verified: true,
     visual_verified_at: verifiedAt,
     visual_review_note: note?.trim() || null,
+    visual_zoom: visualZoom,
+    visual_preview_url: visualPreviewUrl,
   }
 }
 
@@ -257,6 +283,8 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
         prospect_id: prospect.id,
         source: 'prospect_table',
         visual_target: visualTarget,
+        visual_zoom: prospectWithVisualTarget.visual_zoom || null,
+        visual_preview_url: prospectWithVisualTarget.visual_preview_url || null,
       },
     }])
     .select('id')
@@ -283,6 +311,8 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
       prospect_id: prospectWithVisualTarget.id,
       job_id: job.id,
       visual_target: visualTarget,
+      visual_zoom: prospectWithVisualTarget.visual_zoom || null,
+      visual_preview_url: prospectWithVisualTarget.visual_preview_url || null,
     }),
     cache: 'no-store',
   })
@@ -327,6 +357,8 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
         prospect_id: prospectWithVisualTarget.id,
         source: 'prospect_table',
         visual_target: visualTarget,
+        visual_zoom: prospectWithVisualTarget.visual_zoom || null,
+        visual_preview_url: prospectWithVisualTarget.visual_preview_url || null,
       },
     })
     .eq('id', job.id)
@@ -545,6 +577,12 @@ function parseJsonReceipt(value: string): Record<string, unknown> | null {
   } catch {
     return { message: value }
   }
+}
+
+function clampZoom(value: unknown) {
+  const zoom = Number(value)
+  if (!Number.isFinite(zoom)) return 19
+  return Math.min(Math.max(Math.round(zoom), 16), 21)
 }
 
 function getReceiptUrl(receipt: Record<string, unknown> | null) {

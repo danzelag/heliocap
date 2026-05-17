@@ -9,28 +9,28 @@ const VERTEX_MODEL_RESOURCE = 'publishers/google/models/veo-3.1-generate-001'
 const VEO_DURATION_SECONDS = 8
 
 export const DEFAULT_VEO_CINEMATIC_PROMPT =
-  `REFERENCE LOCK: The provided images show the exact target property. Treat them as factual constraints, not inspiration. Preserve the real building and site. Do not hallucinate. Do not create buildings that arent there.
+  `REFERENCE LOCK: The provided images show the exact target residential property. Treat them as factual constraints, not inspiration. Preserve the real home and site. Do not hallucinate. Do not create buildings that are not there.
 
-Use the provided reference images as strict visual anchors for the exact target property. The video must preserve the same building, roof shape, footprint, lot layout, parking areas, roads, and surrounding site context shown in the references. Do not invent, redesign, replace, simplify, expand, or substitute the building. Do not create a generic commercial building. Do not use adjacent or nearby buildings. The output must remain recognizable as the exact same property from the references in every frame.
+Use the provided reference images as strict visual anchors for the exact target home. The video must preserve the same house, roof shape, footprint, driveway, yard, street, lot layout, trees, and surrounding site context shown in the references. Do not invent, redesign, replace, simplify, expand, or substitute the home. Do not create a generic house. Do not use adjacent or nearby houses. The output must remain recognizable as the exact same property from the references in every frame.
 
 Image-to-video from the provided reference image only.
 
-Create a slow cinematic aerial motion shot of the exact same commercial property shown in the input image.
+Create a slow cinematic residential drone shot of the exact same home shown in the input image. Prefer a front-of-home presentation when the reference context supports it: a tasteful front oblique aerial angle that shows the roof, driveway, front yard, and street-facing side. If the input image is top-down only, keep the same roof/site identity and use only subtle motion rather than inventing a new front facade.
 
-Do not change the building, roof shape, building footprint, surrounding roads, parking lot, lot boundaries, or site layout. Do not invent nearby buildings. Do not use adjacent or nearby buildings. Do not replace the property with a generic building. The video must remain visually recognizable as the same input property in every frame.
+Do not change the house, roof shape, footprint, driveway, surrounding roads, yard, lot boundaries, or site layout. Do not invent nearby buildings. Do not use adjacent or nearby houses. Do not replace the property with a generic home. The video must remain visually recognizable as the same input property in every frame.
 
-Use only subtle drone-style motion: slow push-in, slight parallax, gentle tilt. Maintain the same site geometry and roof proportions.
+Use only subtle drone-style motion: slow push-in, slight parallax, gentle tilt. Maintain the same site geometry and roof proportions. Avoid orbiting to the backyard unless the reference image clearly shows that as the best angle.
 
 Add solar panels only during this video step. Solar panels may appear only as clean, broad, flat, pure black or very dark charcoal rectangular rooftop arrays on the existing roof surfaces, with subtle glossy reflections. No blue panels.
 
 Panels must be aligned in straight, clean rectangular rows parallel to the roof edges or dominant roof axis. No slanted, crooked, warped, scattered, diagonal, random, or speckled panel placement.
 
-Do not place panels on parking lots, roads, grass, trees, facades, walls, roof edges, or neighboring properties.
+Do not place panels on driveway, road, grass, trees, facades, walls, roof edges, detached structures unless clearly part of the target property, or neighboring homes.
 
-No text, labels, UI, logos, cars, people, map artifacts, neon, cartoon, or HUD graphics.
+Do not add EV chargers, heat pumps, cars, people, text, labels, UI, logos, map artifacts, neon, cartoon, or HUD graphics.
 
 Priority order:
-1. Preserve the exact input building and site.
+1. Preserve the exact input home and site.
 2. Keep geometry stable.
 3. Add premium cinematic lighting.
 4. Add clean rooftop solar arrays.`

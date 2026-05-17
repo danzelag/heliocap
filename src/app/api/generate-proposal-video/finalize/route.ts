@@ -23,7 +23,9 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = (await request.json()) as FinalizeProposalVideoBody
-    const { operation_name, slug, job_id, business_name } = body
+    const { job_id, business_name } = body
+    const operation_name = sanitizeN8nString(body.operation_name)
+    const slug = sanitizeN8nString(body.slug)
     jobId = job_id
     businessName = business_name
 
@@ -97,4 +99,12 @@ export async function POST(request: NextRequest) {
     // Non-fatal — the proposal already has a still image. Log and skip.
     return NextResponse.json({ skipped: true, reason: message })
   }
+}
+
+function sanitizeN8nString(value: string) {
+  return value
+    .trim()
+    .replace(/^=+/, '')
+    .replace(/^"+|"+$/g, '')
+    .trim()
 }

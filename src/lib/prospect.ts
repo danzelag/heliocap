@@ -36,6 +36,8 @@ export interface Prospect {
   visual_verified: boolean | null
   visual_verified_at: string | null
   visual_review_note: string | null
+  visual_zoom: number | null
+  visual_preview_url: string | null
   owner_llc: string | null
   sqft: number | null
   year_built: number | null

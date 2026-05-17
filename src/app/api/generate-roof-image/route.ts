@@ -39,6 +39,9 @@ export async function POST(request: NextRequest) {
       formattedAddress,
       formatted_address,
       address,
+      visual_zoom,
+      map_zoom,
+      zoom,
     } = await request.json()
 
     if (bucket !== 'leads' && bucket !== 'prospects') {
@@ -71,7 +74,7 @@ export async function POST(request: NextRequest) {
       return null
     })
     const solarModel = buildSolarModel(solarInsights)
-    const mapZoom = selectStaticMapZoom(solarModel)
+    const mapZoom = clampMapZoom(visual_zoom ?? map_zoom ?? zoom) || selectStaticMapZoom(solarModel)
     const mapCenter = selectStaticMapCenter(solarInsights, Number(lat), Number(lng))
     console.log('[generate-roof-image] Visual target center selected', mapCenter)
     const imageBuffer = await fetchStaticSatelliteImage(mapCenter.lat, mapCenter.lng, mapZoom)
@@ -185,6 +188,12 @@ export async function POST(request: NextRequest) {
     console.error('[generate-roof-image]', message)
     return NextResponse.json({ error: message }, { status: 500 })
   }
+}
+
+function clampMapZoom(value: unknown) {
+  const zoom = Number(value)
+  if (!Number.isFinite(zoom)) return null
+  return Math.min(Math.max(Math.round(zoom), 16), 21)
 }
 
 function isUuid(value: unknown) {
