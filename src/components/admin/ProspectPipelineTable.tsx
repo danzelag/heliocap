@@ -78,7 +78,7 @@ function needsVisualVerification(prospect: Prospect) {
 }
 
 function blocksProposalGeneration(prospect: Prospect) {
-  return prospect.pipeline_stage === 'dead' || needsVisualVerification(prospect)
+  return prospect.pipeline_stage === 'dead'
 }
 
 function formatCoordinate(value: number | null | undefined) {
@@ -674,7 +674,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                           onClick={() => handlePromote(prospect.id)}
                           title={
                             needsVisualVerification(prospect)
-                                ? 'Verify target building before proposal generation'
+                                ? 'Create proposal will auto-detect roof center first; verify manually if it cannot.'
                               : prospect.pipeline_stage === 'dead'
                                 ? 'Prospect is marked not qualified'
                                 : hasProposal ? 'Proposal already made' : 'Promote prospect to proposal worker'

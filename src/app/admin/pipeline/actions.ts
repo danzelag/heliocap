@@ -11,11 +11,14 @@ import {
   type ProspectStage,
 } from '@/lib/prospect'
 import { recordProposalJobEvent } from '@/lib/proposal-job-events'
-import { fetchStaticSatelliteImage } from '@/lib/openclaw-google'
+import { fetchSolarInsights, fetchStaticSatelliteImage } from '@/lib/openclaw-google'
 import sharp from 'sharp'
 
 const DEFAULT_SITE_URL = 'https://heliocap.vercel.app'
 const BULK_PROPOSAL_LIMIT = 25
+const MAX_AUTO_SOLAR_CENTER_DRIFT_METERS = 180
+const MIN_AUTO_SOLAR_PANEL_COUNT = 80
+const MIN_AUTO_SOLAR_AREA_METERS = 750
 
 function isProspectStage(value: string): value is ProspectStage {
   return prospectStages.includes(value as ProspectStage)
@@ -75,7 +78,7 @@ export async function getProspectVisualPreviewAction(id: string, lat?: number, l
   const requestedLng = Number(lng)
   const candidate = Number.isFinite(requestedLat) && Number.isFinite(requestedLng)
     ? { lat: requestedLat, lng: requestedLng, source: 'manual_input' as const }
-    : getProspectVisualCandidate(prospect as Prospect)
+    : await resolveAutoVisualCandidate(prospect as Prospect)
 
   if (!candidate) return { success: false, error: 'No coordinates available for preview.' }
 
@@ -197,36 +200,41 @@ export async function bulkPromoteProspectsToLeadsAction(ids: string[]) {
 }
 
 async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof createAdminClient>>, prospect: Prospect) {
-  if ((prospect.pipeline_stage === 'coordinate_review' || prospect.needs_review) && prospect.visual_verified !== true) {
+  const prospectWithVisualTarget = await ensureVisualTargetForProposal(supabase, prospect)
+
+  if (
+    (prospectWithVisualTarget.pipeline_stage === 'coordinate_review' || prospectWithVisualTarget.needs_review) &&
+    prospectWithVisualTarget.visual_verified !== true
+  ) {
     return {
       success: false,
-      error: prospect.review_reason || 'Prospect needs coordinate review before proposal generation.',
+      error: prospectWithVisualTarget.review_reason || 'Prospect needs coordinate review before proposal generation.',
     }
   }
 
-  if (prospect.lead_id && prospect.microsite_slug) {
-    if (prospect.pipeline_stage !== 'microsite_live') {
+  if (prospectWithVisualTarget.lead_id && prospectWithVisualTarget.microsite_slug) {
+    if (prospectWithVisualTarget.pipeline_stage !== 'microsite_live') {
       await supabase
         .from('prospects')
         .update({ pipeline_stage: 'microsite_live' })
-        .eq('id', prospect.id)
+        .eq('id', prospectWithVisualTarget.id)
     }
 
     return {
       success: true,
-      lead_id: prospect.lead_id,
-      slug: prospect.microsite_slug,
-      url: `${DEFAULT_SITE_URL}/proposal/${prospect.microsite_slug}`,
+      lead_id: prospectWithVisualTarget.lead_id,
+      slug: prospectWithVisualTarget.microsite_slug,
+      url: `${DEFAULT_SITE_URL}/proposal/${prospectWithVisualTarget.microsite_slug}`,
       already_live: true,
     }
   }
 
-  const businessName = prospect.owner_llc || prospect.owner_name || prospect.address.split(',')[0] || 'Helio Cap Prospect'
+  const businessName = prospectWithVisualTarget.owner_llc || prospectWithVisualTarget.owner_name || prospectWithVisualTarget.address.split(',')[0] || 'Helio Cap Prospect'
   const slug = await getUniqueSlug(businessName)
 
-  const visualTarget = resolveProspectVisualTarget(prospect)
+  const visualTarget = resolveProspectVisualTarget(prospectWithVisualTarget)
   if (!visualTarget) {
-    return { success: false, error: 'Verify target building before creating proposal.' }
+    return { success: false, error: 'Could not auto-detect a reliable roof target. Verify target building before creating proposal.' }
   }
 
   const webhookUrl = process.env.N8N_CREATE_PROPOSAL_WEBHOOK_URL
@@ -238,7 +246,7 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
     .from('proposal_jobs')
     .insert([{
       business_name: businessName,
-      address: prospect.address,
+      address: prospectWithVisualTarget.address,
       lat: visualTarget.lat,
       lng: visualTarget.lng,
       slug,
@@ -268,11 +276,11 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       business_name: businessName,
-      address: prospect.address,
+      address: prospectWithVisualTarget.address,
       lat: visualTarget.lat,
       lng: visualTarget.lng,
       slug,
-      prospect_id: prospect.id,
+      prospect_id: prospectWithVisualTarget.id,
       job_id: job.id,
       visual_target: visualTarget,
     }),
@@ -316,7 +324,7 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
       progress_percent: 8,
       receipt: {
         ...(receipt || {}),
-        prospect_id: prospect.id,
+        prospect_id: prospectWithVisualTarget.id,
         source: 'prospect_table',
         visual_target: visualTarget,
       },
@@ -336,6 +344,113 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
     slug,
     queued: true,
   }
+}
+
+async function ensureVisualTargetForProposal(
+  supabase: Awaited<ReturnType<typeof createAdminClient>>,
+  prospect: Prospect,
+): Promise<Prospect> {
+  if (
+    prospect.visual_verified === true &&
+    typeof prospect.visual_lat === 'number' &&
+    typeof prospect.visual_lng === 'number'
+  ) {
+    return prospect
+  }
+
+  const candidate = await resolveAutoVisualCandidate(prospect)
+  if (!candidate || candidate.source !== 'google_solar_roof_center') return prospect
+
+  const verifiedAt = new Date().toISOString()
+  const note = `Auto-verified from Google Solar roof center (${candidate.reason})`
+  const { error } = await supabase
+    .from('prospects')
+    .update({
+      visual_lat: candidate.lat,
+      visual_lng: candidate.lng,
+      visual_verified: true,
+      visual_verified_at: verifiedAt,
+      visual_review_note: note,
+    })
+    .eq('id', prospect.id)
+
+  if (error) {
+    console.error('[pipeline] Auto visual target save failed:', error.message)
+    return prospect
+  }
+
+  return {
+    ...prospect,
+    visual_lat: candidate.lat,
+    visual_lng: candidate.lng,
+    visual_verified: true,
+    visual_verified_at: verifiedAt,
+    visual_review_note: note,
+  }
+}
+
+async function resolveAutoVisualCandidate(prospect: Prospect) {
+  const existing = getProspectVisualCandidate(prospect)
+  if (
+    prospect.visual_verified === true &&
+    existing?.source === 'saved_visual'
+  ) {
+    return existing
+  }
+
+  if (existing) {
+    const solarCandidate = await getSolarRoofCenterCandidate(existing.lat, existing.lng)
+    if (solarCandidate) return solarCandidate
+  }
+
+  return existing
+}
+
+async function getSolarRoofCenterCandidate(lat: number, lng: number) {
+  const insights = await fetchSolarInsights(lat, lng).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[pipeline] Auto visual target solar lookup failed: ${message}`)
+    return null
+  })
+
+  const center = insights?.center
+  if (typeof center?.latitude !== 'number' || typeof center.longitude !== 'number') return null
+
+  const driftMeters = distanceMeters(lat, lng, center.latitude, center.longitude)
+  const panelCount = insights?.solarPotential?.maxArrayPanelsCount || insights?.solarPotential?.solarPanels?.length || 0
+  const roofAreaMeters = insights?.solarPotential?.maxArrayAreaMeters2 || 0
+  const looksCommercial = panelCount >= MIN_AUTO_SOLAR_PANEL_COUNT || roofAreaMeters >= MIN_AUTO_SOLAR_AREA_METERS
+
+  if (driftMeters > MAX_AUTO_SOLAR_CENTER_DRIFT_METERS || !looksCommercial) {
+    console.log('[pipeline] Auto visual target rejected', {
+      driftMeters: Math.round(driftMeters),
+      panelCount,
+      roofAreaMeters: Math.round(roofAreaMeters),
+      looksCommercial,
+    })
+    return null
+  }
+
+  return {
+    lat: center.latitude,
+    lng: center.longitude,
+    source: 'google_solar_roof_center' as const,
+    reason: `${Math.round(driftMeters)}m drift, ${panelCount} panels, ${Math.round(roofAreaMeters)}m2 roof`,
+  }
+}
+
+function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const earthRadiusMeters = 6371000
+  const toRadians = (degrees: number) => (degrees * Math.PI) / 180
+  const deltaLat = toRadians(bLat - aLat)
+  const deltaLng = toRadians(bLng - aLng)
+  const lat1 = toRadians(aLat)
+  const lat2 = toRadians(bLat)
+  const h =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2
+
+  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
 }
 
 export async function clearProposalQueueAction() {
