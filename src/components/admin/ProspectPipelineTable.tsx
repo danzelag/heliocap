@@ -11,6 +11,7 @@ import {
   bulkPromoteProspectsToLeadsAction,
   deleteProspectAction,
   getProspectVisualPreviewAction,
+  getProspectVisualReferencesAction,
   promoteProspectToLeadAction,
   saveProspectVisualTargetAction,
   triggerProspectEnrichmentAction,
@@ -22,6 +23,12 @@ import { VisualTargetMap } from '@/components/admin/VisualTargetMap'
 
 type ProspectPipelineTableProps = {
   initialProspects: Prospect[]
+}
+
+type VisualReferencePreview = {
+  mapTilesImageUrl: string | null
+  aerialViewReferenceUrl: string | null
+  streetViewReferenceUrls: string[]
 }
 
 const stageLabels: Record<ProspectStage, string> = {
@@ -104,6 +111,8 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
   const [visualNote, setVisualNote] = useState('')
   const [visualPreviewUrl, setVisualPreviewUrl] = useState<string | null>(null)
   const [visualPreviewSource, setVisualPreviewSource] = useState<string | null>(null)
+  const [visualReferences, setVisualReferences] = useState<VisualReferencePreview | null>(null)
+  const [visualReferencesLoading, setVisualReferencesLoading] = useState(false)
   const [visualError, setVisualError] = useState<string | null>(null)
   const [visualLoading, setVisualLoading] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -258,13 +267,38 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
     setVisualNote(prospect.visual_review_note || '')
     setVisualPreviewUrl(null)
     setVisualPreviewSource(candidate?.source || null)
+    setVisualReferences(null)
     setVisualError(null)
 
     if (candidate) {
       void refreshVisualPreview(prospect.id, candidate.lat, candidate.lng, prospect.visual_zoom || 19)
+      void loadVisualReferences(prospect.id, candidate.lat, candidate.lng)
     } else {
       setVisualError('No coordinates available for this prospect.')
     }
+  }
+
+  const loadVisualReferences = async (
+    id = visualProspect?.id,
+    latValue = parseCoordinate(visualLat),
+    lngValue = parseCoordinate(visualLng),
+  ) => {
+    if (!id) return
+    if (latValue == null || lngValue == null) return
+
+    setVisualReferencesLoading(true)
+    const result = await getProspectVisualReferencesAction(id, latValue, lngValue)
+    if (result.success) {
+      setVisualReferences({
+        mapTilesImageUrl: result.mapTilesImageUrl || null,
+        aerialViewReferenceUrl: result.aerialViewReferenceUrl || null,
+        streetViewReferenceUrls: result.streetViewReferenceUrls || [],
+      })
+    } else {
+      setVisualReferences(null)
+      setVisualError(result.error || 'Failed to load visual references.')
+    }
+    setVisualReferencesLoading(false)
   }
 
   const refreshVisualPreview = async (
@@ -331,13 +365,18 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
               visual_verified: true,
               visual_verified_at: result.visual_verified_at ?? new Date().toISOString(),
               visual_review_note: result.visual_review_note ?? (visualNote.trim() || null),
-              visual_zoom: result.visual_zoom ?? visualZoom,
-              visual_preview_url: result.visual_preview_url ?? prospect.visual_preview_url,
-            }
+                      visual_zoom: result.visual_zoom ?? visualZoom,
+                      visual_preview_url: result.visual_preview_url ?? prospect.visual_preview_url,
+                    }
             : prospect
         )))
+        setVisualReferences((prev) => ({
+          mapTilesImageUrl: result.visual_preview_url ?? prev?.mapTilesImageUrl ?? visualPreviewUrl,
+          aerialViewReferenceUrl: prev?.aerialViewReferenceUrl ?? null,
+          streetViewReferenceUrls: prev?.streetViewReferenceUrls ?? [],
+        }))
+        void loadVisualReferences(visualProspect.id, latValue, lngValue)
         setMessage(`Visual target verified for ${visualProspect.business_name || visualProspect.address}.`)
-        setVisualProspect(null)
       }
       setVisualLoading(false)
     })
@@ -706,21 +745,22 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
           if (!open) {
             setVisualProspect(null)
             setVisualPreviewUrl(null)
+            setVisualReferences(null)
             setVisualError(null)
           }
         }}
       >
-        <DialogContent className="border border-stone-700/70 bg-stone-950 text-stone-50 shadow-[0_24px_70px_rgba(15,23,42,0.35)] sm:max-w-4xl">
+        <DialogContent className="max-h-[92vh] overflow-y-auto border border-stone-700/70 bg-stone-950 text-stone-50 shadow-[0_24px_70px_rgba(15,23,42,0.35)] sm:max-w-6xl">
           <DialogHeader>
             <DialogTitle className="text-xl text-stone-50">Verify target building</DialogTitle>
             <DialogDescription className="text-slate-500">
-              Drag and zoom the map until the amber reticle sits on the target home roof. This saved framing is what the proposal workflow uses.
+              Drag and zoom the map until the amber reticle sits on the target home roof. Save keeps this window open so you can check the saved satellite frame and street-level angles before creating a proposal.
             </DialogDescription>
           </DialogHeader>
 
           {visualProspect && (
-            <div className="grid gap-5 lg:grid-cols-[1.4fr_0.9fr]">
-              <div className="overflow-hidden rounded-xl border border-stone-700/70 bg-stone-900/60">
+            <div className="grid gap-5 xl:grid-cols-[1.35fr_0.95fr]">
+              <div className="overflow-hidden rounded-2xl border border-stone-700/70 bg-stone-900/60">
                 <div className="flex items-center justify-between border-b border-stone-700/70 px-3 py-2 text-xs text-slate-500">
                   <span>{visualPreviewSource ? `Map source: ${visualPreviewSource}` : 'Interactive satellite map'}</span>
                   {visualLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-300" />}
@@ -735,6 +775,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                       setVisualLng(String(target.lng))
                       setVisualZoom(target.zoom)
                       setVisualPreviewUrl(null)
+                      setVisualReferences(null)
                     }}
                   />
                 ) : (
@@ -802,7 +843,12 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
 
                 {visualPreviewUrl && (
                   <div className="rounded-xl border border-stone-700/70 bg-stone-900/60 p-3">
-                    <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Saved preview check</div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Saved proposal frame</div>
+                      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200">
+                        Used by n8n
+                      </span>
+                    </div>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={visualPreviewUrl}
@@ -811,6 +857,57 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                     />
                   </div>
                 )}
+
+                <div className="rounded-xl border border-stone-700/70 bg-stone-900/60 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Veo reference angles</div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        These are the extra identity anchors we send alongside the roof frame.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="rounded-lg border-stone-700/70 bg-stone-950/70 text-stone-300 hover:bg-stone-900/60"
+                      disabled={visualReferencesLoading || visualLoading}
+                      onClick={() => void loadVisualReferences()}
+                    >
+                      {visualReferencesLoading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <RadioTower className="mr-2 h-3.5 w-3.5" />}
+                      Load angles
+                    </Button>
+                  </div>
+
+                  {visualReferencesLoading ? (
+                    <div className="mt-3 flex aspect-video items-center justify-center rounded-lg border border-stone-800 bg-stone-950 text-xs text-slate-500">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin text-amber-300" />
+                      Collecting Google Street View angles...
+                    </div>
+                  ) : visualReferences && (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {[visualReferences.mapTilesImageUrl, visualReferences.aerialViewReferenceUrl, ...visualReferences.streetViewReferenceUrls]
+                        .filter((url): url is string => Boolean(url))
+                        .slice(0, 6)
+                        .map((url, index) => (
+                          <div key={`${url}-${index}`} className="overflow-hidden rounded-lg border border-stone-800 bg-stone-950">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={url}
+                              alt={`Veo reference ${index + 1} for ${visualProspect.business_name || visualProspect.address}`}
+                              className="aspect-video w-full object-cover"
+                            />
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
+                  {visualReferences && !visualReferences.mapTilesImageUrl && !visualReferences.aerialViewReferenceUrl && visualReferences.streetViewReferenceUrls.length === 0 && (
+                    <div className="mt-3 rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
+                      No street-level angles were available for these coordinates. Veo will use the saved satellite frame.
+                    </div>
+                  )}
+                </div>
 
                 {visualError && (
                   <div className="rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">

@@ -15,6 +15,8 @@ Use the provided reference images as strict visual anchors for the exact target 
 
 Image-to-video from the provided reference image only.
 
+If the input image is a multi-reference board or collage, treat each panel as identity evidence for the same target home. Do not render a split-screen, collage, labels, or multiple houses. Produce one continuous cinematic shot of the target home, using the top-down roof image for roof geometry and the street-level images only to understand the real facade, driveway, and front-of-home context.
+
 Create a slow cinematic residential drone shot of the exact same home shown in the input image. Prefer a front-of-home presentation when the reference context supports it: a tasteful front oblique aerial angle that shows the roof, driveway, front yard, and street-facing side. If the input image is top-down only, keep the same roof/site identity and use only subtle motion rather than inventing a new front facade.
 
 Do not change the house, roof shape, footprint, driveway, surrounding roads, yard, lot boundaries, or site layout. Do not invent nearby buildings. Do not use adjacent or nearby houses. Do not replace the property with a generic home. The video must remain visually recognizable as the same input property in every frame.

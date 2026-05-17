@@ -388,7 +388,6 @@ async function fetchStreetViewReferenceImages({
   slug,
   lat,
   lng,
-  address,
 }: {
   supabase: SupabaseClient
   bucket: 'leads' | 'prospects'
@@ -402,7 +401,9 @@ async function fetchStreetViewReferenceImages({
 
   const headings = [0, 90, 180, 270]
   const uploadedUrls: string[] = []
-  const location = address?.trim() || `${lat},${lng}`
+  // Use the verified visual coordinates, not address text, so Street View anchors
+  // stay tied to the exact roof the admin selected.
+  const location = `${lat},${lng}`
 
   for (const heading of headings) {
     try {

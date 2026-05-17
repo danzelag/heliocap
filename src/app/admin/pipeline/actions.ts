@@ -11,7 +11,7 @@ import {
   type ProspectStage,
 } from '@/lib/prospect'
 import { recordProposalJobEvent } from '@/lib/proposal-job-events'
-import { fetchSolarInsights, fetchStaticSatelliteImage, uploadLeadAsset } from '@/lib/openclaw-google'
+import { collectVisualReferences, fetchSolarInsights, fetchStaticSatelliteImage, uploadLeadAsset } from '@/lib/openclaw-google'
 import sharp from 'sharp'
 
 const DEFAULT_SITE_URL = 'https://heliocap.vercel.app'
@@ -168,6 +168,49 @@ export async function saveProspectVisualTargetAction({
     visual_review_note: note?.trim() || null,
     visual_zoom: visualZoom,
     visual_preview_url: visualPreviewUrl,
+  }
+}
+
+export async function getProspectVisualReferencesAction(id: string, lat?: number, lng?: number) {
+  if (!id) return { success: false, error: 'Missing prospect ID' }
+
+  const requestedLat = Number(lat)
+  const requestedLng = Number(lng)
+  if (!Number.isFinite(requestedLat) || !Number.isFinite(requestedLng)) {
+    return { success: false, error: 'Enter valid latitude and longitude first.' }
+  }
+
+  const supabase = await createAdminClient()
+  const { data: prospect, error } = await supabase
+    .from('prospects')
+    .select('id,address,visual_preview_url')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (error) return { success: false, error: error.message }
+  if (!prospect) return { success: false, error: 'Prospect not found' }
+
+  try {
+    const referenceSet = await collectVisualReferences({
+      supabase,
+      bucket: 'prospects',
+      slug: id,
+      lat: requestedLat,
+      lng: requestedLng,
+      address: prospect.address,
+      mapTilesImageUrl: prospect.visual_preview_url || null,
+    })
+
+    return {
+      success: true,
+      reference_set: referenceSet,
+      mapTilesImageUrl: referenceSet.mapTilesImageUrl,
+      aerialViewReferenceUrl: referenceSet.aerialViewReferenceUrl,
+      streetViewReferenceUrls: referenceSet.streetViewReferenceUrls,
+    }
+  } catch (referenceError) {
+    const message = referenceError instanceof Error ? referenceError.message : 'Failed to collect visual references.'
+    return { success: false, error: message }
   }
 }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
 import { verifyN8nRequest } from '@/lib/n8n-auth'
 import { buildDefaultVeoCinematicPrompt, submitVertexVeoRender } from '@/lib/vertex-veo'
+import sharp from 'sharp'
 
 type SubmitVeoBody = {
   slug?: unknown
@@ -43,7 +44,8 @@ export async function POST(request: NextRequest) {
     const receiptReferences = slug ? await findReceiptReferences(slug) : emptyReferenceSet()
     const bodyReferences = extractReferenceSet(body)
     const referenceSet = mergeReferenceSets(receiptReferences, bodyReferences)
-    const primaryReference = selectPrimaryVeoReference(referenceSet)
+    const referenceBoard = await buildVeoReferenceBoard(referenceSet)
+    const primaryReference = referenceBoard || selectPrimaryVeoReference(referenceSet)
     const fallbackImageUrl = getFirstString(
       body.imageUrl,
       body.image_url,
@@ -60,9 +62,9 @@ export async function POST(request: NextRequest) {
     if (!slug) {
       return NextResponse.json({ error: 'slug is required' }, { status: 400 })
     }
-    if (!imageUrl) {
+    if (!imageUrl && !primaryReference.buffer) {
       return NextResponse.json(
-        { error: 'imageUrl or render_preview_url is required' },
+        { error: 'imageUrl, render_preview_url, or visual references are required' },
         { status: 400 },
       )
     }
@@ -76,14 +78,21 @@ export async function POST(request: NextRequest) {
     })
     console.log('[api/veo/submit] Primary Veo reference selected', {
       source: primaryReference.source || 'fallback_request_image',
-      url: imageUrl,
+      url: primaryReference.url || imageUrl,
+      referenceBoard: Boolean(referenceBoard),
     })
 
     if (process.env.NODE_ENV !== 'production') {
       console.log('[api/veo/submit] final Veo prompt', prompt)
     }
 
-    const result = await submitVertexVeoRender({ slug, prompt, imageUrl })
+    const result = await submitVertexVeoRender({
+      slug,
+      prompt,
+      imageUrl: primaryReference.buffer ? undefined : imageUrl,
+      imageBuffer: primaryReference.buffer,
+      imageMimeType: primaryReference.buffer ? 'image/jpeg' : undefined,
+    })
 
     return NextResponse.json({
       slug,
@@ -184,7 +193,71 @@ function mergeReferenceSets(
   }
 }
 
-function selectPrimaryVeoReference(referenceSet: VisualReferenceSet) {
+type PrimaryVeoReference = {
+  source: string
+  url: string
+  buffer?: Buffer
+}
+
+async function buildVeoReferenceBoard(referenceSet: VisualReferenceSet): Promise<PrimaryVeoReference | null> {
+  const candidates = [
+    referenceSet.cleanedPreviewImageUrl,
+    referenceSet.mapTilesImageUrl,
+    isLikelyImageUrl(referenceSet.aerialViewReferenceUrl) ? referenceSet.aerialViewReferenceUrl : null,
+    ...referenceSet.streetViewReferenceUrls,
+  ]
+    .map((url) => (typeof url === 'string' ? sanitizeN8nString(url) : ''))
+    .filter((url) => /^https?:\/\//i.test(url))
+    .filter((url, index, urls) => urls.indexOf(url) === index)
+    .slice(0, 4)
+
+  if (candidates.length < 2) return null
+
+  try {
+    const tiles = await Promise.all(candidates.map(downloadReferenceTile))
+    const composites = await Promise.all(tiles.map(async (buffer, index) => ({
+      input: await sharp(buffer)
+        .resize(640, 360, { fit: 'cover', position: 'center' })
+        .jpeg({ quality: 88 })
+        .toBuffer(),
+      left: index % 2 === 0 ? 0 : 640,
+      top: index < 2 ? 0 : 360,
+    })))
+
+    const board = await sharp({
+      create: {
+        width: 1280,
+        height: 720,
+        channels: 3,
+        background: '#0c0a09',
+      },
+    })
+      .composite(composites)
+      .jpeg({ quality: 90 })
+      .toBuffer()
+
+    return {
+      source: 'combinedReferenceBoard',
+      url: '',
+      buffer: board,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`[api/veo/submit] Reference board build failed: ${message}`)
+    return null
+  }
+}
+
+async function downloadReferenceTile(url: string) {
+  const response = await fetch(url, { cache: 'no-store' })
+  if (!response.ok) {
+    throw new Error(`reference image returned ${response.status}`)
+  }
+
+  return Buffer.from(await response.arrayBuffer())
+}
+
+function selectPrimaryVeoReference(referenceSet: VisualReferenceSet): PrimaryVeoReference {
   if (referenceSet.cleanedPreviewImageUrl) {
     return { source: 'cleanedPreviewImageUrl', url: referenceSet.cleanedPreviewImageUrl }
   }
