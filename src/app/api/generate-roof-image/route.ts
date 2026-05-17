@@ -25,10 +25,8 @@ import {
  */
 export async function POST(request: NextRequest) {
   try {
+    const body = await request.json()
     const {
-      lat,
-      lng,
-      slug,
       bucket = 'leads',
       job_id,
       business_name,
@@ -42,7 +40,15 @@ export async function POST(request: NextRequest) {
       visual_zoom,
       map_zoom,
       zoom,
-    } = await request.json()
+    } = body
+
+    const slug = sanitizeN8nString(body.slug)
+    const prospectIdentifier = sanitizeN8nString(prospect_id || prospectId)
+    const placeIdentifier = sanitizeN8nString(place_id || placeId)
+    let targetLat = Number(stripN8nPrefix(body.lat))
+    let targetLng = Number(stripN8nPrefix(body.lng))
+    let requestedZoom: unknown = visual_zoom ?? map_zoom ?? zoom
+    let targetAddress = getFirstString(formattedAddress, formatted_address, address)
 
     if (bucket !== 'leads' && bucket !== 'prospects') {
       return NextResponse.json({ error: 'bucket must be leads or prospects' }, { status: 400 })
@@ -53,7 +59,7 @@ export async function POST(request: NextRequest) {
       if (authError) return authError
     }
 
-    if (lat == null || lng == null) {
+    if (!Number.isFinite(targetLat) || !Number.isFinite(targetLng)) {
       return NextResponse.json({ error: 'lat and lng are required' }, { status: 400 })
     }
     if (!slug) {
@@ -61,6 +67,17 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createAdminClient()
+    if (bucket === 'prospects' && prospectIdentifier) {
+      const verifiedTarget = await getVerifiedProspectVisualTarget(supabase, prospectIdentifier)
+      if (verifiedTarget) {
+        targetLat = verifiedTarget.lat
+        targetLng = verifiedTarget.lng
+        requestedZoom = verifiedTarget.zoom ?? requestedZoom
+        targetAddress = verifiedTarget.address || targetAddress
+        console.log('[generate-roof-image] Using verified prospect visual target from Supabase', verifiedTarget)
+      }
+    }
+
     await updateProposalJobProgress(supabase, {
       jobId: job_id,
       businessName: business_name,
@@ -69,13 +86,13 @@ export async function POST(request: NextRequest) {
       progressPercent: 20,
     })
 
-    const solarInsights = await fetchSolarInsights(Number(lat), Number(lng)).catch((error) => {
+    const solarInsights = await fetchSolarInsights(targetLat, targetLng).catch((error) => {
       console.error('[generate-roof-image] Google Solar fallback:', error)
       return null
     })
     const solarModel = buildSolarModel(solarInsights)
-    const mapZoom = clampMapZoom(visual_zoom ?? map_zoom ?? zoom) || selectStaticMapZoom(solarModel)
-    const mapCenter = selectStaticMapCenter(solarInsights, Number(lat), Number(lng))
+    const mapZoom = clampMapZoom(requestedZoom) || selectStaticMapZoom(solarModel)
+    const mapCenter = selectStaticMapCenter(solarInsights, targetLat, targetLng)
     console.log('[generate-roof-image] Visual target center selected', mapCenter)
     const imageBuffer = await fetchStaticSatelliteImage(mapCenter.lat, mapCenter.lng, mapZoom)
 
@@ -93,7 +110,7 @@ export async function POST(request: NextRequest) {
       slug,
       lat: mapCenter.lat,
       lng: mapCenter.lng,
-      address: getFirstString(formattedAddress, formatted_address, address),
+      address: targetAddress,
       mapTilesImageUrl: roofImageUrl,
     })
 
@@ -134,8 +151,7 @@ export async function POST(request: NextRequest) {
     })
 
     if (bucket === 'prospects') {
-      const prospectIdentifier = prospect_id || prospectId || (isUuid(slug) ? slug : null)
-      const placeIdentifier = place_id || placeId
+      const fallbackProspectIdentifier = prospectIdentifier || (isUuid(slug) ? slug : null)
       const update = {
         panel_count: solarModel.panelCount,
         system_kw: solarModel.systemSizeKw,
@@ -151,8 +167,8 @@ export async function POST(request: NextRequest) {
         pipeline_stage: 'solar_fetched',
       }
 
-      if (prospectIdentifier) {
-        const { error: updateError } = await supabase.from('prospects').update(update).eq('id', prospectIdentifier)
+      if (fallbackProspectIdentifier) {
+        const { error: updateError } = await supabase.from('prospects').update(update).eq('id', fallbackProspectIdentifier)
         if (updateError) console.error('[generate-roof-image] prospect update:', updateError.message)
       } else if (placeIdentifier) {
         const { error: updateError } = await supabase.from('prospects').update(update).eq('place_id', placeIdentifier)
@@ -190,6 +206,45 @@ export async function POST(request: NextRequest) {
   }
 }
 
+async function getVerifiedProspectVisualTarget(
+  supabase: Awaited<ReturnType<typeof createAdminClient>>,
+  prospectId: string,
+) {
+  const { data, error } = await supabase
+    .from('prospects')
+    .select('address, visual_lat, visual_lng, visual_zoom, visual_verified')
+    .eq('id', prospectId)
+    .maybeSingle()
+
+  if (error) {
+    console.error('[generate-roof-image] verified visual target lookup:', error.message)
+    return null
+  }
+
+  if (
+    data?.visual_verified === true &&
+    typeof data.visual_lat === 'number' &&
+    typeof data.visual_lng === 'number'
+  ) {
+    return {
+      lat: data.visual_lat,
+      lng: data.visual_lng,
+      zoom: data.visual_zoom,
+      address: typeof data.address === 'string' ? data.address : null,
+    }
+  }
+
+  return null
+}
+
+function stripN8nPrefix(value: unknown) {
+  return typeof value === 'string' ? value.trim().replace(/^=+/, '') : value
+}
+
+function sanitizeN8nString(value: unknown) {
+  return typeof value === 'string' ? value.trim().replace(/^=+/, '') : ''
+}
+
 function clampMapZoom(value: unknown) {
   const zoom = Number(value)
   if (!Number.isFinite(zoom)) return null
@@ -202,7 +257,7 @@ function isUuid(value: unknown) {
 
 function getFirstString(...values: unknown[]) {
   for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim()
+    if (typeof value === 'string' && value.trim()) return sanitizeN8nString(value)
   }
 
   return null
