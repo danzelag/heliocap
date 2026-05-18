@@ -99,6 +99,7 @@ export type VisualReferenceSet = {
   aerialViewReferenceUrl: string | null
   streetViewReferenceUrls: string[]
   cleanedPreviewImageUrl: string | null
+  solarApiLayoutImageUrl: string | null
 }
 
 type CollectVisualReferencesArgs = {
@@ -283,6 +284,7 @@ export async function collectVisualReferences({
     aerialViewReferenceUrl,
     streetViewReferenceUrls,
     cleanedPreviewImageUrl,
+    solarApiLayoutImageUrl: null as string | null,
   }
 
   console.log('[openclaw-google] Visual references available', {
