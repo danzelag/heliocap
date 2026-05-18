@@ -12,6 +12,7 @@ import {
   deleteProspectAction,
   getProspectVisualPreviewAction,
   getProspectVisualReferencesAction,
+  getProspectSolarCapabilityAction,
   promoteProspectToLeadAction,
   saveProspectStreetViewCaptureAction,
   saveProspectVisualTargetAction,
@@ -40,6 +41,39 @@ type VisualReferenceCard = {
   type: string
   url: string | null
   unavailableReason: string | null
+}
+
+type SolarCapability = {
+  building: {
+    available: boolean
+    centerLat: number | null
+    centerLng: number | null
+    roofSegmentCount: number
+    panelCandidateCount: number
+    maxPanelCount: number
+    maxArrayAreaSqft: number | null
+    maxSunshineHoursPerYear: number | null
+    unavailableReason: string | null
+  }
+  roofSegments: Array<{
+    id: number
+    areaSqft: number | null
+    pitchDegrees: number | null
+    azimuthDegrees: number | null
+  }>
+  dataLayers: {
+    available: boolean
+    imageryQuality: string | null
+    imageryDate: string | null
+    imageryProcessedDate: string | null
+    unavailableReason: string | null
+    cards: Array<{
+      id: string
+      label: string
+      available: boolean
+      reason: string | null
+    }>
+  }
 }
 
 const stageLabels: Record<ProspectStage, string> = {
@@ -161,6 +195,8 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
   const [visualReferences, setVisualReferences] = useState<VisualReferencePreview | null>(null)
   const [visualReferencesLoading, setVisualReferencesLoading] = useState(false)
   const [streetViewCaptureLoading, setStreetViewCaptureLoading] = useState(false)
+  const [solarCapability, setSolarCapability] = useState<SolarCapability | null>(null)
+  const [solarCapabilityLoading, setSolarCapabilityLoading] = useState(false)
   const [visualError, setVisualError] = useState<string | null>(null)
   const [visualLoading, setVisualLoading] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -316,14 +352,39 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
     setVisualPreviewUrl(null)
     setVisualPreviewSource(candidate?.source || null)
     setVisualReferences(null)
+    setSolarCapability(null)
     setVisualError(null)
 
     if (candidate) {
       void refreshVisualPreview(prospect.id, candidate.lat, candidate.lng, prospect.visual_zoom || 19)
       void loadVisualReferences(prospect.id, candidate.lat, candidate.lng)
+      void loadSolarCapability(prospect.id, candidate.lat, candidate.lng)
     } else {
       setVisualError('No coordinates available for this prospect.')
     }
+  }
+
+  const loadSolarCapability = async (
+    id = visualProspect?.id,
+    latValue = parseCoordinate(visualLat),
+    lngValue = parseCoordinate(visualLng),
+  ) => {
+    if (!id) return
+    if (latValue == null || lngValue == null) return
+
+    setSolarCapabilityLoading(true)
+    const result = await getProspectSolarCapabilityAction(id, latValue, lngValue)
+    if (result.success && result.building && result.dataLayers) {
+      setSolarCapability({
+        building: result.building,
+        roofSegments: result.roofSegments || [],
+        dataLayers: result.dataLayers,
+      })
+    } else {
+      setSolarCapability(null)
+      setVisualError(result.error || 'Failed to load Google Solar API roof data.')
+    }
+    setSolarCapabilityLoading(false)
   }
 
   const loadVisualReferences = async (
@@ -861,6 +922,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                       setVisualZoom(target.zoom)
                       setVisualPreviewUrl(null)
                       setVisualReferences(null)
+                      setSolarCapability(null)
                     }}
                   />
                 ) : (
@@ -1038,6 +1100,100 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                   {visualReferences && !visualReferences.mapTilesImageUrl && !visualReferences.aerialViewReferenceUrl && visualReferences.streetViewReferenceUrls.length === 0 && (
                     <div className="mt-3 rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
                       No street-level angles were available for these coordinates. Veo will use the saved satellite frame.
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-stone-700/70 bg-stone-900/60 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Solar API roof intelligence</div>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Roof segments, panel candidates, sunlight, and data-layer availability.
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="rounded-lg border-stone-700/70 bg-stone-950/70 text-stone-300 hover:bg-stone-900/60"
+                      disabled={solarCapabilityLoading || visualLoading}
+                      onClick={() => void loadSolarCapability()}
+                    >
+                      {solarCapabilityLoading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-2 h-3.5 w-3.5" />}
+                      Load roof data
+                    </Button>
+                  </div>
+
+                  {solarCapabilityLoading ? (
+                    <div className="mt-3 flex aspect-video items-center justify-center rounded-lg border border-stone-800 bg-stone-950 text-xs text-slate-500">
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin text-amber-300" />
+                      Reading Google Solar roof data...
+                    </div>
+                  ) : solarCapability && (
+                    <div className="mt-3 space-y-3">
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          ['Roof segments', solarCapability.building.roofSegmentCount || 'Unavailable'],
+                          ['Panel candidates', solarCapability.building.panelCandidateCount || 'Unavailable'],
+                          ['Max panel count', solarCapability.building.maxPanelCount || 'Unavailable'],
+                          ['Max array area', solarCapability.building.maxArrayAreaSqft ? `${formatNumber(solarCapability.building.maxArrayAreaSqft)} sqft` : 'Unavailable'],
+                          ['Sun hours/year', solarCapability.building.maxSunshineHoursPerYear || 'Unavailable'],
+                          ['Imagery quality', solarCapability.dataLayers.imageryQuality || 'Unavailable'],
+                        ].map(([label, value]) => (
+                          <div key={label} className="rounded-lg border border-stone-800 bg-stone-950 p-3">
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">{label}</div>
+                            <div className="mt-1 text-sm font-semibold text-stone-100">{value}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {solarCapability.roofSegments.length > 0 ? (
+                        <div className="rounded-lg border border-stone-800 bg-stone-950 p-3">
+                          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Detected roof planes</div>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            {solarCapability.roofSegments.map((segment) => (
+                              <div key={segment.id} className="rounded-md border border-stone-800 bg-stone-900/60 px-3 py-2 text-xs text-slate-400">
+                                <div className="font-semibold text-stone-200">Plane {segment.id}</div>
+                                <div>{segment.areaSqft ? `${formatNumber(segment.areaSqft)} sqft` : 'Area unavailable'}</div>
+                                <div>Pitch {segment.pitchDegrees ?? 'unknown'}° · Azimuth {segment.azimuthDegrees ?? 'unknown'}°</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
+                          {solarCapability.building.unavailableReason || 'Google Solar did not return roof segment geometry for this location.'}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {solarCapability.dataLayers.cards.map((layer) => (
+                          <div key={layer.id} className={`rounded-lg border px-3 py-2 ${
+                            layer.available
+                              ? 'border-emerald-500/30 bg-emerald-500/10'
+                              : 'border-amber-500/30 bg-amber-500/10'
+                          }`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-xs font-semibold text-stone-100">{layer.label}</div>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                                layer.available ? 'text-emerald-200' : 'text-amber-200'
+                              }`}>
+                                {layer.available ? 'Available' : 'Unavailable'}
+                              </span>
+                            </div>
+                            {!layer.available && layer.reason && (
+                              <div className="mt-1 text-[11px] leading-4 text-amber-200/90">{layer.reason}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {(solarCapability.dataLayers.imageryDate || solarCapability.dataLayers.imageryProcessedDate) && (
+                        <div className="text-[11px] text-slate-500">
+                          Imagery date: {solarCapability.dataLayers.imageryDate || 'unknown'} · Processed: {solarCapability.dataLayers.imageryProcessedDate || 'unknown'}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

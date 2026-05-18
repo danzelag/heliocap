@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 import sharp from 'sharp'
+import { getGoogleCloudAccessToken } from '@/lib/google-cloud-auth'
 
 const STATIC_MAP_REQUEST_WIDTH = 640
 const STATIC_MAP_REQUEST_HEIGHT = 360
@@ -127,6 +128,26 @@ type StreetViewMetadataResponse = {
     lat?: number
     lng?: number
   }
+}
+
+export type GoogleSolarDataLayers = {
+  imageryDate?: {
+    year?: number
+    month?: number
+    day?: number
+  }
+  imageryProcessedDate?: {
+    year?: number
+    month?: number
+    day?: number
+  }
+  dsmUrl?: string
+  rgbUrl?: string
+  maskUrl?: string
+  annualFluxUrl?: string
+  monthlyFluxUrl?: string
+  hourlyShadeUrls?: string[]
+  imageryQuality?: string
 }
 
 export function getGoogleMapsApiKey() {
@@ -723,6 +744,36 @@ export async function fetchSolarInsights(lat: number, lng: number): Promise<Goog
 
   if (!response.ok) {
     throw new Error(`Google Solar API returned ${response.status}: ${await response.text()}`)
+  }
+
+  return response.json()
+}
+
+export async function fetchSolarDataLayersMetadata(
+  lat: number,
+  lng: number,
+  radiusMeters = 35,
+): Promise<GoogleSolarDataLayers | null> {
+  const accessToken = await getGoogleCloudAccessToken()
+  const url = new URL('https://solar.googleapis.com/v1/dataLayers:get')
+  url.searchParams.set('location.latitude', String(lat))
+  url.searchParams.set('location.longitude', String(lng))
+  url.searchParams.set('radiusMeters', String(radiusMeters))
+  url.searchParams.set('view', 'IMAGERY_AND_ANNUAL_FLUX_LAYERS')
+  url.searchParams.set('requiredQuality', 'HIGH')
+  url.searchParams.set('pixelSizeMeters', '0.25')
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    cache: 'no-store',
+  })
+
+  if (response.status === 404) return null
+
+  if (!response.ok) {
+    throw new Error(`Google Solar Data Layers API returned ${response.status}: ${await response.text()}`)
   }
 
   return response.json()

@@ -13,6 +13,7 @@ import {
 import { recordProposalJobEvent } from '@/lib/proposal-job-events'
 import {
   collectVisualReferences,
+  fetchSolarDataLayersMetadata,
   fetchSolarInsights,
   fetchStaticSatelliteImage,
   fetchStreetViewImage,
@@ -280,6 +281,110 @@ export async function saveProspectStreetViewCaptureAction({
     const message = captureError instanceof Error ? captureError.message : 'Failed to save Street View capture.'
     return { success: false, error: message }
   }
+}
+
+export async function getProspectSolarCapabilityAction(id: string, lat?: number, lng?: number) {
+  if (!id) return { success: false, error: 'Missing prospect ID' }
+
+  const requestedLat = Number(lat)
+  const requestedLng = Number(lng)
+  if (!Number.isFinite(requestedLat) || !Number.isFinite(requestedLng)) {
+    return { success: false, error: 'Enter valid latitude and longitude first.' }
+  }
+
+  const [insightsResult, dataLayersResult] = await Promise.allSettled([
+    fetchSolarInsights(requestedLat, requestedLng),
+    fetchSolarDataLayersMetadata(requestedLat, requestedLng),
+  ])
+  const insights = insightsResult.status === 'fulfilled' ? insightsResult.value : null
+  const dataLayers = dataLayersResult.status === 'fulfilled' ? dataLayersResult.value : null
+  const insightsError = insightsResult.status === 'rejected'
+    ? insightsResult.reason instanceof Error ? insightsResult.reason.message : String(insightsResult.reason)
+    : null
+  const dataLayersError = dataLayersResult.status === 'rejected'
+    ? dataLayersResult.reason instanceof Error ? dataLayersResult.reason.message : String(dataLayersResult.reason)
+    : null
+
+  const roofSegments = (insights?.solarPotential?.roofSegmentStats || []).slice(0, 8).map((segment, index) => ({
+    id: index + 1,
+    areaSqft: segment.stats?.areaMeters2 ? Math.round(segment.stats.areaMeters2 * 10.7639) : null,
+    pitchDegrees: typeof segment.pitchDegrees === 'number' ? Math.round(segment.pitchDegrees * 10) / 10 : null,
+    azimuthDegrees: typeof segment.azimuthDegrees === 'number' ? Math.round(segment.azimuthDegrees) : null,
+  }))
+  const dataLayerCards = [
+    {
+      id: 'rgb',
+      label: 'Solar RGB imagery',
+      available: Boolean(dataLayers?.rgbUrl),
+      reason: dataLayers?.rgbUrl ? null : dataLayersError || 'Unavailable from Solar data layers for this roof.',
+    },
+    {
+      id: 'mask',
+      label: 'Roof mask',
+      available: Boolean(dataLayers?.maskUrl),
+      reason: dataLayers?.maskUrl ? null : dataLayersError || 'Unavailable from Solar data layers for this roof.',
+    },
+    {
+      id: 'dsm',
+      label: 'DSM height model',
+      available: Boolean(dataLayers?.dsmUrl),
+      reason: dataLayers?.dsmUrl ? null : dataLayersError || 'Unavailable from Solar data layers for this roof.',
+    },
+    {
+      id: 'annual-flux',
+      label: 'Annual sunlight flux',
+      available: Boolean(dataLayers?.annualFluxUrl),
+      reason: dataLayers?.annualFluxUrl ? null : dataLayersError || 'Unavailable from Solar data layers for this roof.',
+    },
+    {
+      id: 'monthly-flux',
+      label: 'Monthly sunlight flux',
+      available: Boolean(dataLayers?.monthlyFluxUrl),
+      reason: dataLayers?.monthlyFluxUrl ? null : 'Not requested in this lightweight app view to control payload size.',
+    },
+    {
+      id: 'hourly-shade',
+      label: 'Hourly shade layers',
+      available: Boolean(dataLayers?.hourlyShadeUrls?.length),
+      reason: dataLayers?.hourlyShadeUrls?.length ? null : 'Not requested in this lightweight app view to control payload size.',
+    },
+  ]
+
+  return {
+    success: Boolean(insights || dataLayers),
+    error: !insights && !dataLayers
+      ? insightsError || dataLayersError || 'Google Solar API returned no roof data for this location.'
+      : undefined,
+    building: {
+      available: Boolean(insights),
+      centerLat: insights?.center?.latitude ?? null,
+      centerLng: insights?.center?.longitude ?? null,
+      roofSegmentCount: insights?.solarPotential?.roofSegmentStats?.length || 0,
+      panelCandidateCount: insights?.solarPotential?.solarPanels?.length || 0,
+      maxPanelCount: insights?.solarPotential?.maxArrayPanelsCount || 0,
+      maxArrayAreaSqft: insights?.solarPotential?.maxArrayAreaMeters2
+        ? Math.round(insights.solarPotential.maxArrayAreaMeters2 * 10.7639)
+        : null,
+      maxSunshineHoursPerYear: insights?.solarPotential?.maxSunshineHoursPerYear
+        ? Math.round(insights.solarPotential.maxSunshineHoursPerYear)
+        : null,
+      unavailableReason: insights ? null : insightsError || 'No buildingInsights result for this roof.',
+    },
+    roofSegments,
+    dataLayers: {
+      available: Boolean(dataLayers),
+      imageryQuality: dataLayers?.imageryQuality || null,
+      imageryDate: formatGoogleDate(dataLayers?.imageryDate),
+      imageryProcessedDate: formatGoogleDate(dataLayers?.imageryProcessedDate),
+      cards: dataLayerCards,
+      unavailableReason: dataLayers ? null : dataLayersError || 'No Solar data layers result for this roof.',
+    },
+  }
+}
+
+function formatGoogleDate(date?: { year?: number; month?: number; day?: number }) {
+  if (!date?.year || !date.month || !date.day) return null
+  return `${date.year}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`
 }
 
 function buildVisualReferenceCards(
