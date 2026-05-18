@@ -41,6 +41,8 @@ export async function POST(request: NextRequest) {
       visual_zoom,
       map_zoom,
       zoom,
+      solarApiLayoutImageUrl,
+      solar_api_layout_image_url,
     } = body
 
     const slug = sanitizeN8nString(body.slug)
@@ -50,6 +52,11 @@ export async function POST(request: NextRequest) {
     let targetLng = Number(stripN8nPrefix(body.lng))
     let requestedZoom: unknown = visual_zoom ?? map_zoom ?? zoom
     let targetAddress = getFirstString(formattedAddress, formatted_address, address)
+    let prospectReferenceControls: {
+      solarReferenceUrl: string | null
+      solarReferenceEnabled: boolean
+      excludedReferenceUrls: string[]
+    } | null = null
 
     if (bucket !== 'leads' && bucket !== 'prospects') {
       return NextResponse.json({ error: 'bucket must be leads or prospects' }, { status: 400 })
@@ -75,6 +82,11 @@ export async function POST(request: NextRequest) {
         targetLng = verifiedTarget.lng
         requestedZoom = verifiedTarget.zoom ?? requestedZoom
         targetAddress = verifiedTarget.address || targetAddress
+        prospectReferenceControls = {
+          solarReferenceUrl: verifiedTarget.solarReferenceUrl,
+          solarReferenceEnabled: verifiedTarget.solarReferenceEnabled,
+          excludedReferenceUrls: verifiedTarget.excludedReferenceUrls,
+        }
         console.log('[generate-roof-image] Using verified prospect visual target from Supabase', verifiedTarget)
       }
     }
@@ -128,6 +140,20 @@ export async function POST(request: NextRequest) {
           count: manualStreetViewReferenceUrls.length,
         })
       }
+    }
+    const bodySolarReferenceUrl = getFirstString(solarApiLayoutImageUrl, solar_api_layout_image_url)
+    const solarReferenceUrl = prospectReferenceControls?.solarReferenceEnabled === false
+      ? null
+      : bodySolarReferenceUrl || prospectReferenceControls?.solarReferenceUrl || roofImageUrl
+    visualReferences.solarApiLayoutImageUrl = solarReferenceUrl
+    if (prospectReferenceControls?.excludedReferenceUrls.length) {
+      const filtered = filterExcludedReferences(visualReferences, prospectReferenceControls.excludedReferenceUrls)
+      visualReferences.mapTilesImageUrl = filtered.mapTilesImageUrl
+      visualReferences.aerialViewReferenceUrl = filtered.aerialViewReferenceUrl
+      visualReferences.streetViewReferenceUrls = filtered.streetViewReferenceUrls
+      visualReferences.cleanedPreviewImageUrl = filtered.cleanedPreviewImageUrl
+      visualReferences.solarApiLayoutImageUrl = filtered.solarApiLayoutImageUrl
+      await removeExcludedProspectReferenceFiles(supabase, prospectReferenceControls.excludedReferenceUrls)
     }
 
     const satelliteBase64 = `data:image/png;base64,${Buffer.from(imageBuffer).toString('base64')}`
@@ -199,7 +225,11 @@ export async function POST(request: NextRequest) {
         mapTilesImageUrl: visualReferences.mapTilesImageUrl,
         aerialViewReferenceUrl: visualReferences.aerialViewReferenceUrl,
         streetViewReferenceUrls: visualReferences.streetViewReferenceUrls,
+        solarApiLayoutImageUrl: visualReferences.solarApiLayoutImageUrl,
         visual_target: mapCenter,
+        // renderPreviewUrl has Solar API panels composited onto the satellite —
+        // this is the correct Veo seed (panels already placed by real geometry).
+        solarPanelRenderUrl: renderPreviewUrl,
       })
     }
 
@@ -210,6 +240,7 @@ export async function POST(request: NextRequest) {
       mapTilesImageUrl: visualReferences.mapTilesImageUrl,
       aerialViewReferenceUrl: visualReferences.aerialViewReferenceUrl,
       streetViewReferenceUrls: visualReferences.streetViewReferenceUrls,
+      solarApiLayoutImageUrl: visualReferences.solarApiLayoutImageUrl,
       reference_set: visualReferences,
       visual_target: mapCenter,
       solar_model: solarModel,
@@ -228,7 +259,7 @@ async function getVerifiedProspectVisualTarget(
 ) {
   const { data, error } = await supabase
     .from('prospects')
-    .select('address, visual_lat, visual_lng, visual_zoom, visual_verified')
+    .select('address, visual_lat, visual_lng, visual_zoom, visual_verified, solar_reference_url, solar_reference_enabled, visual_reference_exclusions')
     .eq('id', prospectId)
     .maybeSingle()
 
@@ -247,10 +278,71 @@ async function getVerifiedProspectVisualTarget(
       lng: data.visual_lng,
       zoom: data.visual_zoom,
       address: typeof data.address === 'string' ? data.address : null,
+      solarReferenceUrl: typeof data.solar_reference_url === 'string' ? data.solar_reference_url : null,
+      solarReferenceEnabled: data.solar_reference_enabled !== false,
+      excludedReferenceUrls: getExcludedReferenceUrls(data.visual_reference_exclusions),
     }
   }
 
   return null
+}
+
+function getExcludedReferenceUrls(value: unknown) {
+  if (!Array.isArray(value)) return []
+  return value.filter((url): url is string => typeof url === 'string' && url.startsWith('http'))
+}
+
+function filterExcludedReferences<T extends {
+  mapTilesImageUrl: string | null
+  aerialViewReferenceUrl: string | null
+  streetViewReferenceUrls: string[]
+  cleanedPreviewImageUrl?: string | null
+  solarApiLayoutImageUrl?: string | null
+}>(referenceSet: T, excludedUrls: string[]): T {
+  if (!excludedUrls.length) return referenceSet
+  const excluded = new Set(excludedUrls)
+
+  return {
+    ...referenceSet,
+    mapTilesImageUrl: referenceSet.mapTilesImageUrl && !excluded.has(referenceSet.mapTilesImageUrl)
+      ? referenceSet.mapTilesImageUrl
+      : null,
+    aerialViewReferenceUrl: referenceSet.aerialViewReferenceUrl && !excluded.has(referenceSet.aerialViewReferenceUrl)
+      ? referenceSet.aerialViewReferenceUrl
+      : null,
+    cleanedPreviewImageUrl: referenceSet.cleanedPreviewImageUrl && !excluded.has(referenceSet.cleanedPreviewImageUrl)
+      ? referenceSet.cleanedPreviewImageUrl
+      : null,
+    solarApiLayoutImageUrl: referenceSet.solarApiLayoutImageUrl && !excluded.has(referenceSet.solarApiLayoutImageUrl)
+      ? referenceSet.solarApiLayoutImageUrl
+      : null,
+    streetViewReferenceUrls: referenceSet.streetViewReferenceUrls.filter((url) => !excluded.has(url)),
+  }
+}
+
+function getProspectStoragePathFromPublicUrl(url: string) {
+  try {
+    const parsed = new URL(url)
+    const marker = '/storage/v1/object/public/prospects/'
+    const index = parsed.pathname.indexOf(marker)
+    if (index === -1) return null
+    return decodeURIComponent(parsed.pathname.slice(index + marker.length))
+  } catch {
+    return null
+  }
+}
+
+async function removeExcludedProspectReferenceFiles(
+  supabase: Awaited<ReturnType<typeof createAdminClient>>,
+  excludedUrls: string[],
+) {
+  const paths = excludedUrls
+    .map(getProspectStoragePathFromPublicUrl)
+    .filter((path): path is string => Boolean(path))
+
+  if (!paths.length) return
+  const { error } = await supabase.storage.from('prospects').remove(paths)
+  if (error) console.error(`[generate-roof-image] Failed to remove excluded references: ${error.message}`)
 }
 
 function stripN8nPrefix(value: unknown) {

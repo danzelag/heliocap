@@ -6,7 +6,7 @@ import {
 import sharp from 'sharp'
 
 const VERTEX_MODEL_RESOURCE = 'publishers/google/models/veo-3.1-generate-001'
-const VEO_DURATION_SECONDS = 8
+const VEO_DURATION_SECONDS = 15
 
 export const DEFAULT_VEO_CINEMATIC_PROMPT =
   `Aerial drone footage slowly revealing a residential home from a low oblique angle, black solar panels covering the entire roof in neat rows, golden hour lighting, warm long shadows, lush green yard, smooth elegant camera motion pulling up and back, photorealistic, 4K, film-grade color grading, atmospheric haze, no people, no text, no watermarks.`
