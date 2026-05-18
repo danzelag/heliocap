@@ -204,6 +204,7 @@ export async function getProspectVisualReferencesAction(id: string, lat?: number
     return {
       success: true,
       reference_set: referenceSet,
+      referenceCards: buildVisualReferenceCards(referenceSet),
       mapTilesImageUrl: referenceSet.mapTilesImageUrl,
       aerialViewReferenceUrl: referenceSet.aerialViewReferenceUrl,
       streetViewReferenceUrls: referenceSet.streetViewReferenceUrls,
@@ -212,6 +213,44 @@ export async function getProspectVisualReferencesAction(id: string, lat?: number
     const message = referenceError instanceof Error ? referenceError.message : 'Failed to collect visual references.'
     return { success: false, error: message }
   }
+}
+
+function buildVisualReferenceCards(referenceSet: Awaited<ReturnType<typeof collectVisualReferences>>) {
+  const cards = [
+    {
+      id: 'map-tiles',
+      label: 'Map / satellite roof frame',
+      type: 'Top-down roof geometry',
+      url: referenceSet.mapTilesImageUrl,
+      unavailableReason: referenceSet.mapTilesImageUrl
+        ? null
+        : 'Unavailable until the visual target preview is generated and saved.',
+    },
+    {
+      id: 'aerial-view',
+      label: 'Google Aerial View',
+      type: 'Optional 3D aerial identity reference',
+      url: referenceSet.aerialViewReferenceUrl,
+      unavailableReason: referenceSet.aerialViewReferenceUrl
+        ? null
+        : 'Unavailable. Google Aerial View did not return an active image/video for this address or region.',
+    },
+  ]
+
+  for (let index = 0; index < 5; index += 1) {
+    const url = referenceSet.streetViewReferenceUrls[index] || null
+    cards.push({
+      id: `street-view-${index + 1}`,
+      label: `Street View ${index + 1}`,
+      type: index === 0 ? 'Front-facing facade anchor' : 'Street-level angle variant',
+      url,
+      unavailableReason: url
+        ? null
+        : 'Unavailable. Street View did not return another usable outdoor angle facing the selected home.',
+    })
+  }
+
+  return cards
 }
 
 export async function promoteProspectToLeadAction(id: string) {

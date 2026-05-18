@@ -29,6 +29,15 @@ type VisualReferencePreview = {
   mapTilesImageUrl: string | null
   aerialViewReferenceUrl: string | null
   streetViewReferenceUrls: string[]
+  referenceCards: VisualReferenceCard[]
+}
+
+type VisualReferenceCard = {
+  id: string
+  label: string
+  type: string
+  url: string | null
+  unavailableReason: string | null
 }
 
 const stageLabels: Record<ProspectStage, string> = {
@@ -96,6 +105,42 @@ function formatCoordinate(value: number | null | undefined) {
 function parseCoordinate(value: string) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+function fallbackReferenceCards(references: VisualReferencePreview): VisualReferenceCard[] {
+  return [
+    {
+      id: 'map-tiles',
+      label: 'Map / satellite roof frame',
+      type: 'Top-down roof geometry',
+      url: references.mapTilesImageUrl,
+      unavailableReason: references.mapTilesImageUrl
+        ? null
+        : 'Unavailable until the visual target preview is generated and saved.',
+    },
+    {
+      id: 'aerial-view',
+      label: 'Google Aerial View',
+      type: 'Optional 3D aerial identity reference',
+      url: references.aerialViewReferenceUrl,
+      unavailableReason: references.aerialViewReferenceUrl
+        ? null
+        : 'Unavailable. Google Aerial View did not return an active image/video for this address or region.',
+    },
+    ...Array.from({ length: 5 }, (_, index) => {
+      const url = references.streetViewReferenceUrls[index] || null
+
+      return {
+        id: `street-view-${index + 1}`,
+        label: `Street View ${index + 1}`,
+        type: index === 0 ? 'Front-facing facade anchor' : 'Street-level angle variant',
+        url,
+        unavailableReason: url
+          ? null
+          : 'Unavailable. Street View did not return another usable outdoor angle facing the selected home.',
+      }
+    }),
+  ]
 }
 
 export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTableProps) {
@@ -293,6 +338,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
         mapTilesImageUrl: result.mapTilesImageUrl || null,
         aerialViewReferenceUrl: result.aerialViewReferenceUrl || null,
         streetViewReferenceUrls: result.streetViewReferenceUrls || [],
+        referenceCards: result.referenceCards || [],
       })
     } else {
       setVisualReferences(null)
@@ -374,6 +420,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
           mapTilesImageUrl: result.visual_preview_url ?? prev?.mapTilesImageUrl ?? visualPreviewUrl,
           aerialViewReferenceUrl: prev?.aerialViewReferenceUrl ?? null,
           streetViewReferenceUrls: prev?.streetViewReferenceUrls ?? [],
+          referenceCards: prev?.referenceCards ?? [],
         }))
         void loadVisualReferences(visualProspect.id, latValue, lngValue)
         setMessage(`Visual target verified for ${visualProspect.business_name || visualProspect.address}.`)
@@ -885,20 +932,47 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                       Collecting Google Street View angles...
                     </div>
                   ) : visualReferences && (
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      {[visualReferences.mapTilesImageUrl, visualReferences.aerialViewReferenceUrl, ...visualReferences.streetViewReferenceUrls]
-                        .filter((url): url is string => Boolean(url))
-                        .slice(0, 6)
-                        .map((url, index) => (
-                          <div key={`${url}-${index}`} className="overflow-hidden rounded-lg border border-stone-800 bg-stone-950">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={url}
-                              alt={`Veo reference ${index + 1} for ${visualProspect.business_name || visualProspect.address}`}
-                              className="aspect-video w-full object-cover"
-                            />
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {(visualReferences.referenceCards.length
+                        ? visualReferences.referenceCards
+                        : fallbackReferenceCards(visualReferences)
+                      ).map((reference) => (
+                        <div
+                          key={reference.id}
+                          className={`overflow-hidden rounded-lg border bg-stone-950 ${
+                            reference.url ? 'border-stone-800' : 'border-amber-900/50'
+                          }`}
+                        >
+                          <div className="border-b border-stone-800 px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-xs font-semibold text-stone-200">{reference.label}</div>
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                                reference.url
+                                  ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                                  : 'border border-amber-500/30 bg-amber-500/10 text-amber-200'
+                              }`}>
+                                {reference.url ? 'Available' : 'Unavailable'}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-[11px] text-slate-500">{reference.type}</div>
                           </div>
-                        ))}
+
+                          {reference.url ? (
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={reference.url}
+                                alt={`${reference.label} for ${visualProspect.business_name || visualProspect.address}`}
+                                className="aspect-video w-full object-cover"
+                              />
+                            </>
+                          ) : (
+                            <div className="flex aspect-video items-center justify-center px-4 text-center text-xs leading-5 text-amber-200/90">
+                              {reference.unavailableReason || 'Photo unavailable.'}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
 
