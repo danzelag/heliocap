@@ -9,33 +9,13 @@ const VERTEX_MODEL_RESOURCE = 'publishers/google/models/veo-3.1-generate-001'
 const VEO_DURATION_SECONDS = 8
 
 export const DEFAULT_VEO_CINEMATIC_PROMPT =
-  `REFERENCE LOCK: The provided images show the exact target residential property. Treat them as factual constraints, not inspiration. Preserve the real home and site. Do not hallucinate. Do not create buildings that are not there.
+  `Cinematic aerial drone video of the exact residential property shown in the reference image. Preserve the building precisely: same roof shape, same roof planes, same footprint, same driveway, same yard, same surrounding street and trees. This is the real property — do not redesign it, do not substitute a generic home, do not add or remove structures.
 
-Use the provided reference images as strict visual anchors for the exact target home. The video must preserve the same house, roof shape, footprint, driveway, yard, street, lot layout, trees, and surrounding site context shown in the references. Do not invent, redesign, replace, simplify, expand, or substitute the home. Do not create a generic house. Do not use adjacent or nearby houses. The output must remain recognizable as the exact same property from the references in every frame.
+Solar panels: cover every available roof plane completely with tightly packed rows of matte-black solar panels. Panels run edge-to-edge across all roof surfaces in straight, uniform rows aligned to each roof plane's pitch and axis. No gaps, no partial coverage, no scattered or random placement.
 
-Image-to-video from the provided reference image only.
+Cinematography: slow, smooth drone push-in from a tasteful front-oblique angle — low and wide, revealing the home, roof, driveway, and street. Golden-hour warm light, long soft shadows, gentle atmospheric haze, rich contrast, film-grade color grading. Motion is elegant and unhurried. 8 seconds.
 
-If the input image is a multi-reference board or collage, treat each panel as identity evidence for the same target home. Do not render a split-screen, collage, labels, or multiple houses. Produce one continuous cinematic shot of the target home, using the top-down roof image for roof geometry and the street-level images only to understand the real facade, driveway, and front-of-home context.
-
-Create a slow cinematic residential drone shot of the exact same home shown in the input image. Prefer a front-of-home presentation when the reference context supports it: a tasteful front oblique aerial angle that shows the roof, driveway, front yard, and street-facing side. If the input image is top-down only, keep the same roof/site identity and use only subtle motion rather than inventing a new front facade.
-
-Do not change the house, roof shape, footprint, driveway, surrounding roads, yard, lot boundaries, or site layout. Do not invent nearby buildings. Do not use adjacent or nearby houses. Do not replace the property with a generic home. The video must remain visually recognizable as the same input property in every frame.
-
-Use only subtle drone-style motion: slow push-in, slight parallax, gentle tilt. Maintain the same site geometry and roof proportions. Avoid orbiting to the backyard unless the reference image clearly shows that as the best angle.
-
-Add solar panels only during this video step. Solar panels may appear only as clean, broad, flat, pure black or very dark charcoal rectangular rooftop arrays on the existing roof surfaces, with subtle glossy reflections. No blue panels.
-
-Panels must be aligned in straight, clean rectangular rows parallel to the roof edges or dominant roof axis. No slanted, crooked, warped, scattered, diagonal, random, or speckled panel placement.
-
-Do not place panels on driveway, road, grass, trees, facades, walls, roof edges, detached structures unless clearly part of the target property, or neighboring homes.
-
-Do not add EV chargers, heat pumps, cars, people, text, labels, UI, logos, map artifacts, neon, cartoon, or HUD graphics.
-
-Priority order:
-1. Preserve the exact input home and site.
-2. Keep geometry stable.
-3. Add premium cinematic lighting.
-4. Add clean rooftop solar arrays.`
+Visual quality: photorealistic, ultra-sharp, 4K cinematic. No grain, no compression artifacts, no map overlays, no watermarks, no text, no UI elements, no logos, no people, no vehicles.`
 
 export function buildDefaultVeoCinematicPrompt(
   address?: string | null,
@@ -294,18 +274,19 @@ async function toVeoCompatibleImage({
   buffer: Buffer
   mimeType?: string | null
 }): Promise<VeoImageAsset> {
-  const normalized = normalizeVeoImageMimeType(mimeType)
-  if (normalized === 'image/jpeg' || normalized === 'image/png') {
-    return { buffer, mimeType: normalized }
-  }
+  // Always re-encode through sharp so we control resolution and quality.
+  // Use 1920×1080 + lanczos3 to prevent the grain that comes from
+  // downscaling a WebP seed to 1280×720 with default resampling.
+  const pngBuffer = await sharp(buffer)
+    .resize(1920, 1080, {
+      fit: 'cover',
+      position: 'center',
+      kernel: sharp.kernel.lanczos3,
+    })
+    .png({ compressionLevel: 6, adaptiveFiltering: false })
+    .toBuffer()
 
-  return {
-    buffer: await sharp(buffer)
-      .resize(1280, 720, { fit: 'cover', position: 'center' })
-      .png()
-      .toBuffer(),
-    mimeType: 'image/png',
-  }
+  return { buffer: pngBuffer, mimeType: 'image/png' }
 }
 
 function extractVideoRefs(raw: VertexVeoOperation): { videoUrl: string | null; gcsUri: string | null } {

@@ -18,15 +18,15 @@ Do not redesign, replace, expand, simplify, or invent the building. Do not add n
 
 Do not add solar panels. Do not add solar arrays, solar modules, rooftop rectangles, panel guides, blue panels, black panels, or any proposed equipment. The image-generation step is cleanup only.
 
-Remove map artifacts, labels, UI controls, watermarks, cars, people, logos, icons, pins, borders, and compression artifacts.
+Remove ALL overlays completely: Google Maps watermarks, Google logo, copyright notices, map UI controls, attribution text, compass rose, scale bar, labels, pins, borders, icons, cars, people, logos, and any other non-building artifacts. The output image must contain zero text, zero UI elements, and zero watermarks.
 
-Improve clarity only: sharpen roof edges, clean muddy texture, improve contrast, clarify shadows, and reduce map compression while preserving the same camera angle and site geometry.
+Improve clarity aggressively: sharpen roof edges, clean muddy texture, improve contrast, clarify shadows, fix JPEG/satellite compression artifacts, and boost overall image sharpness while preserving the exact camera angle and site geometry.
 
 If a second image is provided, do not copy any solar panels from it. Use it only to understand the same target property boundaries if helpful, while keeping the output free of solar panels.
 
-The output must look like a cleaned high-quality satellite/aerial proposal image of the exact same property, not a new architectural render.
+The output must look like a pristine, ultra-high-quality aerial proposal image of the exact same property — photorealistic, sharp, watermark-free, suitable as a cinematic video seed frame.
 
-Return only a clean 16:9 aerial image of the same commercial property for Veo video generation.`
+Return only a clean 16:9 aerial image of the same property for Veo video generation.`
 
 export type PremiumSolarRenderSource = 'ai_generated' | 'executive_render' | 'fallback_roof_image'
 
@@ -76,7 +76,7 @@ export async function generatePremiumSolarRender({
     const previewBuffer = await sharp(aiRender.buffer)
       .resize(PREVIEW_WIDTH, PREVIEW_HEIGHT, { fit: 'cover', position: 'center' })
       .sharpen()
-      .webp({ quality: 88, effort: 4 })
+      .webp({ quality: 95, effort: 6 })
       .toBuffer()
 
     return {

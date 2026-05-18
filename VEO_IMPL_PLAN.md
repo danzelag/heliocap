@@ -137,13 +137,22 @@ pollVeoOperation(operationName: string): Promise<{ done: boolean; videoBuffer?: 
 
 ### 1.2 — The one universal Veo prompt
 
-Single constant in `src/lib/veo-render.ts`:
+Single constant `DEFAULT_VEO_CINEMATIC_PROMPT` in `src/lib/vertex-veo.ts`.
 
+**Current prompt (rewritten 2026-05-18):**
 ```
-Cinematic aerial shot of a single commercial building. Smooth, slow drone-style flyover, gentle parallax, 5 seconds. Premium architectural visualization aesthetic — clean materials, soft natural daylight, subtle long shadows, gentle atmospheric depth. During the shot, dark commercial solar panels appear naturally across the roof in a clean grid layout. Preserve the building's footprint and roof shape from the reference image. No text, no UI, no labels, no map artifacts, no Google Maps style, no people, no vehicles, no logos, no neon, no cartoon. Style: high-end infrastructure visualization, premium energy brand, calm and confident.
+Cinematic aerial drone video of the exact residential property shown in the reference image. Preserve the building precisely: same roof shape, same roof planes, same footprint, same driveway, same yard, same surrounding street and trees. This is the real property — do not redesign it, do not substitute a generic home, do not add or remove structures.
+
+Solar panels: cover every available roof plane completely with tightly packed rows of matte-black solar panels. Panels run edge-to-edge across all roof surfaces in straight, uniform rows aligned to each roof plane's pitch and axis. No gaps, no partial coverage, no scattered or random placement.
+
+Cinematography: slow, smooth drone push-in from a tasteful front-oblique angle — low and wide, revealing the home, roof, driveway, and street. Golden-hour warm light, long soft shadows, gentle atmospheric haze, rich contrast, film-grade color grading. Motion is elegant and unhurried. 8 seconds.
+
+Visual quality: photorealistic, ultra-sharp, 4K cinematic. No grain, no compression artifacts, no map overlays, no watermarks, no text, no UI elements, no logos, no people, no vehicles.
 ```
 
-This is a TypeScript `const` named `VEO_CINEMATIC_PROMPT`. Do not parameterize it — one prompt for all proposals.
+**Why it changed:** The previous prompt was 95% "do not" instructions. Veo does not respond well to negative constraints — they exhaust the prompt budget without improving adherence. The new prompt is positive, cinematic, and front-loads what matters most.
+
+Do not parameterize — one prompt for all proposals.
 
 ### 1.3 — New API route: `POST /api/generate-proposal-video`
 
