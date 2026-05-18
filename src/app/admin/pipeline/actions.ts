@@ -11,7 +11,14 @@ import {
   type ProspectStage,
 } from '@/lib/prospect'
 import { recordProposalJobEvent } from '@/lib/proposal-job-events'
-import { collectVisualReferences, fetchSolarInsights, fetchStaticSatelliteImage, uploadLeadAsset } from '@/lib/openclaw-google'
+import {
+  collectVisualReferences,
+  fetchSolarInsights,
+  fetchStaticSatelliteImage,
+  fetchStreetViewImage,
+  listManualStreetViewReferenceUrls,
+  uploadLeadAsset,
+} from '@/lib/openclaw-google'
 import sharp from 'sharp'
 
 const DEFAULT_SITE_URL = 'https://heliocap.vercel.app'
@@ -200,14 +207,25 @@ export async function getProspectVisualReferencesAction(id: string, lat?: number
       address: prospect.address,
       mapTilesImageUrl: prospect.visual_preview_url || null,
     })
+    const manualStreetViewReferenceUrls = await listManualStreetViewReferenceUrls({
+      supabase,
+      prospectId: id,
+    })
+    const mergedReferenceSet = {
+      ...referenceSet,
+      streetViewReferenceUrls: [
+        ...manualStreetViewReferenceUrls,
+        ...referenceSet.streetViewReferenceUrls,
+      ].filter((url, index, urls) => urls.indexOf(url) === index),
+    }
 
     return {
       success: true,
-      reference_set: referenceSet,
-      referenceCards: buildVisualReferenceCards(referenceSet),
-      mapTilesImageUrl: referenceSet.mapTilesImageUrl,
-      aerialViewReferenceUrl: referenceSet.aerialViewReferenceUrl,
-      streetViewReferenceUrls: referenceSet.streetViewReferenceUrls,
+      reference_set: mergedReferenceSet,
+      referenceCards: buildVisualReferenceCards(mergedReferenceSet, manualStreetViewReferenceUrls.length),
+      mapTilesImageUrl: mergedReferenceSet.mapTilesImageUrl,
+      aerialViewReferenceUrl: mergedReferenceSet.aerialViewReferenceUrl,
+      streetViewReferenceUrls: mergedReferenceSet.streetViewReferenceUrls,
     }
   } catch (referenceError) {
     const message = referenceError instanceof Error ? referenceError.message : 'Failed to collect visual references.'
@@ -215,7 +233,59 @@ export async function getProspectVisualReferencesAction(id: string, lat?: number
   }
 }
 
-function buildVisualReferenceCards(referenceSet: Awaited<ReturnType<typeof collectVisualReferences>>) {
+export async function saveProspectStreetViewCaptureAction({
+  id,
+  pano,
+  lat,
+  lng,
+  heading,
+  pitch,
+  fov,
+}: {
+  id: string
+  pano?: string | null
+  lat?: number | null
+  lng?: number | null
+  heading: number
+  pitch: number
+  fov: number
+}) {
+  if (!id) return { success: false, error: 'Missing prospect ID' }
+  if (!Number.isFinite(heading)) return { success: false, error: 'Street View heading is required.' }
+
+  const supabase = await createAdminClient()
+  try {
+    const image = await fetchStreetViewImage({ pano, lat, lng, heading, pitch, fov })
+    const publicUrl = await uploadLeadAsset({
+      supabase,
+      bucket: 'prospects',
+      slug: id,
+      fileName: `references/manual-street-view-${Date.now()}.jpg`,
+      body: image.buffer,
+      contentType: image.contentType,
+    })
+
+    return {
+      success: true,
+      url: publicUrl,
+      referenceCard: {
+        id: `manual-street-view-${Date.now()}`,
+        label: 'Manual Street View capture',
+        type: 'Manually aimed facade reference',
+        url: publicUrl,
+        unavailableReason: null,
+      },
+    }
+  } catch (captureError) {
+    const message = captureError instanceof Error ? captureError.message : 'Failed to save Street View capture.'
+    return { success: false, error: message }
+  }
+}
+
+function buildVisualReferenceCards(
+  referenceSet: Awaited<ReturnType<typeof collectVisualReferences>>,
+  manualStreetViewCount = 0,
+) {
   const cards = [
     {
       id: 'map-tiles',
@@ -239,10 +309,15 @@ function buildVisualReferenceCards(referenceSet: Awaited<ReturnType<typeof colle
 
   for (let index = 0; index < 5; index += 1) {
     const url = referenceSet.streetViewReferenceUrls[index] || null
+    const isManual = index < manualStreetViewCount
     cards.push({
       id: `street-view-${index + 1}`,
-      label: `Street View ${index + 1}`,
-      type: index === 0 ? 'Front-facing facade anchor' : 'Street-level angle variant',
+      label: isManual ? `Manual Street View ${index + 1}` : `Street View ${index + 1}`,
+      type: isManual
+        ? 'Manually aimed facade reference'
+        : index === 0
+          ? 'Front-facing facade anchor'
+          : 'Street-level angle variant',
       url,
       unavailableReason: url
         ? null

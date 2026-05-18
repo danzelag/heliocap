@@ -157,6 +157,77 @@ export async function uploadLeadAsset({
   return data.publicUrl
 }
 
+export async function listManualStreetViewReferenceUrls({
+  supabase,
+  prospectId,
+}: {
+  supabase: SupabaseClient
+  prospectId: string
+}) {
+  const bucket = await resolveStorageBucket(supabase, 'prospects')
+  const folder = `${prospectId}/references`
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .list(folder, { limit: 100, sortBy: { column: 'name', order: 'asc' } })
+
+  if (error) {
+    console.error(`[openclaw-google] Manual Street View reference listing failed: ${error.message}`)
+    return []
+  }
+
+  return (data || [])
+    .filter((file) => /^manual-street-view-.+\.(jpe?g|png|webp)$/i.test(file.name))
+    .map((file) => {
+      const { data: publicUrl } = supabase.storage.from(bucket).getPublicUrl(`${folder}/${file.name}`)
+      return publicUrl.publicUrl
+    })
+}
+
+export async function fetchStreetViewImage({
+  pano,
+  lat,
+  lng,
+  heading,
+  pitch = 0,
+  fov = 70,
+}: {
+  pano?: string | null
+  lat?: number | null
+  lng?: number | null
+  heading: number
+  pitch?: number
+  fov?: number
+}) {
+  const apiKey = getGoogleMapsApiKey()
+  if (!apiKey) throw new Error('GOOGLE_MAPS_API_KEY is not configured')
+  if (!pano && (!Number.isFinite(lat) || !Number.isFinite(lng))) {
+    throw new Error('Street View capture requires a panorama ID or coordinates.')
+  }
+
+  const imageUrl = new URL('https://maps.googleapis.com/maps/api/streetview')
+  imageUrl.searchParams.set('size', '640x360')
+  if (pano) {
+    imageUrl.searchParams.set('pano', pano)
+  } else {
+    imageUrl.searchParams.set('location', `${lat},${lng}`)
+  }
+  imageUrl.searchParams.set('heading', String(normalizeHeadingDegrees(heading)))
+  imageUrl.searchParams.set('fov', String(clampNumber(fov, 20, 120)))
+  imageUrl.searchParams.set('pitch', String(clampNumber(pitch, -45, 45)))
+  imageUrl.searchParams.set('source', 'outdoor')
+  imageUrl.searchParams.set('key', apiKey)
+
+  const response = await fetch(imageUrl, { cache: 'no-store' })
+  if (!response.ok) {
+    throw new Error(`Street View image returned ${response.status}: ${await response.text()}`)
+  }
+
+  return {
+    buffer: Buffer.from(await response.arrayBuffer()),
+    contentType: response.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg',
+  }
+}
+
 export async function collectVisualReferences({
   supabase,
   bucket = 'leads',
@@ -449,32 +520,21 @@ async function fetchStreetViewReferenceImages({
     })
 
     for (const heading of headings) {
-      const imageUrl = new URL('https://maps.googleapis.com/maps/api/streetview')
-      imageUrl.searchParams.set('size', '640x360')
-      if (metadata.pano_id) {
-        imageUrl.searchParams.set('pano', metadata.pano_id)
-      } else {
-        imageUrl.searchParams.set('location', location)
-      }
-      imageUrl.searchParams.set('heading', String(heading))
-      imageUrl.searchParams.set('fov', '70')
-      imageUrl.searchParams.set('pitch', '4')
-      imageUrl.searchParams.set('source', 'outdoor')
-      imageUrl.searchParams.set('key', apiKey)
-
-      const imageResponse = await fetch(imageUrl, { cache: 'no-store' })
-      if (!imageResponse.ok) {
-        throw new Error(`image returned ${imageResponse.status}: ${await imageResponse.text()}`)
-      }
-
-      const buffer = Buffer.from(await imageResponse.arrayBuffer())
+      const image = await fetchStreetViewImage({
+        pano: metadata.pano_id,
+        lat,
+        lng,
+        heading,
+        pitch: 4,
+        fov: 70,
+      })
       const publicUrl = await uploadLeadAsset({
         supabase,
         bucket,
         slug,
         fileName: `references/street-view-facing-${Math.round(heading)}.jpg`,
-        body: buffer,
-        contentType: imageResponse.headers.get('content-type')?.split(';')[0]?.trim() || 'image/jpeg',
+        body: image.buffer,
+        contentType: image.contentType,
       })
       uploadedUrls.push(publicUrl)
     }
@@ -504,6 +564,11 @@ function calculateHeadingDegrees(fromLat: number, fromLng: number, toLat: number
 
 function normalizeHeadingDegrees(heading: number) {
   return ((heading % 360) + 360) % 360
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  if (!Number.isFinite(value)) return min
+  return Math.min(max, Math.max(min, value))
 }
 
 async function fetchMapTilesSatelliteImage({

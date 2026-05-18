@@ -13,6 +13,7 @@ import {
   getProspectVisualPreviewAction,
   getProspectVisualReferencesAction,
   promoteProspectToLeadAction,
+  saveProspectStreetViewCaptureAction,
   saveProspectVisualTargetAction,
   triggerProspectEnrichmentAction,
   updateProspectStageAction,
@@ -20,6 +21,7 @@ import {
 import { readClientCache, writeClientCache } from '@/lib/client-cache'
 import { createClient } from '@/lib/supabase'
 import { VisualTargetMap } from '@/components/admin/VisualTargetMap'
+import { StreetViewCapture } from '@/components/admin/StreetViewCapture'
 
 type ProspectPipelineTableProps = {
   initialProspects: Prospect[]
@@ -158,6 +160,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
   const [visualPreviewSource, setVisualPreviewSource] = useState<string | null>(null)
   const [visualReferences, setVisualReferences] = useState<VisualReferencePreview | null>(null)
   const [visualReferencesLoading, setVisualReferencesLoading] = useState(false)
+  const [streetViewCaptureLoading, setStreetViewCaptureLoading] = useState(false)
   const [visualError, setVisualError] = useState<string | null>(null)
   const [visualLoading, setVisualLoading] = useState(false)
   const [isPending, startTransition] = useTransition()
@@ -427,6 +430,41 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
       }
       setVisualLoading(false)
     })
+  }
+
+  const saveStreetViewCapture = async (capture: {
+    pano: string
+    lat: number | null
+    lng: number | null
+    heading: number
+    pitch: number
+    fov: number
+  }) => {
+    if (!visualProspect) return
+
+    setStreetViewCaptureLoading(true)
+    setVisualError(null)
+    const result = await saveProspectStreetViewCaptureAction({
+      id: visualProspect.id,
+      pano: capture.pano,
+      lat: capture.lat,
+      lng: capture.lng,
+      heading: capture.heading,
+      pitch: capture.pitch,
+      fov: capture.fov,
+    })
+
+    if (!result.success) {
+      setVisualError(result.error || 'Failed to save Street View capture.')
+    } else {
+      setMessage('Manual Street View reference saved for Veo.')
+      await loadVisualReferences(
+        visualProspect.id,
+        parseCoordinate(visualLat),
+        parseCoordinate(visualLng),
+      )
+    }
+    setStreetViewCaptureLoading(false)
   }
 
   const handleToggleSelection = (id: string) => {
@@ -931,7 +969,28 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                       <Loader2 className="mr-2 h-4 w-4 animate-spin text-amber-300" />
                       Collecting Google Street View angles...
                     </div>
-                  ) : visualReferences && (
+                  ) : (
+                    parseCoordinate(visualLat) != null && parseCoordinate(visualLng) != null && (
+                      <div className="mt-3">
+                        <StreetViewCapture
+                          lat={parseCoordinate(visualLat)!}
+                          lng={parseCoordinate(visualLng)!}
+                          disabled={streetViewCaptureLoading}
+                          onCapture={(capture) => {
+                            void saveStreetViewCapture(capture)
+                          }}
+                        />
+                        {streetViewCaptureLoading && (
+                          <div className="mt-2 rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
+                            <Loader2 className="mr-2 inline h-3.5 w-3.5 animate-spin" />
+                            Saving manual Street View reference...
+                          </div>
+                        )}
+                      </div>
+                    )
+                  )}
+
+                  {!visualReferencesLoading && visualReferences && (
                     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {(visualReferences.referenceCards.length
                         ? visualReferences.referenceCards

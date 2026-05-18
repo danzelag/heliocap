@@ -9,6 +9,7 @@ import {
   collectVisualReferences,
   fetchSolarInsights,
   fetchStaticSatelliteImage,
+  listManualStreetViewReferenceUrls,
   selectStaticMapCenter,
   selectStaticMapZoom,
   uploadLeadAsset,
@@ -113,6 +114,21 @@ export async function POST(request: NextRequest) {
       address: targetAddress,
       mapTilesImageUrl: roofImageUrl,
     })
+    if (bucket === 'prospects' && prospectIdentifier) {
+      const manualStreetViewReferenceUrls = await listManualStreetViewReferenceUrls({
+        supabase,
+        prospectId: prospectIdentifier,
+      })
+      if (manualStreetViewReferenceUrls.length) {
+        visualReferences.streetViewReferenceUrls = [
+          ...manualStreetViewReferenceUrls,
+          ...visualReferences.streetViewReferenceUrls,
+        ].filter((url, index, urls) => urls.indexOf(url) === index)
+        console.log('[generate-roof-image] Manual Street View references attached', {
+          count: manualStreetViewReferenceUrls.length,
+        })
+      }
+    }
 
     const satelliteBase64 = `data:image/png;base64,${Buffer.from(imageBuffer).toString('base64')}`
     const overlaySvg = buildSolarOverlaySvg({
