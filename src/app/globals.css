@@ -742,31 +742,15 @@
   min-height: 100vh;
   background: #0f1012 !important;
   color: #f2f4f5 !important;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-  overflow-x: clip;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
 }
 
 .admin-shell :where(*, ::before, ::after) {
   border-color: #30343b;
 }
 
-.admin-shell,
-.admin-shell h1,
-.admin-shell h2,
-.admin-shell h3,
-.admin-shell h4,
-.admin-shell p,
-.admin-shell span,
-.admin-shell div,
-.admin-shell button,
-.admin-shell input,
-.admin-shell textarea,
-.admin-shell select,
-.admin-shell a,
-.admin-shell label,
-.admin-shell th,
-.admin-shell td {
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+.admin-shell :where(h1, h2, h3, h4, p, span, div, button, input, textarea, select, a, label, th, td) {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   letter-spacing: 0 !important;
 }
 
@@ -786,7 +770,6 @@
   border: 1px solid #30343b !important;
   border-radius: 8px !important;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24) !important;
-  min-width: 0;
 }
 
 .admin-shell .admin-panel-muted,
@@ -813,8 +796,6 @@
   color: #c9d0d6 !important;
   border-radius: 7px !important;
   box-shadow: none !important;
-  max-width: 100%;
-  min-width: 0;
 }
 
 .admin-shell .admin-nav-pill-active,
@@ -897,7 +878,6 @@
     #181a1f;
   padding: 18px;
   box-shadow: 0 16px 38px rgba(0, 0, 0, 0.22);
-  overflow: hidden;
 }
 
 .admin-workflow-strip {
@@ -914,7 +894,6 @@
   background: #202329;
   padding: 12px;
   color: #9aa3ad;
-  overflow: hidden;
 }
 
 .admin-workflow-step-active {
@@ -939,7 +918,6 @@
   border-radius: 8px;
   background: #15171b;
   padding: 12px;
-  min-width: 0;
 }
 
 .admin-ops-panel {
@@ -951,13 +929,11 @@
   border-radius: 8px;
   background: #15171b;
   padding: 14px;
-  min-width: 0;
-  overflow: hidden;
 }
 
 .admin-mini-workflow {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 6px;
   min-width: 0;
 }
@@ -971,7 +947,6 @@
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
-  white-space: nowrap;
 }
 
 .admin-mini-dot {
@@ -1012,27 +987,16 @@
   color: #d99a3d;
 }
 
+.admin-shell {
+  overflow-x: hidden;
+}
+
 .admin-shell :where(section, div, table) {
   min-width: 0;
 }
 
 .admin-shell .admin-panel {
   max-width: 100%;
-}
-
-.admin-shell .admin-data-table th,
-.admin-shell .admin-data-table td {
-  overflow: hidden;
-}
-
-.admin-shell .admin-data-table select,
-.admin-shell .admin-data-table button,
-.admin-shell .admin-data-table a {
-  max-width: 100%;
-}
-
-.admin-shell .admin-data-table .admin-status {
-  white-space: nowrap;
 }
 
 .admin-shell table {
@@ -1048,25 +1012,13 @@
   background: #1d2025 !important;
 }
 
-.admin-shell details {
-  max-width: 100%;
-}
-
-.admin-shell summary {
-  list-style-position: inside;
-}
-
-.admin-shell pre {
-  max-width: 100%;
-}
-
 @media (max-width: 980px) {
   .admin-workflow-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .admin-mini-workflow {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -1080,7 +1032,7 @@
 /* Google Places Autocomplete Dark Theme Override */
 .pac-container {
   background-color: #0b1016 !important;
-  border: 2px solid #d99028 !important;
+  border: 2px solid #d99028 !important; /* Bright Emerald Border */
   border-top: none !important;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8) !important;
   font-family: var(--font-sans) !important;
@@ -1118,4 +1070,741 @@
 
 .pac-logo:after {
   display: none !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMMAND CENTER — Premium Mission Control UI
+   All classes prefixed cc- to avoid collision with existing admin-* classes
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Nav ──────────────────────────────────────────────────────────────────── */
+.cc-nav {
+  background: #0c0e11 !important;
+  border-bottom: 1px solid #1e2329 !important;
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.cc-brand-mark {
+  display: grid;
+  place-items: center;
+  height: 36px;
+  width: 36px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2a2218 0%, #1a1610 100%);
+  border: 1px solid #3a2f1e;
+  color: #d99a3d;
+  flex-shrink: 0;
+}
+
+.cc-wordmark {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #eef3f8;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.cc-eyebrow {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #4a5560;
+  line-height: 1;
+}
+
+.cc-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid #252a30;
+  background: #181b1f;
+  color: #6b7885;
+  font-size: 0.72rem;
+  font-weight: 500;
+}
+
+.cc-nav-pill {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 0.85rem;
+  border-radius: 7px;
+  border: 1px solid #252a30 !important;
+  background: #181b1f !important;
+  color: #9aa3ad !important;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: border-color 150ms ease, color 150ms ease, background 150ms ease;
+}
+
+.cc-nav-pill:hover {
+  border-color: #3a2f1e !important;
+  color: #d99a3d !important;
+}
+
+.cc-nav-pill-active {
+  border-color: #3a2f1e !important;
+  background: #1f1a12 !important;
+  color: #d99a3d !important;
+}
+
+.cc-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 7px;
+  background: #d99a3d !important;
+  color: #1a0e00 !important;
+  font-weight: 700;
+  font-size: 0.82rem;
+  transition: filter 150ms ease, transform 150ms ease;
+}
+
+.cc-primary-btn:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+/* ── Status Strip ─────────────────────────────────────────────────────────── */
+.cc-status-strip {
+  border-bottom: 1px solid #1a1e23;
+  background: #0c0e11;
+}
+
+.cc-status-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  min-height: 56px;
+}
+
+.cc-status-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px 16px;
+  border-right: 1px solid #1a1e23;
+}
+
+.cc-status-cell:last-child {
+  border-right: none;
+}
+
+.cc-status-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #3d4550;
+}
+
+.cc-status-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #9aa3ad;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cc-status-value-live {
+  color: #d99a3d;
+}
+
+.cc-status-value-danger {
+  color: #ef7676;
+}
+
+.cc-status-sub {
+  font-size: 0.6rem;
+  color: #3d4550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Pulse dot */
+.cc-pulse-dot {
+  display: inline-block;
+  height: 6px;
+  width: 6px;
+  border-radius: 50%;
+  background: #d99a3d;
+  flex-shrink: 0;
+  animation: cc-pulse 2s ease-in-out infinite;
+}
+
+@keyframes cc-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(217, 154, 61, 0.4); }
+  50% { opacity: 0.85; transform: scale(1.15); box-shadow: 0 0 0 4px rgba(217, 154, 61, 0); }
+}
+
+/* ── Mission Control Grid ─────────────────────────────────────────────────── */
+.cc-mission-grid {
+  display: grid;
+  grid-template-columns: 1fr 160px 320px;
+  gap: 16px;
+  align-items: start;
+}
+
+/* ── Hero Card ────────────────────────────────────────────────────────────── */
+.cc-hero-card {
+  border: 1px solid #252a30;
+  border-radius: 12px;
+  background: #131619;
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.025) 0%, transparent 40%);
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+}
+
+.cc-hero-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.cc-section-eyebrow {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #4a5560;
+}
+
+.cc-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 100px;
+  border: 1px solid #3a2f1e;
+  background: #1a1610;
+  color: #d99a3d;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cc-hero-identity {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.cc-hero-name {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #eef3f8;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cc-hero-address {
+  font-size: 0.78rem;
+  color: #4a5560;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cc-hero-empty {
+  padding: 48px 0;
+  text-align: center;
+}
+
+/* ── Progress ─────────────────────────────────────────────────────────────── */
+.cc-progress-track {
+  height: 4px;
+  border-radius: 100px;
+  background: #1e2329;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.cc-progress-fill {
+  height: 100%;
+  border-radius: 100px;
+  background: linear-gradient(90deg, #b07828 0%, #d99a3d 100%);
+  transition: width 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.cc-progress-fill-active {
+  background: linear-gradient(90deg, #c4882a 0%, #f5b942 100%);
+  box-shadow: 0 0 12px rgba(217, 154, 61, 0.4);
+}
+
+.cc-progress-pct {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: #4a5560;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  text-align: right;
+  margin-bottom: 20px;
+}
+
+/* ── Workflow Pipeline ────────────────────────────────────────────────────── */
+.cc-pipeline {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  margin-bottom: 20px;
+}
+
+.cc-pipeline-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.cc-pipeline-node {
+  height: 22px;
+  width: 22px;
+  border-radius: 50%;
+  border: 2px solid #252a30;
+  background: #131619;
+  display: grid;
+  place-items: center;
+  color: #131619;
+  flex-shrink: 0;
+  transition: all 200ms ease;
+  z-index: 1;
+  position: relative;
+}
+
+.cc-node-done {
+  border-color: #d99a3d;
+  background: #d99a3d;
+  color: #1a0e00;
+}
+
+.cc-node-current {
+  border-color: #d99a3d;
+  background: #1a1610;
+  box-shadow: 0 0 0 4px rgba(217, 154, 61, 0.15), 0 0 16px rgba(217, 154, 61, 0.25);
+  animation: cc-node-pulse 2s ease-in-out infinite;
+}
+
+.cc-node-failed {
+  border-color: #ef7676;
+  background: #1a1010;
+  box-shadow: 0 0 0 4px rgba(239, 118, 118, 0.1);
+}
+
+@keyframes cc-node-pulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(217, 154, 61, 0.15), 0 0 16px rgba(217, 154, 61, 0.2); }
+  50% { box-shadow: 0 0 0 6px rgba(217, 154, 61, 0.08), 0 0 24px rgba(217, 154, 61, 0.35); }
+}
+
+.cc-pipeline-connector {
+  position: absolute;
+  top: 11px;
+  left: calc(50% + 11px);
+  right: calc(-50% + 11px);
+  height: 2px;
+  background: #252a30;
+  transition: background 300ms ease;
+}
+
+.cc-connector-done {
+  background: #d99a3d;
+}
+
+.cc-pipeline-label {
+  margin-top: 8px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #3a4048;
+  text-align: center;
+  transition: color 200ms ease;
+}
+
+.cc-label-active {
+  color: #8a7a5a;
+}
+
+/* ── Status Pills ─────────────────────────────────────────────────────────── */
+.cc-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 100px;
+  border: 1px solid transparent;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.cc-pill-success {
+  background: #1a2416;
+  border-color: #3a5a32;
+  color: #7ec87a;
+}
+
+.cc-pill-running {
+  background: #1a1610;
+  border-color: #3a2f1e;
+  color: #d99a3d;
+}
+
+.cc-pill-danger {
+  background: #1a1010;
+  border-color: #4a2020;
+  color: #ef7676;
+}
+
+.cc-pill-warning {
+  background: #1a1600;
+  border-color: #3a3010;
+  color: #f0c27a;
+}
+
+.cc-pill-idle {
+  background: #1a1e23;
+  border-color: #252a30;
+  color: #4a5560;
+}
+
+/* ── Logs Accordion (hero) ────────────────────────────────────────────────── */
+.cc-logs-accordion {
+  margin-top: 20px;
+  border-radius: 8px;
+  border: 1px solid #1e2329;
+  background: #0e1014;
+  overflow: hidden;
+}
+
+.cc-logs-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #4a5560;
+  user-select: none;
+  list-style: none;
+  transition: color 150ms ease;
+}
+
+.cc-logs-summary:hover {
+  color: #6b7885;
+}
+
+.cc-logs-summary::-webkit-details-marker {
+  display: none;
+}
+
+.cc-logs-count {
+  margin-left: auto;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: #3a4048;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.cc-logs-body {
+  border-top: 1px solid #1a1e23;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* Diagnostics grid */
+.cc-diag-grid {
+  display: grid;
+  gap: 6px;
+}
+
+.cc-diag-row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 8px;
+  font-size: 0.7rem;
+}
+
+.cc-diag-label {
+  color: #3a4048;
+  font-weight: 600;
+}
+
+.cc-diag-value {
+  color: #6b7885;
+  word-break: break-all;
+}
+
+/* Event list */
+.cc-event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.cc-event-row {
+  display: grid;
+  grid-template-columns: 5.5rem minmax(0, 1fr);
+  gap: 8px;
+  font-size: 0.68rem;
+}
+
+.cc-event-time {
+  color: #2e363d;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.cc-event-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Action Rail ──────────────────────────────────────────────────────────── */
+.cc-action-rail {
+  border: 1px solid #252a30;
+  border-radius: 12px;
+  background: #131619;
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 40%);
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cc-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition: all 150ms ease;
+  text-align: left;
+  width: 100%;
+  border: 1px solid transparent;
+}
+
+.cc-action-btn-primary {
+  background: linear-gradient(135deg, #2a2010 0%, #1f1a0e 100%);
+  border-color: #3a2f1e;
+  color: #d99a3d;
+}
+
+.cc-action-btn-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #342814 0%, #281f10 100%);
+  border-color: #5a4a2e;
+  color: #f5b942;
+}
+
+.cc-action-btn-ghost {
+  background: transparent;
+  border-color: #1e2329;
+  color: #6b7885;
+}
+
+.cc-action-btn-ghost:hover:not(:disabled) {
+  background: #181b1f;
+  border-color: #252a30;
+  color: #9aa3ad;
+}
+
+.cc-mini-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+
+.cc-mini-stat-label {
+  font-size: 0.68rem;
+  color: #3a4048;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.cc-mini-stat-value {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #6b7885;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+/* ── Queue Panel ──────────────────────────────────────────────────────────── */
+.cc-queue-panel {
+  border: 1px solid #252a30;
+  border-radius: 12px;
+  background: #131619;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.cc-queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid #1a1e23;
+}
+
+.cc-queue-count {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #3a4048;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+.cc-queue-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 560px;
+  divide-y: 1px solid #1a1e23;
+}
+
+.cc-queue-row {
+  padding: 14px 18px;
+  border-bottom: 1px solid #1a1e23;
+  transition: background 150ms ease;
+}
+
+.cc-queue-row:last-child {
+  border-bottom: none;
+}
+
+.cc-queue-row:hover {
+  background: #161a1e;
+}
+
+.cc-queue-row-focus {
+  background: #16140e;
+  border-left: 2px solid #d99a3d;
+}
+
+.cc-queue-row-batch {
+  background: #0e1014;
+}
+
+.cc-queue-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #c9d0d6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cc-queue-address {
+  font-size: 0.68rem;
+  color: #3a4048;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Per-row technical logs (collapsed) ───────────────────────────────────── */
+.cc-row-logs {
+  margin-top: 8px;
+}
+
+.cc-row-logs-summary {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #3a4048;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: color 150ms ease;
+}
+
+.cc-row-logs-summary:hover {
+  color: #4a5560;
+}
+
+.cc-row-logs-summary::-webkit-details-marker {
+  display: none;
+}
+
+/* ── Ghost button ─────────────────────────────────────────────────────────── */
+.cc-ghost-btn {
+  color: #4a5560;
+  font-size: 0.72rem;
+  font-weight: 600;
+  transition: color 150ms ease;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.cc-ghost-btn:hover:not(:disabled) {
+  color: #ef7676;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .cc-mission-grid {
+    grid-template-columns: 1fr 140px;
+    grid-template-rows: auto auto;
+  }
+  .cc-queue-panel {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 900px) {
+  .cc-status-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .cc-mission-grid {
+    grid-template-columns: 1fr;
+  }
+  .cc-action-rail {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .cc-action-rail > .cc-section-eyebrow,
+  .cc-action-rail > div,
+  .cc-action-rail > .my-5 {
+    display: none;
+  }
+  .cc-action-btn {
+    width: auto;
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .cc-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cc-hero-name {
+    font-size: 1.1rem;
+  }
 }

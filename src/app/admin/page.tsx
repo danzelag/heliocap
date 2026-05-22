@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Database, Plus, RadioTower, ShieldCheck, Sun, Target, Zap } from 'lucide-react'
+import { Plus, RadioTower, Sun } from 'lucide-react'
 import Link from 'next/link'
 import { AdminRoutePrefetcher } from '@/components/admin/AdminRoutePrefetcher'
 import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle'
@@ -51,115 +51,127 @@ export default async function AdminDashboard() {
   const prospectRows = (prospects as { pipeline_stage: string }[]) || []
   const jobRows = (jobs as ProposalJob[]) || []
   const jobEventRows = (jobEvents as ProposalJobEvent[]) || []
+
   const publishedCount = leadRows.filter((lead) => lead.status === 'published').length
   const flaggedSavings = leadRows.reduce((total, lead) => total + (lead.estimated_savings || 0), 0)
-  const solarFetchedCount = prospectRows.filter((prospect) => prospect.pipeline_stage === 'solar_fetched').length
-  const enrichedCount = prospectRows.filter((prospect) => prospect.pipeline_stage === 'enriched').length
-  const notQualifiedCount = prospectRows.filter((prospect) => prospect.pipeline_stage === 'dead').length
+  const activeJobs = jobRows.filter((j) => j.status === 'running' || j.status === 'queued').length
+  const failedJobs = jobRows.filter((j) => j.status === 'failed').length
+  const lastPublished = leadRows.find((l) => l.status === 'published')
 
-  const telemetry = [
-    { label: 'Targets', value: (leadRows.length + prospectRows.length).toLocaleString(), icon: Target, tone: 'text-slate-200' },
-    { label: 'Live', value: publishedCount.toLocaleString(), icon: RadioTower, tone: 'text-emerald-300' },
-    { label: 'Pipeline', value: prospectRows.length.toLocaleString(), icon: Database, tone: 'text-amber-300' },
-    { label: 'Savings', value: formatCompactUSD(flaggedSavings), icon: Zap, tone: 'text-slate-200' },
-  ]
-
-  const workflow = [
-    { label: 'Residential intake', value: `${prospectRows.length} prospects`, active: prospectRows.length > 0 },
-    { label: 'Roof data', value: `${solarFetchedCount} ready`, active: solarFetchedCount > 0 },
-    { label: 'Prepared', value: `${enrichedCount} enriched`, active: enrichedCount > 0 },
-    { label: 'Filtered', value: `${notQualifiedCount} archived`, active: notQualifiedCount > 0 },
-    { label: 'Live proposals', value: `${publishedCount} live`, active: publishedCount > 0 },
+  const statusBar = [
+    {
+      id: 'system',
+      label: 'System',
+      value: 'Live',
+      live: true,
+      sub: null,
+    },
+    {
+      id: 'active',
+      label: 'Active Jobs',
+      value: activeJobs.toString(),
+      live: activeJobs > 0,
+      sub: activeJobs > 0 ? 'Processing' : 'Idle',
+    },
+    {
+      id: 'proposals',
+      label: 'Proposals Ready',
+      value: publishedCount.toString(),
+      live: publishedCount > 0,
+      sub: `${formatCompactUSD(flaggedSavings)} savings flagged`,
+    },
+    {
+      id: 'failed',
+      label: 'Failed Jobs',
+      value: failedJobs.toString(),
+      live: false,
+      sub: failedJobs > 0 ? 'Review needed' : 'All clear',
+    },
+    {
+      id: 'prospects',
+      label: 'Prospects',
+      value: prospectRows.length.toString(),
+      live: prospectRows.length > 0,
+      sub: 'In pipeline',
+    },
+    {
+      id: 'last',
+      label: 'Last Published',
+      value: lastPublished?.business_name ?? '—',
+      live: !!lastPublished,
+      sub: lastPublished?.address ?? null,
+    },
   ]
 
   return (
     <div className="admin-shell">
       <AdminRoutePrefetcher />
 
-      <nav className="admin-nav sticky top-0 z-20 px-5 py-3 lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      {/* ── Nav ─────────────────────────────────────────────── */}
+      <nav className="cc-nav sticky top-0 z-20 px-5 lg:px-8">
+        <div className="mx-auto flex max-w-screen-2xl items-center justify-between gap-4 py-3">
           <div className="flex items-center gap-4">
-            <div className="admin-brand-mark h-10 w-10">
-              <Sun className="h-5 w-5" />
+            <div className="cc-brand-mark">
+              <Sun className="h-4.5 w-4.5" />
             </div>
             <div>
-              <div className="admin-eyebrow">Helio Cap</div>
-              <div className="admin-title">Command Center</div>
+              <div className="cc-eyebrow">HelioCap</div>
+              <div className="cc-wordmark">Command Center</div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="admin-chip hidden px-3 py-2 md:block">
-              {user.email}
-            </div>
+          <div className="flex items-center gap-2.5">
+            <div className="cc-chip hidden md:flex">{user.email}</div>
             <AdminThemeToggle />
             <Link href="/admin" prefetch>
-              <Button variant="outline" className="admin-nav-pill admin-nav-pill-active">
-                Proposals
-              </Button>
+              <Button variant="outline" className="cc-nav-pill cc-nav-pill-active">Proposals</Button>
             </Link>
             <Link href="/admin/pipeline" prefetch>
-              <Button variant="outline" className="admin-nav-pill">
-                <RadioTower className="mr-2 h-4 w-4" />
+              <Button variant="outline" className="cc-nav-pill">
+                <RadioTower className="mr-1.5 h-3.5 w-3.5" />
                 Prospects
               </Button>
             </Link>
             <Link href="/admin/leads/new" prefetch>
-              <Button className="admin-primary-button h-10 px-4 text-sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Add prospect
+              <Button className="cc-primary-btn h-9 px-4 text-sm">
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Add Prospect
               </Button>
             </Link>
           </div>
         </div>
       </nav>
 
-      <main className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-6 lg:px-8">
-        <section className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_17rem]">
-          <ProposalJobsQueue initialJobs={jobRows} initialEvents={jobEventRows} />
-
-          <div className="space-y-3">
-            <div className="admin-panel p-4">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <div className="admin-eyebrow">Status</div>
-                  <h2 className="mt-1 text-lg font-semibold text-stone-50">Today</h2>
+      {/* ── Top Status Strip ────────────────────────────────── */}
+      <div className="cc-status-strip px-5 lg:px-8">
+        <div className="mx-auto max-w-screen-2xl">
+          <div className="cc-status-grid">
+            {statusBar.map((item) => (
+              <div key={item.id} className="cc-status-cell">
+                <div className="cc-status-label">{item.label}</div>
+                <div className={`cc-status-value ${item.id === 'failed' && failedJobs > 0 ? 'cc-status-value-danger' : item.live ? 'cc-status-value-live' : ''}`}>
+                  {item.id === 'system' && (
+                    <span className="cc-pulse-dot" />
+                  )}
+                  {item.value}
                 </div>
-                <ShieldCheck className="h-5 w-5 text-slate-400" />
+                {item.sub && <div className="cc-status-sub">{item.sub}</div>}
               </div>
-
-              <div className="space-y-2">
-                {workflow.map((step, index) => (
-                  <div key={step.label} className="admin-panel-muted grid grid-cols-[1.75rem_1fr_auto] items-center gap-2 p-2.5">
-                    <div className="text-xs font-semibold text-slate-400">{String(index + 1).padStart(2, '0')}</div>
-                    <div>
-                      <div className="text-xs font-semibold text-stone-400">{step.label}</div>
-                      <div className="text-xs text-slate-500">{step.value}</div>
-                    </div>
-                    <span className={`h-2 w-2 rounded-full ${step.active ? 'bg-primary' : 'bg-muted-foreground/35'}`} />
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {telemetry.map((item) => {
-                const Icon = item.icon
-                return (
-                  <div key={item.label} className="admin-panel p-3">
-                    <div className="mb-3 flex items-center justify-between">
-                      <span className="text-xs font-semibold text-slate-500">{item.label}</span>
-                      <Icon className="h-3.5 w-3.5 text-slate-400" />
-                    </div>
-                    <div className="num text-xl font-semibold text-stone-50">{item.value}</div>
-                  </div>
-                )
-              })}
-            </div>
+            ))}
           </div>
-        </section>
+        </div>
+      </div>
 
-        <LeadTable initialLeads={leadRows} />
+      {/* ── Main Content ─────────────────────────────────────── */}
+      <main className="mx-auto max-w-screen-2xl px-5 py-6 lg:px-8">
+
+        {/* ── Mission Control Hero ─── */}
+        <ProposalJobsQueue initialJobs={jobRows} initialEvents={jobEventRows} />
+
+        {/* ── Proposal Pipeline Table ─── */}
+        <section className="mt-6">
+          <LeadTable initialLeads={leadRows} />
+        </section>
       </main>
     </div>
   )

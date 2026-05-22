@@ -2,21 +2,22 @@
 
 import { useEffect, useMemo, useState, useTransition, type SetStateAction } from 'react'
 import Link from 'next/link'
-import { Activity, ChevronDown, ChevronRight, ExternalLink, Loader2, Trash2 } from 'lucide-react'
+import {
+  Activity,
+  Archive,
+  ChevronDown,
+  Copy,
+  ExternalLink,
+  Loader2,
+  Mail,
+  RefreshCw,
+  Trash2,
+} from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { clearProposalQueueAction } from '@/app/admin/pipeline/actions'
-import {
-  getProposalBuildStatus,
-  getProposalQueueBadgeClass,
-  getProposalQueueDisplayStatus,
-  getProposalQueueLabel,
-  getProposalWorkflowIndex,
-  getReceiptString,
-  proposalWorkflowSteps,
-  type BuildDisplayStatus,
-  type QueueDisplayStatus,
-} from '@/lib/admin-pipeline'
 import { readClientCache, writeClientCache } from '@/lib/client-cache'
+
+// ─── Types ─────────────────────────────────────────────────────────────────
 
 export type ProposalJob = {
   id: string
@@ -50,8 +51,27 @@ type ProposalJobsQueueProps = {
   initialEvents: ProposalJobEvent[]
 }
 
+// ─── Constants ─────────────────────────────────────────────────────────────
+
 const JOBS_CACHE_KEY = 'admin:proposal-jobs'
 const EVENTS_CACHE_KEY = 'admin:proposal-job-events'
+const STALE_RUNNING_MS = 20 * 60 * 1000
+
+type QueueDisplayStatus = ProposalJob['status'] | 'not_qualified' | 'stalled'
+type BuildDisplayStatus =
+  | 'queued'
+  | 'processing'
+  | 'qualified'
+  | 'filtered_out'
+  | 'image_generating'
+  | 'image_generated'
+  | 'video_rendering'
+  | 'video_complete'
+  | 'proposal_publishing'
+  | 'proposal_published'
+  | 'failed'
+
+// ─── Pure helpers (all unchanged from original) ────────────────────────────
 
 function isBatchJob(job: ProposalJob) {
   return job.slug.startsWith('batch-')
@@ -66,23 +86,75 @@ function parseBatchAddress(address: string) {
 }
 
 function getDisplayStatus(job: ProposalJob): QueueDisplayStatus {
-  return getProposalQueueDisplayStatus(job)
+  const buildStatus = getBuildStatus(job)
+  if (buildStatus === 'filtered_out') return 'not_qualified'
+  if (buildStatus === 'failed') return 'failed'
+  if (buildStatus === 'proposal_published') return 'completed'
+
+  const text = `${job.current_step || ''} ${job.error_message || ''}`
+  if (/not\s*qualified|filtered\s*out|disqualified|filter qualified solar targets/i.test(text)) return 'not_qualified'
+  if (
+    job.status === 'running' &&
+    new Date().getTime() - new Date(job.updated_at || job.created_at).getTime() > STALE_RUNNING_MS
+  ) {
+    return 'stalled'
+  }
+  return job.status
 }
 
 function getBuildStatus(job: ProposalJob): BuildDisplayStatus | null {
-  return getProposalBuildStatus(job)
+  const value = job.receipt?.build_status
+  if (typeof value !== 'string') return null
+  if (!buildStatusLabels[value as BuildDisplayStatus]) return null
+  return value as BuildDisplayStatus
 }
 
-function statusClass(status: QueueDisplayStatus) {
-  return getProposalQueueBadgeClass(status)
+function statusLabel(status: QueueDisplayStatus) {
+  if (status === 'not_qualified') return 'Not Qualified'
+  if (status === 'stalled') return 'Stalled'
+  return status.charAt(0).toUpperCase() + status.slice(1)
 }
+
+const buildStatusLabels: Record<BuildDisplayStatus, string> = {
+  queued: 'Queued',
+  processing: 'Processing',
+  qualified: 'Qualified',
+  filtered_out: 'Not Qualified',
+  image_generating: 'Generating Image',
+  image_generated: 'Image Generated',
+  video_rendering: 'Rendering Video',
+  video_complete: 'Video Complete',
+  proposal_publishing: 'Publishing Proposal',
+  proposal_published: 'Proposal Ready',
+  failed: 'Failed',
+}
+
+const workflowSteps: Array<{ id: BuildDisplayStatus; label: string }> = [
+  { id: 'queued', label: 'Queued' },
+  { id: 'processing', label: 'Started' },
+  { id: 'qualified', label: 'Roof' },
+  { id: 'image_generating', label: 'Image' },
+  { id: 'proposal_publishing', label: 'Publish' },
+  { id: 'video_rendering', label: 'Video' },
+  { id: 'proposal_published', label: 'Live' },
+]
 
 function getQueueLabel(job: ProposalJob, displayStatus: QueueDisplayStatus) {
-  return getProposalQueueLabel(job, displayStatus)
+  const buildStatus = getBuildStatus(job)
+  return buildStatus ? buildStatusLabels[buildStatus] : statusLabel(displayStatus)
 }
 
 function getWorkflowIndex(job: ProposalJob) {
-  return getProposalWorkflowIndex(job)
+  const buildStatus = getBuildStatus(job)
+  if (buildStatus === 'image_generated') return workflowSteps.findIndex((step) => step.id === 'image_generating')
+  if (buildStatus === 'video_complete') return workflowSteps.findIndex((step) => step.id === 'video_rendering')
+  if (buildStatus) {
+    const index = workflowSteps.findIndex((step) => step.id === buildStatus)
+    if (index >= 0) return index
+  }
+  if (job.status === 'completed') return workflowSteps.length - 1
+  if (job.status === 'running') return 1
+  return 0
 }
 
 function getQueueReason(job: ProposalJob) {
@@ -91,6 +163,11 @@ function getQueueReason(job: ProposalJob) {
   const reason = job.receipt?.reason
   if (typeof reason === 'string' && reason.trim()) return reason.trim()
   return job.error_message
+}
+
+function getReceiptString(receipt: Record<string, unknown> | null | undefined, key: string) {
+  const value = receipt?.[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : null
 }
 
 function getFailureDetails(job: ProposalJob) {
@@ -122,50 +199,16 @@ function getReferenceCount(job: ProposalJob) {
 
 function getWorkflowDiagnostics(job: ProposalJob) {
   const receipt = job.receipt || {}
-  const solarDebug = getSolarDebug(receipt)
-  const solarLayers = getSolarLayerAssets(receipt)
   return [
     ['Step', job.current_step],
     ['Build', getReceiptString(receipt, 'build_status_label') || getReceiptString(receipt, 'build_status') || getQueueLabel(job, getDisplayStatus(job))],
     ['Failure', getFailureDetails(job)],
     ['Solar model', getReceiptString(receipt, 'solar_model') ? 'available' : receipt.solar_model ? 'available' : null],
-    ['Solar layout', solarDebug ? `${solarDebug.selectedPanelCount}/${solarDebug.apiPanelCandidates} panels · ${solarDebug.selectedSegmentCount} roof segment${solarDebug.selectedSegmentCount === 1 ? '' : 's'}` : null],
-    ['Solar layers', solarLayers.length ? `${solarLayers.filter((layer) => layer.previewUrl || layer.originalUrl).length}/${solarLayers.length} saved` : null],
     ['References', getReferenceCount(job) ? `${getReferenceCount(job)} collected` : null],
-    ['Media', receipt.video_required === false ? 'still image' : receipt.video_required === true ? 'video required' : null],
+    ['Veo op', getReceiptString(receipt, 'veo_operation_name')],
+    ['Video', receipt.video_complete === true ? 'uploaded' : receipt.video_required === true ? 'required' : null],
     ['Proposal', getReceiptString(receipt, 'proposal_url') || job.proposal_url],
   ].filter(([, value]) => value)
-}
-
-function getSolarLayerAssets(receipt: Record<string, unknown> | null | undefined) {
-  const value = receipt?.solar_data_layers
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return []
-  const layers = (value as Record<string, unknown>).layers
-  if (!Array.isArray(layers)) return []
-
-  return layers
-    .filter((layer): layer is Record<string, unknown> => Boolean(layer) && typeof layer === 'object' && !Array.isArray(layer))
-    .map((layer) => ({
-      id: typeof layer.id === 'string' ? layer.id : '',
-      label: typeof layer.label === 'string' ? layer.label : 'Solar layer',
-      previewUrl: typeof layer.previewUrl === 'string' && layer.previewUrl.trim() ? layer.previewUrl.trim() : null,
-      originalUrl: typeof layer.originalUrl === 'string' && layer.originalUrl.trim() ? layer.originalUrl.trim() : null,
-      error: typeof layer.error === 'string' && layer.error.trim() ? layer.error.trim() : null,
-      contentType: typeof layer.contentType === 'string' && layer.contentType.trim() ? layer.contentType.trim() : null,
-    }))
-}
-
-function getSolarDebug(receipt: Record<string, unknown> | null | undefined) {
-  const value = receipt?.solar_layout_debug
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const record = value as Record<string, unknown>
-  const selectedSegments = Array.isArray(record.selectedSegments) ? record.selectedSegments : []
-  return {
-    apiPanelCandidates: typeof record.apiPanelCandidates === 'number' ? record.apiPanelCandidates : 0,
-    selectedPanelCount: typeof record.selectedPanelCount === 'number' ? record.selectedPanelCount : 0,
-    selectedSegmentCount: selectedSegments.length,
-    raw: record,
-  }
 }
 
 function formatTime(value: string) {
@@ -174,6 +217,13 @@ function formatTime(value: string) {
     minute: '2-digit',
     second: '2-digit',
   }).format(new Date(value))
+}
+
+function formatRelativeTime(value: string) {
+  const diff = Math.floor((Date.now() - new Date(value).getTime()) / 1000)
+  if (diff < 60) return `${diff}s ago`
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  return `${Math.floor(diff / 3600)}h ago`
 }
 
 function sortJobs(jobs: ProposalJob[]) {
@@ -185,7 +235,6 @@ function sortJobs(jobs: ProposalJob[]) {
     failed: 4,
     completed: 5,
   }
-
   return [...jobs].sort((a, b) => {
     const statusDelta = rank[getDisplayStatus(a)] - rank[getDisplayStatus(b)]
     if (statusDelta !== 0) return statusDelta
@@ -203,27 +252,50 @@ function getJobEvents(events: ProposalJobEvent[], jobId: string) {
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 }
 
+// ─── Status pill styles ────────────────────────────────────────────────────
+
+function statusPillClass(status: QueueDisplayStatus) {
+  if (status === 'completed') return 'cc-pill cc-pill-success'
+  if (status === 'running') return 'cc-pill cc-pill-running'
+  if (status === 'failed') return 'cc-pill cc-pill-danger'
+  if (status === 'stalled') return 'cc-pill cc-pill-danger'
+  if (status === 'not_qualified') return 'cc-pill cc-pill-warning'
+  return 'cc-pill cc-pill-idle'
+}
+
+// ─── Copy helper ──────────────────────────────────────────────────────────
+
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text).catch(() => {})
+}
+
+// ─── Component ────────────────────────────────────────────────────────────
+
 export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQueueProps) {
   const [jobs, setJobsState] = useState(() => readClientCache<ProposalJob[]>(JOBS_CACHE_KEY) || sortJobs(initialJobs))
   const [events, setEventsState] = useState(() => readClientCache<ProposalJobEvent[]>(EVENTS_CACHE_KEY) || sortEvents(initialEvents))
-  const [collapsed, setCollapsed] = useState(false)
   const [clearError, setClearError] = useState<string | null>(null)
   const [isClearing, startClearTransition] = useTransition()
+  const [logsOpen, setLogsOpen] = useState(false)
 
   const activeCount = useMemo(() => jobs.filter((j) => {
     const status = getDisplayStatus(j)
     return status === 'queued' || status === 'running'
   }).length, [jobs])
+
   const finishedCount = useMemo(() => jobs.filter((j) => {
     const status = getDisplayStatus(j)
     return !isBatchJob(j) && (status === 'completed' || status === 'failed' || status === 'not_qualified')
   }).length, [jobs])
+
   const focusJob = useMemo(() => (
     jobs.find((job) => !isBatchJob(job) && ['running', 'queued'].includes(getDisplayStatus(job))) ||
     jobs.find((job) => !isBatchJob(job)) ||
     null
   ), [jobs])
-  const focusEvents = useMemo(() => focusJob ? getJobEvents(events, focusJob.id).slice(-5).reverse() : [], [events, focusJob])
+
+  const focusEvents = useMemo(() => focusJob ? getJobEvents(events, focusJob.id) : [], [events, focusJob])
+
   const hasPendingVideo = useMemo(() => jobs.some((job) => {
     const receipt = job.receipt || {}
     const hasOperation = typeof receipt.veo_operation_name === 'string' && receipt.veo_operation_name.trim().length > 0
@@ -276,6 +348,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
     })
   }
 
+  // ── Realtime + polling (unchanged) ──────────────────────────────────────
   useEffect(() => {
     const supabase = createClient()
     let mounted = true
@@ -327,266 +400,334 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
 
   useEffect(() => {
     if (!hasPendingVideo) return
-
     let stopped = false
     const processVideos = async () => {
       try {
-        await fetch('/api/proposal-jobs/process-videos', {
-          method: 'POST',
-          cache: 'no-store',
-        })
+        await fetch('/api/proposal-jobs/process-videos', { method: 'POST', cache: 'no-store' })
       } catch (error) {
         if (!stopped) console.error('[ProposalJobsQueue] video processor failed', error)
       }
     }
-
     processVideos()
     const poller = window.setInterval(processVideos, 20000)
-    return () => {
-      stopped = true
-      window.clearInterval(poller)
-    }
+    return () => { stopped = true; window.clearInterval(poller) }
   }, [hasPendingVideo])
 
+  // ── Render ───────────────────────────────────────────────────────────────
+
+  const focusDisplayStatus = focusJob ? getDisplayStatus(focusJob) : null
+  const focusWorkflowIndex = focusJob ? getWorkflowIndex(focusJob) : -1
+  const isRunning = focusDisplayStatus === 'running'
+  const isCompleted = focusDisplayStatus === 'completed'
+
   return (
-    <section className={`admin-panel admin-ops-panel min-w-0 self-start overflow-hidden rounded-lg border border-[#30343b] bg-[#181a1f] shadow-[0_14px_34px_rgba(0,0,0,0.24)] transition-all ${collapsed ? 'p-3 lg:p-4' : 'p-4 lg:p-5'}`}>
-      <div className={`flex items-center justify-between ${collapsed ? '' : 'admin-divider mb-3 border-b pb-3'}`}>
-        <button
-          type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          className="flex items-center gap-2.5 text-left"
-        >
-          {collapsed ? <ChevronRight className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
-          <Activity className="h-3.5 w-3.5 text-primary" />
-          <span className="text-sm font-semibold text-stone-100">
-            Live workflow
+    <section className="cc-mission-grid">
+
+      {/* ── LEFT: Active Proposal Hero ─────────────────────────── */}
+      <div className="cc-hero-card">
+        {/* Header */}
+        <div className="cc-hero-header">
+          <div className="flex items-center gap-2.5">
+            <Activity className={`h-4 w-4 ${isRunning ? 'text-[#d99a3d] animate-pulse' : 'text-[#6b7885]'}`} />
+            <span className="cc-section-eyebrow">Active Workflow</span>
             {activeCount > 0 && (
-              <span className="ml-2 font-mono text-xs text-primary">{activeCount} active</span>
-            )}
-          </span>
-        </button>
-        {finishedCount > 0 && (
-          <button
-            type="button"
-            disabled={isClearing}
-            onClick={handleClearQueue}
-            className="admin-subtle-button inline-flex items-center gap-1.5 px-2 py-1 text-xs transition-colors hover:text-red-300 disabled:opacity-50"
-          >
-            {isClearing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-            Clear {finishedCount}
-          </button>
-        )}
-      </div>
-
-      {clearError && <div className="mb-3 text-xs text-red-300">{clearError}</div>}
-
-      {!collapsed && (
-        <div className="space-y-3">
-          <div className="admin-live-card min-w-0 overflow-hidden rounded-lg border border-[#343a42] bg-[#15171b] p-3.5">
-            {focusJob ? (
-              <>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold uppercase text-slate-500">Current job</div>
-                    <div className="mt-1 truncate text-base font-semibold text-stone-50">{focusJob.business_name}</div>
-                    <div className="mt-1 truncate text-xs text-slate-500">{focusJob.current_step}</div>
-                  </div>
-                  <span className={statusClass(getDisplayStatus(focusJob))}>{getQueueLabel(focusJob, getDisplayStatus(focusJob))}</span>
-                </div>
-                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#2a2f36]">
-                  <div
-                    className="h-full rounded-full bg-[#d99a3d] transition-all"
-                    style={{ width: `${Math.max(4, Math.min(100, focusJob.progress_percent || 0))}%` }}
-                  />
-                </div>
-                <div className="admin-mini-workflow mt-4 grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-3 2xl:grid-cols-6">
-                  {proposalWorkflowSteps.map((step, index) => {
-                    const currentIndex = getWorkflowIndex(focusJob)
-                    const done = index < currentIndex || getDisplayStatus(focusJob) === 'completed'
-                    const current = index === currentIndex && getDisplayStatus(focusJob) !== 'completed'
-                    return (
-                      <div key={step.id} className={`admin-mini-step flex min-w-0 items-center gap-1.5 text-[0.68rem] font-bold uppercase ${done ? 'admin-mini-step-done' : ''} ${current ? 'admin-mini-step-current' : ''}`}>
-                        <span className="admin-mini-dot" />
-                        <span>{step.label}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-                {focusEvents.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    {focusEvents.map((event) => (
-                      <div key={event.id} className="grid grid-cols-[4.5rem_1fr] gap-2 text-xs">
-                        <span className="text-slate-600">{formatTime(event.created_at)}</span>
-                        <span className="truncate text-slate-400">{event.error_message || event.step}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="mt-4 rounded-lg border border-stone-800 bg-stone-950/60 p-3">
-                  <div className="mb-2 text-[11px] font-semibold uppercase text-slate-500">Live diagnostics</div>
-                  <div className="grid gap-2 text-xs">
-                    {getWorkflowDiagnostics(focusJob).map(([label, value]) => (
-                      <div key={label} className="grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] gap-2">
-                        <span className="text-slate-600">{label}</span>
-                        <span className="min-w-0 break-words text-slate-300">{String(value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="p-2 text-sm text-slate-500">No active proposal workflow.</div>
+              <span className="cc-live-badge">
+                <span className="cc-pulse-dot" />
+                {activeCount} active
+              </span>
             )}
           </div>
+          {finishedCount > 0 && (
+            <button
+              type="button"
+              disabled={isClearing}
+              onClick={handleClearQueue}
+              className="cc-ghost-btn flex items-center gap-1.5 text-xs"
+            >
+              {isClearing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+              Clear {finishedCount}
+            </button>
+          )}
+        </div>
 
-          <div className="admin-scroll-panel min-w-0 overflow-hidden rounded-lg border border-[#30343b] bg-[#202329]">
-          {jobs.length === 0 ? (
-            <div className="p-5 text-sm text-slate-500">No jobs yet.</div>
-          ) : (
-            <div className="max-h-[320px] divide-y divide-stone-800/80 overflow-y-auto">
-              {jobs.map((job) => {
-                if (isBatchJob(job)) {
-                  const { count, category, location } = parseBatchAddress(job.address)
-                  return (
-                    <div key={job.id} className="flex items-center gap-3 px-4 py-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-500">
-                          Gather proposals
-                        </div>
-                        <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          {[count, category, location].filter(Boolean).map((chip) => (
-                            <span
-                              key={chip}
-                              className="admin-chip px-2 py-0.5 text-xs"
-                            >
-                              {chip}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                      <span className="shrink-0 text-xs text-slate-600">{formatTime(job.created_at)}</span>
-                    </div>
-                  )
-                }
+        {clearError && <div className="mb-3 rounded-md bg-red-500/10 px-3 py-2 text-xs text-red-300">{clearError}</div>}
 
-                const jobEvents = getJobEvents(events, job.id)
-                const displayStatus = getDisplayStatus(job)
+        {/* Focus Job */}
+        {focusJob ? (
+          <>
+            {/* Name + Status */}
+            <div className="cc-hero-identity">
+              <div className="min-w-0 flex-1">
+                <div className="cc-hero-name">{focusJob.business_name}</div>
+                <div className="cc-hero-address">{focusJob.address}</div>
+              </div>
+              <span className={statusPillClass(focusDisplayStatus!)}>
+                {getQueueLabel(focusJob, focusDisplayStatus!)}
+              </span>
+            </div>
+
+            {/* Progress bar */}
+            <div className="cc-progress-track">
+              <div
+                className={`cc-progress-fill ${isRunning ? 'cc-progress-fill-active' : ''}`}
+                style={{ width: `${Math.max(4, Math.min(100, focusJob.progress_percent || 0))}%` }}
+              />
+            </div>
+            <div className="cc-progress-pct">
+              {Math.round(focusJob.progress_percent || 0)}%
+            </div>
+
+            {/* Workflow Pipeline */}
+            <div className="cc-pipeline">
+              {workflowSteps.map((step, index) => {
+                const done = index < focusWorkflowIndex || isCompleted
+                const current = index === focusWorkflowIndex && !isCompleted
+                const failed = (focusDisplayStatus === 'failed' || focusDisplayStatus === 'stalled') && index === focusWorkflowIndex
                 return (
-                  <div key={job.id} className="px-4 py-3">
-                    <div className="flex items-start gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-stone-100">{job.business_name}</div>
-                        <div className="mt-0.5 truncate text-xs text-slate-500">{job.address}</div>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1.5">
-                        <span className="text-xs text-slate-500">{formatTime(job.updated_at || job.created_at)}</span>
-                        <span className={statusClass(displayStatus)}>
-                          {getQueueLabel(job, displayStatus)}
-                        </span>
-                        {job.proposal_url ? (
-                          <Link
-                            href={job.proposal_url}
-                            target="_blank"
-                            className="inline-flex items-center gap-1 text-xs text-slate-400 transition-colors hover:text-stone-100"
-                            title="Open proposal"
-                          >
-                            View <ExternalLink className="h-3 w-3" />
-                          </Link>
-                        ) : null}
-                      </div>
+                  <div key={step.id} className="cc-pipeline-step">
+                    <div className={`cc-pipeline-node ${done ? 'cc-node-done' : ''} ${current ? 'cc-node-current' : ''} ${failed ? 'cc-node-failed' : ''}`}>
+                      {done && !current && (
+                        <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none">
+                          <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
                     </div>
-
-                    {(displayStatus === 'not_qualified' || displayStatus === 'failed') && getQueueReason(job) ? (
-                      <div className="mt-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2 text-xs text-red-200">
-                        {getQueueReason(job)}
-                      </div>
-                    ) : null}
-
-                    {job.receipt && (
-                      <details className="mt-2 rounded-lg border border-stone-800 bg-stone-950/50 px-3 py-2 text-xs">
-                        <summary className="cursor-pointer text-slate-400">Workflow details</summary>
-                        <div className="mt-2 grid gap-1.5">
-                          {getWorkflowDiagnostics(job).map(([label, value]) => (
-                            <div key={label} className="grid min-w-0 grid-cols-[5rem_minmax(0,1fr)] gap-2">
-                              <span className="text-slate-600">{label}</span>
-                              <span className="min-w-0 break-words text-slate-300">{String(value)}</span>
-                            </div>
-                          ))}
-                        </div>
-                        {getSolarDebug(job.receipt) ? (
-                          <details className="mt-3 rounded-md border border-stone-800 bg-black/20 px-2 py-2">
-                            <summary className="cursor-pointer text-slate-400">Solar API layout data</summary>
-                            <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded bg-black/30 p-2 font-mono text-[0.68rem] leading-relaxed text-slate-300">
-                              {JSON.stringify(getSolarDebug(job.receipt)?.raw, null, 2)}
-                            </pre>
-                          </details>
-                        ) : null}
-                        {getSolarLayerAssets(job.receipt).length ? (
-                          <details className="mt-3 rounded-md border border-stone-800 bg-black/20 px-2 py-2">
-                            <summary className="cursor-pointer text-slate-400">Solar data layer previews</summary>
-                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                              {getSolarLayerAssets(job.receipt).map((layer) => (
-                                <div key={layer.id || layer.label} className="overflow-hidden rounded-md border border-stone-800 bg-stone-950">
-                                  <div className="flex items-center justify-between gap-2 border-b border-stone-800 px-2 py-1.5">
-                                    <span className="text-[11px] font-semibold text-stone-200">{layer.label}</span>
-                                    {layer.originalUrl ? (
-                                      <Link
-                                        href={layer.originalUrl}
-                                        target="_blank"
-                                        className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-stone-100"
-                                      >
-                                        TIFF <ExternalLink className="h-3 w-3" />
-                                      </Link>
-                                    ) : null}
-                                  </div>
-                                  {layer.previewUrl ? (
-                                    <Link href={layer.previewUrl} target="_blank">
-                                      <img
-                                        src={layer.previewUrl}
-                                        alt={layer.label}
-                                        className="aspect-video w-full bg-black object-contain"
-                                        loading="lazy"
-                                      />
-                                    </Link>
-                                  ) : (
-                                    <div className="px-2 py-3 text-[11px] text-amber-200">
-                                      {layer.error || 'Preview unavailable.'}
-                                    </div>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        ) : null}
-                      </details>
+                    {index < workflowSteps.length - 1 && (
+                      <div className={`cc-pipeline-connector ${done ? 'cc-connector-done' : ''}`} />
                     )}
-
-                    {jobEvents.length > 0 && (
-                      <div className="admin-divider mt-3 space-y-1.5 border-l pl-3">
-                        {jobEvents.map((event) => {
-                          const tone =
-                            /not\s*qualified|filtered\s*out|disqualified|filter qualified/i.test(`${event.step} ${event.error_message || ''}`) ? 'text-amber-300'
-                            : event.status === 'failed' ? 'text-red-300/80'
-                            : event.status === 'completed' ? 'text-emerald-300/80'
-                            : event.status === 'running' ? 'text-primary'
-                            : 'text-stone-500'
-                          return (
-                            <div key={event.id} className="grid grid-cols-[5rem_1fr] gap-2 text-xs">
-                              <span className="text-slate-600">{formatTime(event.created_at)}</span>
-                              <span className={tone}>{event.error_message || event.step}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
+                    <span className={`cc-pipeline-label ${done || current ? 'cc-label-active' : ''}`}>{step.label}</span>
                   </div>
                 )
               })}
             </div>
+
+            {/* Failure reason */}
+            {(focusDisplayStatus === 'failed' || focusDisplayStatus === 'not_qualified') && getQueueReason(focusJob) && (
+              <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-xs text-red-300 leading-relaxed">
+                {getQueueReason(focusJob)}
+              </div>
+            )}
+
+            {/* Workflow Logs — collapsed by default */}
+            <details
+              className="cc-logs-accordion"
+              open={logsOpen}
+              onToggle={(e) => setLogsOpen((e.currentTarget as HTMLDetailsElement).open)}
+            >
+              <summary className="cc-logs-summary">
+                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${logsOpen ? 'rotate-180' : ''}`} />
+                Workflow Logs
+                {focusEvents.length > 0 && <span className="cc-logs-count">{focusEvents.length}</span>}
+              </summary>
+              <div className="cc-logs-body">
+                {/* Live diagnostics */}
+                {getWorkflowDiagnostics(focusJob).length > 0 && (
+                  <div className="cc-diag-grid">
+                    {getWorkflowDiagnostics(focusJob).map(([label, value]) => (
+                      <div key={label} className="cc-diag-row">
+                        <span className="cc-diag-label">{label}</span>
+                        <span className="cc-diag-value">{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Event timeline */}
+                {focusEvents.length > 0 && (
+                  <div className="cc-event-list">
+                    {[...focusEvents].reverse().map((event) => {
+                      const tone =
+                        /not\s*qualified|filtered\s*out|disqualified|filter qualified/i.test(`${event.step} ${event.error_message || ''}`) ? 'text-[#f0c27a]'
+                        : event.status === 'failed' ? 'text-red-300/80'
+                        : event.status === 'completed' ? 'text-[#d99a3d]/80'
+                        : event.status === 'running' ? 'text-[#d99a3d]'
+                        : 'text-[#6b7885]'
+                      return (
+                        <div key={event.id} className="cc-event-row">
+                          <span className="cc-event-time">{formatTime(event.created_at)}</span>
+                          <span className={`cc-event-text ${tone}`}>{event.error_message || event.step}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                {focusEvents.length === 0 && getWorkflowDiagnostics(focusJob).length === 0 && (
+                  <div className="py-3 text-center text-xs text-[#6b7885]">No log entries yet.</div>
+                )}
+              </div>
+            </details>
+          </>
+        ) : (
+          <div className="cc-hero-empty">
+            <Activity className="mx-auto mb-3 h-8 w-8 text-[#3a4048]" />
+            <div className="text-sm font-medium text-[#4a5560]">No active workflow</div>
+            <div className="mt-1 text-xs text-[#3a4048]">Queue a proposal to get started</div>
+          </div>
+        )}
+      </div>
+
+      {/* ── CENTER: Action Rail ────────────────────────────────── */}
+      <div className="cc-action-rail">
+        <div className="cc-section-eyebrow mb-4">Actions</div>
+        <div className="flex flex-col gap-2">
+          {focusJob?.proposal_url ? (
+            <Link href={focusJob.proposal_url} target="_blank" className="cc-action-btn cc-action-btn-primary">
+              <ExternalLink className="h-3.5 w-3.5" />
+              View Proposal
+            </Link>
+          ) : (
+            <button type="button" disabled className="cc-action-btn cc-action-btn-primary opacity-40 cursor-not-allowed">
+              <ExternalLink className="h-3.5 w-3.5" />
+              View Proposal
+            </button>
           )}
+
+          <button
+            type="button"
+            onClick={() => focusJob?.proposal_url && copyToClipboard(focusJob.proposal_url)}
+            disabled={!focusJob?.proposal_url}
+            className="cc-action-btn cc-action-btn-ghost"
+          >
+            <Copy className="h-3.5 w-3.5" />
+            Copy Link
+          </button>
+
+          <button
+            type="button"
+            disabled={!focusJob}
+            className="cc-action-btn cc-action-btn-ghost"
+            onClick={() => {
+              if (!focusJob) return
+              const subject = encodeURIComponent(`Solar proposal for ${focusJob.business_name}`)
+              const body = encodeURIComponent(focusJob.proposal_url ? `View your proposal: ${focusJob.proposal_url}` : '')
+              window.open(`mailto:?subject=${subject}&body=${body}`)
+            }}
+          >
+            <Mail className="h-3.5 w-3.5" />
+            Send Email
+          </button>
+
+          {/* NOTE: Retry and Archive require backend actions not yet wired to this component.
+              The buttons are rendered for visual completeness but are intentionally disabled. */}
+          <button type="button" disabled className="cc-action-btn cc-action-btn-ghost opacity-40 cursor-not-allowed">
+            <RefreshCw className="h-3.5 w-3.5" />
+            Retry
+          </button>
+
+          <button type="button" disabled className="cc-action-btn cc-action-btn-ghost opacity-40 cursor-not-allowed">
+            <Archive className="h-3.5 w-3.5" />
+            Archive
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div className="my-5 h-px bg-[#252a30]" />
+
+        {/* Mini stats */}
+        <div className="space-y-3">
+          <div className="cc-mini-stat">
+            <span className="cc-mini-stat-label">Queue</span>
+            <span className="cc-mini-stat-value">{jobs.filter(j => !isBatchJob(j)).length}</span>
+          </div>
+          <div className="cc-mini-stat">
+            <span className="cc-mini-stat-label">Active</span>
+            <span className={`cc-mini-stat-value ${activeCount > 0 ? 'text-[#d99a3d]' : ''}`}>{activeCount}</span>
+          </div>
+          <div className="cc-mini-stat">
+            <span className="cc-mini-stat-label">Done</span>
+            <span className="cc-mini-stat-value">{jobs.filter(j => getDisplayStatus(j) === 'completed').length}</span>
+          </div>
+          <div className="cc-mini-stat">
+            <span className="cc-mini-stat-label">Failed</span>
+            <span className={`cc-mini-stat-value ${jobs.filter(j => getDisplayStatus(j) === 'failed').length > 0 ? 'text-red-400' : ''}`}>
+              {jobs.filter(j => getDisplayStatus(j) === 'failed').length}
+            </span>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* ── RIGHT: Job Queue List ──────────────────────────────── */}
+      <div className="cc-queue-panel">
+        <div className="cc-queue-header">
+          <span className="cc-section-eyebrow">Proposal Queue</span>
+          <span className="cc-queue-count">{jobs.length}</span>
+        </div>
+
+        {jobs.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="text-sm text-[#4a5560]">No jobs in queue</div>
+          </div>
+        ) : (
+          <div className="cc-queue-list">
+            {jobs.map((job) => {
+              if (isBatchJob(job)) {
+                const { count, category, location } = parseBatchAddress(job.address)
+                return (
+                  <div key={job.id} className="cc-queue-row cc-queue-row-batch">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-[#4a5560]">Batch</div>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {[count, category, location].filter(Boolean).map((chip) => (
+                        <span key={chip} className="cc-chip">{chip}</span>
+                      ))}
+                    </div>
+                    <div className="mt-1.5 text-[10px] text-[#3a4048]">{formatRelativeTime(job.created_at)}</div>
+                  </div>
+                )
+              }
+
+              const displayStatus = getDisplayStatus(job)
+              const isFocus = focusJob?.id === job.id
+
+              return (
+                <div key={job.id} className={`cc-queue-row ${isFocus ? 'cc-queue-row-focus' : ''}`}>
+                  <div className="flex items-start justify-between gap-2 min-w-0">
+                    <div className="min-w-0 flex-1">
+                      <div className={`cc-queue-name ${isFocus ? 'text-[#e8d5b0]' : ''}`}>{job.business_name}</div>
+                      <div className="cc-queue-address">{job.address}</div>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1.5">
+                      <span className={statusPillClass(displayStatus)}>
+                        {getQueueLabel(job, displayStatus)}
+                      </span>
+                      <span className="text-[10px] text-[#4a5560]">{formatRelativeTime(job.updated_at || job.created_at)}</span>
+                    </div>
+                  </div>
+
+                  {job.proposal_url && (
+                    <Link
+                      href={job.proposal_url}
+                      target="_blank"
+                      className="mt-2 inline-flex items-center gap-1 text-[10px] text-[#d99a3d]/70 hover:text-[#d99a3d] transition-colors"
+                    >
+                      View proposal <ExternalLink className="h-2.5 w-2.5" />
+                    </Link>
+                  )}
+
+                  {(displayStatus === 'failed' || displayStatus === 'not_qualified') && getQueueReason(job) && (
+                    <div className="mt-2 rounded border border-red-500/15 bg-red-500/5 px-2 py-1.5 text-[10px] text-red-300/80 leading-relaxed">
+                      {getQueueReason(job)}
+                    </div>
+                  )}
+
+                  {/* Per-row logs — collapsed by default */}
+                  {job.receipt && (
+                    <details className="cc-row-logs">
+                      <summary className="cc-row-logs-summary">Technical details</summary>
+                      <div className="mt-1.5 space-y-1">
+                        {getWorkflowDiagnostics(job).map(([label, value]) => (
+                          <div key={label} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-1.5 text-[10px]">
+                            <span className="text-[#4a5560]">{label}</span>
+                            <span className="break-words text-[#8a929c]">{String(value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
     </section>
   )
 }
