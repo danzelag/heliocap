@@ -101,9 +101,7 @@ export default function LeadGeneratorForm() {
         <div className="border-b border-stone-700/70 px-4 py-3">
           <div className="admin-eyebrow">Manual residential intake</div>
           <h2 className="mt-1 text-xl font-semibold text-stone-50">Homeowner details</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            Same fields as the landing page, saved directly into the prospects table.
-          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-500">Matches the landing page intake fields.</p>
         </div>
 
         <div className="space-y-5 p-4">
@@ -279,7 +277,7 @@ export default function LeadGeneratorForm() {
 
         <div className="mt-3 flex items-center justify-center gap-2 text-xs text-slate-500">
           <Home className="h-3.5 w-3.5" />
-          Proposal creation still happens from the prospects table after target verification.
+          Create proposals from Prospects after roof verification.
         </div>
       </div>
     </form>

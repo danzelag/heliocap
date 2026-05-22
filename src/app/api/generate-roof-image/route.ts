@@ -2,18 +2,24 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
 import { verifyN8nRequest } from '@/lib/n8n-auth'
 import { updateProposalJobProgress } from '@/lib/proposal-job-events'
+import sharp from 'sharp'
 import {
-  buildRasterRenderPreview,
+  buildSolarLayoutDebug,
   buildSolarModel,
-  buildSolarOverlaySvg,
+  buildSolarPanelLayerSvg,
   collectVisualReferences,
+  fetchAndUploadSolarDataLayerAssets,
   fetchSolarInsights,
-  fetchStaticSatelliteImage,
   listManualStreetViewReferenceUrls,
   selectStaticMapCenter,
-  selectStaticMapZoom,
   uploadLeadAsset,
+  type SolarDataLayerAsset,
+  type SolarGeoBounds,
+  type SolarRasterPlacement,
 } from '@/lib/openclaw-google'
+
+const RENDER_WIDTH = 1280
+const RENDER_HEIGHT = 720
 
 /**
  * POST /api/generate-roof-image
@@ -38,9 +44,6 @@ export async function POST(request: NextRequest) {
       formattedAddress,
       formatted_address,
       address,
-      visual_zoom,
-      map_zoom,
-      zoom,
       solarApiLayoutImageUrl,
       solar_api_layout_image_url,
     } = body
@@ -50,7 +53,6 @@ export async function POST(request: NextRequest) {
     const placeIdentifier = sanitizeN8nString(place_id || placeId)
     let targetLat = Number(stripN8nPrefix(body.lat))
     let targetLng = Number(stripN8nPrefix(body.lng))
-    let requestedZoom: unknown = visual_zoom ?? map_zoom ?? zoom
     let targetAddress = getFirstString(formattedAddress, formatted_address, address)
     let prospectReferenceControls: {
       solarReferenceUrl: string | null
@@ -80,7 +82,6 @@ export async function POST(request: NextRequest) {
       if (verifiedTarget) {
         targetLat = verifiedTarget.lat
         targetLng = verifiedTarget.lng
-        requestedZoom = verifiedTarget.zoom ?? requestedZoom
         targetAddress = verifiedTarget.address || targetAddress
         prospectReferenceControls = {
           solarReferenceUrl: verifiedTarget.solarReferenceUrl,
@@ -104,19 +105,26 @@ export async function POST(request: NextRequest) {
       return null
     })
     const solarModel = buildSolarModel(solarInsights)
-    const mapZoom = clampMapZoom(requestedZoom) || selectStaticMapZoom(solarModel)
     const mapCenter = selectStaticMapCenter(solarInsights, targetLat, targetLng)
     console.log('[generate-roof-image] Visual target center selected', mapCenter)
-    const imageBuffer = await fetchStaticSatelliteImage(mapCenter.lat, mapCenter.lng, mapZoom)
-
-    const roofImageUrl = await uploadLeadAsset({
+    const solarDataLayerAssets = await fetchAndUploadSolarDataLayerAssets({
       supabase,
       bucket,
       slug,
-      fileName: 'roof.png',
-      body: imageBuffer,
-      contentType: 'image/png',
+      lat: mapCenter.lat,
+      lng: mapCenter.lng,
+    }).catch((error) => {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(`[generate-roof-image] Solar data layers unavailable: ${message}`)
+      return null
     })
+    const solarRgbLayer = getUsableSolarRgbLayer(solarDataLayerAssets?.layers || [])
+    if (!solarRgbLayer) {
+      return NextResponse.json({
+        error: 'Solar API RGB imagery is unavailable for this target. Verify the target coordinates before generating.',
+      }, { status: 422 })
+    }
+    const roofImageUrl = solarRgbLayer.previewUrl
     const visualReferences = await collectVisualReferences({
       supabase,
       bucket,
@@ -124,7 +132,7 @@ export async function POST(request: NextRequest) {
       lat: mapCenter.lat,
       lng: mapCenter.lng,
       address: targetAddress,
-      mapTilesImageUrl: roofImageUrl,
+      mapTilesImageUrl: null,
     })
     if (bucket === 'prospects' && prospectIdentifier) {
       const manualStreetViewReferenceUrls = await listManualStreetViewReferenceUrls({
@@ -156,26 +164,26 @@ export async function POST(request: NextRequest) {
       await removeExcludedProspectReferenceFiles(supabase, prospectReferenceControls.excludedReferenceUrls)
     }
 
-    const satelliteBase64 = `data:image/png;base64,${Buffer.from(imageBuffer).toString('base64')}`
-    const overlaySvg = buildSolarOverlaySvg({
-      satelliteUrl: satelliteBase64,
+    const rasterPlacement = getSolarRgbRasterPlacement(solarRgbLayer)
+    const panelLayerSvg = buildSolarPanelLayerSvg({
       insights: solarInsights,
-      lat: mapCenter.lat,
-      lng: mapCenter.lng,
       model: solarModel,
-      zoom: mapZoom,
+      width: RENDER_WIDTH,
+      height: RENDER_HEIGHT,
+      rasterPlacement,
     })
+    const solarLayoutDebug = buildSolarLayoutDebug(solarInsights, solarModel)
 
     const renderImageUrl = await uploadLeadAsset({
       supabase,
       bucket,
       slug,
-      fileName: 'render.svg',
-      body: overlaySvg,
+      fileName: 'solar-panel-layer.svg',
+      body: panelLayerSvg,
       contentType: 'image/svg+xml',
     })
 
-    const renderPreviewBuffer = await buildRasterRenderPreview(overlaySvg)
+    const renderPreviewBuffer = await buildSolarRgbProposalRender(roofImageUrl, panelLayerSvg)
     const renderPreviewUrl = await uploadLeadAsset({
       supabase,
       bucket,
@@ -227,8 +235,10 @@ export async function POST(request: NextRequest) {
         streetViewReferenceUrls: visualReferences.streetViewReferenceUrls,
         solarApiLayoutImageUrl: visualReferences.solarApiLayoutImageUrl,
         visual_target: mapCenter,
-        // renderPreviewUrl has Solar API panels composited onto the satellite —
-        // this is the correct Veo seed (panels already placed by real geometry).
+        solar_layout_debug: solarLayoutDebug,
+        solar_data_layers: solarDataLayerAssets,
+        // renderPreviewUrl has matte black Solar API panels composited onto Solar RGB imagery.
+        // This is the customer-facing proposal image; video generation is not required.
         solarPanelRenderUrl: renderPreviewUrl,
       })
     }
@@ -243,6 +253,8 @@ export async function POST(request: NextRequest) {
       solarApiLayoutImageUrl: visualReferences.solarApiLayoutImageUrl,
       reference_set: visualReferences,
       visual_target: mapCenter,
+      solar_layout_debug: solarLayoutDebug,
+      solar_data_layers: solarDataLayerAssets,
       solar_model: solarModel,
       solar_insights_available: Boolean(solarInsights),
     })
@@ -290,6 +302,85 @@ async function getVerifiedProspectVisualTarget(
 function getExcludedReferenceUrls(value: unknown) {
   if (!Array.isArray(value)) return []
   return value.filter((url): url is string => typeof url === 'string' && url.startsWith('http'))
+}
+
+type UsableSolarRgbLayer = SolarDataLayerAsset & {
+  previewUrl: string
+  bounds: SolarGeoBounds
+  previewWidth: number
+  previewHeight: number
+}
+
+function getUsableSolarRgbLayer(layers: SolarDataLayerAsset[]): UsableSolarRgbLayer | null {
+  const rgbLayer = layers.find((layer) => layer.id === 'rgb')
+  if (
+    !rgbLayer?.previewUrl ||
+    !rgbLayer.bounds ||
+    !rgbLayer.previewWidth ||
+    !rgbLayer.previewHeight
+  ) {
+    return null
+  }
+
+  return {
+    ...rgbLayer,
+    previewUrl: rgbLayer.previewUrl,
+    bounds: rgbLayer.bounds,
+    previewWidth: rgbLayer.previewWidth,
+    previewHeight: rgbLayer.previewHeight,
+  }
+}
+
+function getSolarRgbRasterPlacement(layer: UsableSolarRgbLayer): SolarRasterPlacement {
+  const scale = Math.min(RENDER_WIDTH / layer.previewWidth, RENDER_HEIGHT / layer.previewHeight)
+  const renderedWidth = Math.round(layer.previewWidth * scale)
+  const renderedHeight = Math.round(layer.previewHeight * scale)
+
+  return {
+    bounds: layer.bounds,
+    sourceWidth: layer.previewWidth,
+    sourceHeight: layer.previewHeight,
+    renderedWidth,
+    renderedHeight,
+    left: Math.round((RENDER_WIDTH - renderedWidth) / 2),
+    top: Math.round((RENDER_HEIGHT - renderedHeight) / 2),
+  }
+}
+
+async function buildSolarRgbProposalRender(roofImageUrl: string, panelLayerSvg: string) {
+  const response = await fetch(roofImageUrl, { cache: 'no-store' })
+  if (!response.ok) throw new Error(`Solar RGB image fetch failed: ${response.status}`)
+  const roofBuffer = Buffer.from(await response.arrayBuffer())
+  const metadata = await sharp(roofBuffer).metadata()
+  const sourceWidth = metadata.width || RENDER_WIDTH
+  const sourceHeight = metadata.height || RENDER_HEIGHT
+  const scale = Math.min(RENDER_WIDTH / sourceWidth, RENDER_HEIGHT / sourceHeight)
+  const renderedWidth = Math.round(sourceWidth * scale)
+  const renderedHeight = Math.round(sourceHeight * scale)
+  const left = Math.round((RENDER_WIDTH - renderedWidth) / 2)
+  const top = Math.round((RENDER_HEIGHT - renderedHeight) / 2)
+  const background = await sharp(roofBuffer)
+    .resize(RENDER_WIDTH, RENDER_HEIGHT, { fit: 'cover', position: 'center' })
+    .blur(18)
+    .modulate({ brightness: 0.62, saturation: 0.72 })
+    .linear(0.92, -8)
+    .webp({ quality: 82, effort: 4 })
+    .toBuffer()
+  const foreground = await sharp(roofBuffer)
+    .resize(renderedWidth, renderedHeight, { fit: 'fill' })
+    .modulate({ brightness: 1.06, saturation: 0.9 })
+    .linear(1.04, -3)
+    .sharpen({ sigma: 0.6, m1: 0.45, m2: 1.2 })
+    .webp({ quality: 94, effort: 5 })
+    .toBuffer()
+
+  return sharp(background)
+    .composite([
+      { input: foreground, left, top },
+      { input: Buffer.from(panelLayerSvg), left: 0, top: 0 },
+    ])
+    .webp({ quality: 94, effort: 6 })
+    .toBuffer()
 }
 
 function filterExcludedReferences<T extends {
@@ -351,12 +442,6 @@ function stripN8nPrefix(value: unknown) {
 
 function sanitizeN8nString(value: unknown) {
   return typeof value === 'string' ? value.trim().replace(/^=+/, '') : ''
-}
-
-function clampMapZoom(value: unknown) {
-  const zoom = Number(value)
-  if (!Number.isFinite(zoom)) return null
-  return Math.min(Math.max(Math.round(zoom), 16), 21)
 }
 
 function isUuid(value: unknown) {

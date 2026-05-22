@@ -8,7 +8,7 @@ This is the full tech stack. If you follow it top to bottom you'll have a workin
 
 ## What you're building
 A workflow that:
-1. Pulls commercial buildings from countywdym parcel records
+1. Pulls commercial buildings from county parcel records
 2. Filters by year built (aging roof window)
 3. Fetches real roof geometry + panel placements from Google Solar API
 4. Pierces the LLC on the deed to find the real human owner
@@ -206,7 +206,7 @@ const result = await fal.subscribe("fal-ai/veo-3", {
     prompt: `Create a realistic aerial view of a commercial building with a rooftop solar installation.
 
 Use the provided satellite image as the base.
-Add dark blue solar panels aligned cleanly and evenly across the usable roof area.
+Preserve the matte black solar panels already placed on the usable roof area by the Google Solar reference image.
 Panels should be grouped in clean rows, not scattered.
 Avoid edges, HVAC units, and irregular shapes.
 Keep the building structure unchanged and recognizable.

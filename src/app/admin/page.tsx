@@ -65,11 +65,11 @@ export default async function AdminDashboard() {
   ]
 
   const workflow = [
-    { label: 'Parcel intake', value: `${prospectRows.length} sourced`, active: prospectRows.length > 0 },
-    { label: 'Solar geometry', value: `${solarFetchedCount} ready`, active: solarFetchedCount > 0 },
-    { label: 'Owner data', value: `${enrichedCount} enriched`, active: enrichedCount > 0 },
-    { label: 'Not qualified', value: `${notQualifiedCount} filtered`, active: notQualifiedCount > 0 },
-    { label: 'Published', value: `${publishedCount} live`, active: publishedCount > 0 },
+    { label: 'Residential intake', value: `${prospectRows.length} prospects`, active: prospectRows.length > 0 },
+    { label: 'Roof data', value: `${solarFetchedCount} ready`, active: solarFetchedCount > 0 },
+    { label: 'Prepared', value: `${enrichedCount} enriched`, active: enrichedCount > 0 },
+    { label: 'Filtered', value: `${notQualifiedCount} archived`, active: notQualifiedCount > 0 },
+    { label: 'Live proposals', value: `${publishedCount} live`, active: publishedCount > 0 },
   ]
 
   return (
@@ -123,7 +123,7 @@ export default async function AdminDashboard() {
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <div className="admin-eyebrow">Status</div>
-                  <h2 className="mt-1 text-lg font-semibold text-stone-50">Pipeline</h2>
+                  <h2 className="mt-1 text-lg font-semibold text-stone-50">Today</h2>
                 </div>
                 <ShieldCheck className="h-5 w-5 text-slate-400" />
               </div>

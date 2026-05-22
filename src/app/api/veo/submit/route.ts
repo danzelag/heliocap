@@ -14,6 +14,8 @@ type SubmitVeoBody = {
   image_url?: unknown
   renderPreviewUrl?: unknown
   render_preview_url?: unknown
+  solarPanelRenderUrl?: unknown
+  solar_panel_render_url?: unknown
   cleanedPreviewImageUrl?: unknown
   cleaned_preview_image_url?: unknown
   mapTilesImageUrl?: unknown
@@ -48,8 +50,7 @@ export async function POST(request: NextRequest) {
     const receiptReferences = slug ? await findReceiptReferences(slug) : emptyReferenceSet()
     const bodyReferences = extractReferenceSet(body)
     const referenceSet = mergeReferenceSets(receiptReferences, bodyReferences)
-    const referenceBoard = await buildVeoReferenceBoard(referenceSet)
-    const primaryReference = referenceBoard || selectPrimaryVeoReference(referenceSet)
+    const primaryReference = selectPrimaryVeoReference(referenceSet)
     const fallbackImageUrl = getFirstString(
       body.imageUrl,
       body.image_url,
@@ -83,7 +84,7 @@ export async function POST(request: NextRequest) {
     console.log('[api/veo/submit] Primary Veo reference selected', {
       source: primaryReference.source || 'fallback_request_image',
       url: primaryReference.url || imageUrl,
-      referenceBoard: Boolean(referenceBoard),
+      referenceBoard: false,
     })
 
     if (process.env.NODE_ENV !== 'production') {
@@ -136,7 +137,11 @@ function extractReferenceSet(body: SubmitVeoBody): VisualReferenceSet {
     // It has real panel geometry from Google Solar API already on the satellite image.
     // This is the ideal Veo seed — panels in the right place, no Gemini stripping.
     solarPanelRenderUrl:
-      getFirstString((referenceSet as Record<string, unknown>).solarPanelRenderUrl),
+      getFirstString(
+        body.solarPanelRenderUrl,
+        body.solar_panel_render_url,
+        (referenceSet as Record<string, unknown>).solarPanelRenderUrl,
+      ),
     mapTilesImageUrl:
       getFirstString(body.mapTilesImageUrl, body.map_tiles_image_url, referenceSet.mapTilesImageUrl),
     solarApiLayoutImageUrl:
@@ -215,9 +220,11 @@ type PrimaryVeoReference = {
 }
 
 async function buildVeoReferenceBoard(referenceSet: VisualReferenceSet): Promise<PrimaryVeoReference | null> {
+  if (referenceSet.solarPanelRenderUrl) {
+    return null
+  }
+
   const candidates = [
-    // solarPanelRenderUrl first — has real panel geometry already on the roof
-    referenceSet.solarPanelRenderUrl,
     referenceSet.cleanedPreviewImageUrl,
     referenceSet.mapTilesImageUrl,
     referenceSet.solarApiLayoutImageUrl,
@@ -255,7 +262,7 @@ async function buildVeoReferenceBoard(referenceSet: VisualReferenceSet): Promise
       .toBuffer()
 
     return {
-      source: 'combinedReferenceBoard',
+      source: 'combinedGoogleMapsReferenceBoard',
       url: '',
       buffer: board,
     }
@@ -287,7 +294,7 @@ function selectPrimaryVeoReference(referenceSet: VisualReferenceSet): PrimaryVeo
   }
 
   if (referenceSet.mapTilesImageUrl) {
-    return { source: 'mapTilesImageUrl', url: referenceSet.mapTilesImageUrl }
+    return { source: 'staticSatelliteImageUrl', url: referenceSet.mapTilesImageUrl }
   }
 
   if (isLikelyImageUrl(referenceSet.aerialViewReferenceUrl)) {
@@ -304,8 +311,9 @@ function selectPrimaryVeoReference(referenceSet: VisualReferenceSet): PrimaryVeo
 
 function describeReferenceSet(referenceSet: VisualReferenceSet) {
   const labels = [
-    referenceSet.cleanedPreviewImageUrl ? 'cleaned no-panel preview image' : null,
-    referenceSet.mapTilesImageUrl ? 'Map Tiles top-down roof image' : null,
+    referenceSet.solarPanelRenderUrl ? 'Google Solar black-panel reference image with proposed array geometry' : null,
+    referenceSet.cleanedPreviewImageUrl ? 'proposal seed frame' : null,
+    referenceSet.mapTilesImageUrl ? 'Static Maps top-down roof image' : null,
     referenceSet.solarApiLayoutImageUrl ? 'Solar API roof reference image without panel overlays, for roof geometry and site context only' : null,
     referenceSet.aerialViewReferenceUrl ? 'Google Aerial View identity reference' : null,
     referenceSet.streetViewReferenceUrls.length

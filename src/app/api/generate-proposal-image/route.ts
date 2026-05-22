@@ -16,6 +16,8 @@ type GenerateProposalImageBody = {
   aerial_view_reference_url?: string | null
   streetViewReferenceUrls?: string[]
   street_view_reference_urls?: string[]
+  solarApiLayoutImageUrl?: string
+  solar_api_layout_image_url?: string
   reference_set?: Record<string, unknown> | null
   business_name?: string
   address?: string
@@ -190,6 +192,11 @@ function buildReferenceSet(
       getString(existing.aerialViewReferenceUrl) ||
       null,
     streetViewReferenceUrls,
+    solarApiLayoutImageUrl:
+      getString(body.solarApiLayoutImageUrl) ||
+      getString(body.solar_api_layout_image_url) ||
+      getString(existing.solarApiLayoutImageUrl) ||
+      null,
     cleanedPreviewImageUrl: getString(cleanedPreviewImageUrl) || getString(existing.cleanedPreviewImageUrl) || null,
   }
 }

@@ -6,10 +6,19 @@ import {
 import sharp from 'sharp'
 
 const VERTEX_MODEL_RESOURCE = 'publishers/google/models/veo-3.1-generate-001'
-const VEO_DURATION_SECONDS = 15
+const VEO_DURATION_SECONDS = 8
 
 export const DEFAULT_VEO_CINEMATIC_PROMPT =
-  `Aerial drone footage slowly revealing a residential home from a low oblique angle, black solar panels covering the entire roof in neat rows, golden hour lighting, warm long shadows, lush green yard, smooth elegant camera motion pulling up and back, photorealistic, 4K, film-grade color grading, atmospheric haze, no people, no text, no watermarks.`
+  `Use the uploaded reference image as the exact residential property and source of truth. Create an 8-second flat 2D top-down image animation, like a premium proposal still with a subtle Ken Burns zoom. Keep the camera directly overhead like a satellite or map view. Use only a very slow top-down zoom-in. No 3D render, no oblique angle, no side angle, no drone orbit, no tilt, no pull-up reveal, no perspective change.
+
+Preserve the exact house, roof shape, roof planes, driveway, yard, street, neighbors, shadows, and top-down camera perspective from the reference image. Do not redesign, replace, expand, simplify, or invent a new house. Do not change neighboring homes or surrounding lots.
+
+The rooftop solar panels already visible in the reference image were placed from Google Solar roof geometry. Keep those panels exactly where they are. Do not add, move, duplicate, recolor, resize, or invent any panels. Do not place panels on neighboring houses, garages, streets, lawns, trees, driveways, or floating above the roof.
+
+All solar panels must be matte black or dark graphite only. The video should feel clean, polished, stable, and pleasant to watch: a touched-up top-down proposal image gently zooming in. No people, no cars, no text, no logos, no watermarks.`
+
+const BLACK_PANEL_SAFETY_PROMPT =
+  `Panel constraint: solar panels must be matte black or dark graphite only. Use only the panels visible in the uploaded reference image. Do not add, move, duplicate, recolor, or invent panels, and never place panels on neighboring properties or off-roof surfaces.`
 
 export function buildDefaultVeoCinematicPrompt(
   address?: string | null,
@@ -29,11 +38,22 @@ export function buildDefaultVeoCinematicPrompt(
     additions.push(`Available identity references collected before video generation: ${cleanReferenceContext}. Use these as building-identity constraints.`)
   }
 
-  if (!additions.length) return DEFAULT_VEO_CINEMATIC_PROMPT
+  if (!additions.length) return enforceBlackPanelVeoPrompt(DEFAULT_VEO_CINEMATIC_PROMPT)
 
-  return `${DEFAULT_VEO_CINEMATIC_PROMPT}
+  return enforceBlackPanelVeoPrompt(`${DEFAULT_VEO_CINEMATIC_PROMPT}
 
-${additions.join('\n')}`
+${additions.join('\n')}`)
+}
+
+export function enforceBlackPanelVeoPrompt(prompt: string) {
+  const cleanPrompt = prompt.trim()
+  if (cleanPrompt.includes('Panel constraint: solar panels must be matte black')) {
+    return cleanPrompt
+  }
+
+  return `${cleanPrompt}
+
+${BLACK_PANEL_SAFETY_PROMPT}`
 }
 
 type VertexImageInput = {
@@ -121,7 +141,7 @@ export async function submitVertexVeoRender({
     body: JSON.stringify({
       instances: [
         {
-          prompt,
+          prompt: enforceBlackPanelVeoPrompt(prompt),
           image,
         },
       ],

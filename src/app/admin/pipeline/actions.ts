@@ -1,32 +1,31 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase-server'
 import { SolarUtils } from '@/lib/solar-utils'
 import {
-  getProspectVisualCandidate,
-  prospectStages,
-  resolveProspectVisualTarget,
-  type Prospect,
-  type ProspectStage,
-} from '@/lib/prospect'
-import { recordProposalJobEvent } from '@/lib/proposal-job-events'
+  clampVisualZoom,
+  getExcludedReferenceUrls,
+  getProspectStoragePathFromPublicUrl,
+} from '@/lib/prospect-admin'
 import {
-  collectVisualReferences,
-  fetchSolarDataLayersMetadata,
-  fetchSolarInsights,
-  fetchStaticSatelliteImage,
+  buildProspectSolarApiLayoutReference,
+  collectProspectVisualReferences,
+  fetchProspectSolarRgbReference,
+  getProspectSolarCapability,
+  resolveAutoVisualCandidate,
+} from '@/lib/prospect-visual'
+import { prospectStages, resolveProspectVisualTarget, type Prospect, type ProspectStage } from '@/lib/prospect'
+import { recordProposalJobEvent } from '@/lib/proposal-job-events'
+import { runInAppProposalWorkflow } from '@/lib/proposal-workflow'
+import {
   fetchStreetViewImage,
-  listManualStreetViewReferenceUrls,
   uploadLeadAsset,
 } from '@/lib/openclaw-google'
-import sharp from 'sharp'
 
 const DEFAULT_SITE_URL = 'https://heliocap.vercel.app'
 const BULK_PROPOSAL_LIMIT = 25
-const MAX_AUTO_SOLAR_CENTER_DRIFT_METERS = 180
-const MIN_AUTO_SOLAR_PANEL_COUNT = 80
-const MIN_AUTO_SOLAR_AREA_METERS = 750
 
 function isProspectStage(value: string): value is ProspectStage {
   return prospectStages.includes(value as ProspectStage)
@@ -91,23 +90,24 @@ export async function getProspectVisualPreviewAction(id: string, lat?: number, l
   if (!candidate) return { success: false, error: 'No coordinates available for preview.' }
 
   try {
-    const previewZoom = clampZoom(zoom)
-    const image = await fetchStaticSatelliteImage(candidate.lat, candidate.lng, previewZoom)
-    const preview = await sharp(image)
-      .resize(960, 540, { fit: 'cover', position: 'center' })
-      .jpeg({ quality: 82 })
-      .toBuffer()
+    const previewZoom = clampVisualZoom(zoom)
+    const solarRgb = await fetchProspectSolarRgbReference({
+      supabase,
+      id,
+      lat: candidate.lat,
+      lng: candidate.lng,
+    })
 
     return {
       success: true,
-      imageDataUrl: `data:image/jpeg;base64,${preview.toString('base64')}`,
+      imageDataUrl: solarRgb.url,
       lat: candidate.lat,
       lng: candidate.lng,
       zoom: previewZoom,
-      source: candidate.source,
+      source: 'google_solar_rgb',
     }
   } catch (previewError) {
-    const message = previewError instanceof Error ? previewError.message : 'Failed to generate visual preview.'
+    const message = previewError instanceof Error ? previewError.message : 'Failed to load Solar API RGB imagery.'
     return { success: false, error: message }
   }
 }
@@ -132,22 +132,20 @@ export async function saveProspectVisualTargetAction({
 
   const supabase = await createAdminClient()
   const verifiedAt = new Date().toISOString()
-  const visualZoom = clampZoom(zoom)
+  const visualZoom = clampVisualZoom(zoom)
   let visualPreviewUrl: string | null = null
 
   try {
-    const previewBuffer = await fetchStaticSatelliteImage(lat, lng, visualZoom)
-    visualPreviewUrl = await uploadLeadAsset({
+    const solarRgb = await fetchProspectSolarRgbReference({
       supabase,
-      bucket: 'prospects',
-      slug: id,
-      fileName: 'visual-target.png',
-      body: previewBuffer,
-      contentType: 'image/png',
+      id,
+      lat,
+      lng,
     })
+    visualPreviewUrl = solarRgb.url
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error(`[pipeline] Visual target preview save failed: ${message}`)
+    console.error(`[pipeline] Solar RGB target preview save failed: ${message}`)
   }
 
   const { error } = await supabase
@@ -191,7 +189,7 @@ export async function getProspectVisualReferencesAction(id: string, lat?: number
   const supabase = await createAdminClient()
   const { data: prospect, error } = await supabase
     .from('prospects')
-    .select('id,address,visual_preview_url')
+    .select('id,address,visual_preview_url,visual_reference_exclusions,solar_reference_enabled,solar_reference_lat,solar_reference_lng,solar_reference_zoom,solar_reference_url')
     .eq('id', id)
     .maybeSingle()
 
@@ -199,39 +197,98 @@ export async function getProspectVisualReferencesAction(id: string, lat?: number
   if (!prospect) return { success: false, error: 'Prospect not found' }
 
   try {
-    const referenceSet = await collectVisualReferences({
+    const {
+      filteredReferenceSet,
+      excludedUrls,
+      referenceCards,
+    } = await collectProspectVisualReferences({
       supabase,
-      bucket: 'prospects',
-      slug: id,
+      prospect,
       lat: requestedLat,
       lng: requestedLng,
-      address: prospect.address,
-      mapTilesImageUrl: prospect.visual_preview_url || null,
     })
-    const manualStreetViewReferenceUrls = await listManualStreetViewReferenceUrls({
-      supabase,
-      prospectId: id,
-    })
-    const mergedReferenceSet = {
-      ...referenceSet,
-      streetViewReferenceUrls: [
-        ...manualStreetViewReferenceUrls,
-        ...referenceSet.streetViewReferenceUrls,
-      ].filter((url, index, urls) => urls.indexOf(url) === index),
-    }
+    await removeExcludedProspectReferenceFiles(supabase, excludedUrls)
 
     return {
       success: true,
-      reference_set: mergedReferenceSet,
-      referenceCards: buildVisualReferenceCards(mergedReferenceSet, manualStreetViewReferenceUrls.length),
-      mapTilesImageUrl: mergedReferenceSet.mapTilesImageUrl,
-      aerialViewReferenceUrl: mergedReferenceSet.aerialViewReferenceUrl,
-      streetViewReferenceUrls: mergedReferenceSet.streetViewReferenceUrls,
+      reference_set: filteredReferenceSet,
+      referenceCards,
+      mapTilesImageUrl: filteredReferenceSet.mapTilesImageUrl,
+      aerialViewReferenceUrl: filteredReferenceSet.aerialViewReferenceUrl,
+      streetViewReferenceUrls: filteredReferenceSet.streetViewReferenceUrls,
+      solarApiLayoutImageUrl: filteredReferenceSet.solarApiLayoutImageUrl || null,
+      solarReferenceEnabled: prospect.solar_reference_enabled !== false,
+      solarReferenceLat: prospect.solar_reference_lat ?? requestedLat,
+      solarReferenceLng: prospect.solar_reference_lng ?? requestedLng,
+      solarReferenceZoom: prospect.solar_reference_zoom ?? null,
     }
   } catch (referenceError) {
     const message = referenceError instanceof Error ? referenceError.message : 'Failed to collect visual references.'
     return { success: false, error: message }
   }
+}
+
+export async function saveProspectSolarReferenceAction({
+  id,
+  lat,
+  lng,
+  zoom,
+  enabled,
+}: {
+  id: string
+  lat: number
+  lng: number
+  zoom?: number
+  enabled: boolean
+}) {
+  if (!id) return { success: false, error: 'Missing prospect ID' }
+
+  const supabase = await createAdminClient()
+  if (!enabled) {
+    const { error } = await supabase
+      .from('prospects')
+      .update({
+        solar_reference_enabled: false,
+        solar_reference_updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+    if (error) return { success: false, error: error.message }
+
+    revalidatePath('/admin')
+    revalidatePath('/admin/pipeline')
+    return { success: true, enabled: false, url: null }
+  }
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return { success: false, error: 'Enter valid Solar API reference latitude and longitude.' }
+  }
+
+  const url = await buildProspectSolarApiLayoutReference({
+    supabase,
+    id,
+    lat,
+    lng,
+    zoom,
+  })
+  if (!url) return { success: false, error: 'Google Solar API did not return roof imagery for this location.' }
+
+  const { data: prospect } = await supabase
+    .from('prospects')
+    .select('visual_reference_exclusions')
+    .eq('id', id)
+    .maybeSingle()
+  const exclusions = getExcludedReferenceUrls(prospect?.visual_reference_exclusions).filter((excludedUrl) => excludedUrl !== url)
+  await supabase
+    .from('prospects')
+    .update({
+      visual_reference_exclusions: exclusions,
+      solar_reference_enabled: true,
+    })
+    .eq('id', id)
+
+  revalidatePath('/admin')
+  revalidatePath('/admin/pipeline')
+  return { success: true, enabled: true, url }
 }
 
 export async function saveProspectStreetViewCaptureAction({
@@ -284,153 +341,90 @@ export async function saveProspectStreetViewCaptureAction({
 }
 
 export async function getProspectSolarCapabilityAction(id: string, lat?: number, lng?: number) {
-  if (!id) return { success: false, error: 'Missing prospect ID' }
+  if (!id) {
+    return { success: false, error: 'Missing prospect ID', building: null, roofSegments: [], dataLayers: null }
+  }
 
   const requestedLat = Number(lat)
   const requestedLng = Number(lng)
   if (!Number.isFinite(requestedLat) || !Number.isFinite(requestedLng)) {
-    return { success: false, error: 'Enter valid latitude and longitude first.' }
+    return {
+      success: false,
+      error: 'Enter valid latitude and longitude first.',
+      building: null,
+      roofSegments: [],
+      dataLayers: null,
+    }
   }
 
-  const [insightsResult, dataLayersResult] = await Promise.allSettled([
-    fetchSolarInsights(requestedLat, requestedLng),
-    fetchSolarDataLayersMetadata(requestedLat, requestedLng),
-  ])
-  const insights = insightsResult.status === 'fulfilled' ? insightsResult.value : null
-  const dataLayers = dataLayersResult.status === 'fulfilled' ? dataLayersResult.value : null
-  const insightsError = insightsResult.status === 'rejected'
-    ? insightsResult.reason instanceof Error ? insightsResult.reason.message : String(insightsResult.reason)
-    : null
-  const dataLayersError = dataLayersResult.status === 'rejected'
-    ? dataLayersResult.reason instanceof Error ? dataLayersResult.reason.message : String(dataLayersResult.reason)
-    : null
+  const supabase = await createAdminClient()
+  return getProspectSolarCapability({
+    supabase,
+    id,
+    lat: requestedLat,
+    lng: requestedLng,
+  })
+}
 
-  const roofSegments = (insights?.solarPotential?.roofSegmentStats || []).slice(0, 8).map((segment, index) => ({
-    id: index + 1,
-    areaSqft: segment.stats?.areaMeters2 ? Math.round(segment.stats.areaMeters2 * 10.7639) : null,
-    pitchDegrees: typeof segment.pitchDegrees === 'number' ? Math.round(segment.pitchDegrees * 10) / 10 : null,
-    azimuthDegrees: typeof segment.azimuthDegrees === 'number' ? Math.round(segment.azimuthDegrees) : null,
-  }))
-  const dataLayerCards = [
-    {
-      id: 'rgb',
-      label: 'Solar RGB imagery',
-      available: Boolean(dataLayers?.rgbUrl),
-      reason: dataLayers?.rgbUrl ? null : dataLayersError || 'Unavailable from Solar data layers for this roof.',
-    },
-    {
-      id: 'mask',
-      label: 'Roof mask',
-      available: Boolean(dataLayers?.maskUrl),
-      reason: dataLayers?.maskUrl ? null : dataLayersError || 'Unavailable from Solar data layers for this roof.',
-    },
-    {
-      id: 'dsm',
-      label: 'DSM height model',
-      available: Boolean(dataLayers?.dsmUrl),
-      reason: dataLayers?.dsmUrl ? null : dataLayersError || 'Unavailable from Solar data layers for this roof.',
-    },
-    {
-      id: 'annual-flux',
-      label: 'Annual sunlight flux',
-      available: Boolean(dataLayers?.annualFluxUrl),
-      reason: dataLayers?.annualFluxUrl ? null : dataLayersError || 'Unavailable from Solar data layers for this roof.',
-    },
-    {
-      id: 'monthly-flux',
-      label: 'Monthly sunlight flux',
-      available: Boolean(dataLayers?.monthlyFluxUrl),
-      reason: dataLayers?.monthlyFluxUrl ? null : 'Not requested in this lightweight app view to control payload size.',
-    },
-    {
-      id: 'hourly-shade',
-      label: 'Hourly shade layers',
-      available: Boolean(dataLayers?.hourlyShadeUrls?.length),
-      reason: dataLayers?.hourlyShadeUrls?.length ? null : 'Not requested in this lightweight app view to control payload size.',
-    },
-  ]
+export async function deleteProspectVisualReferenceAction({
+  id,
+  url,
+}: {
+  id: string
+  url: string
+}) {
+  if (!id) return { success: false, error: 'Missing prospect ID' }
+  if (!url) return { success: false, error: 'Missing reference URL' }
 
-  return {
-    success: Boolean(insights || dataLayers),
-    error: !insights && !dataLayers
-      ? insightsError || dataLayersError || 'Google Solar API returned no roof data for this location.'
-      : undefined,
-    building: {
-      available: Boolean(insights),
-      centerLat: insights?.center?.latitude ?? null,
-      centerLng: insights?.center?.longitude ?? null,
-      roofSegmentCount: insights?.solarPotential?.roofSegmentStats?.length || 0,
-      panelCandidateCount: insights?.solarPotential?.solarPanels?.length || 0,
-      maxPanelCount: insights?.solarPotential?.maxArrayPanelsCount || 0,
-      maxArrayAreaSqft: insights?.solarPotential?.maxArrayAreaMeters2
-        ? Math.round(insights.solarPotential.maxArrayAreaMeters2 * 10.7639)
-        : null,
-      maxSunshineHoursPerYear: insights?.solarPotential?.maxSunshineHoursPerYear
-        ? Math.round(insights.solarPotential.maxSunshineHoursPerYear)
-        : null,
-      unavailableReason: insights ? null : insightsError || 'No buildingInsights result for this roof.',
-    },
-    roofSegments,
-    dataLayers: {
-      available: Boolean(dataLayers),
-      imageryQuality: dataLayers?.imageryQuality || null,
-      imageryDate: formatGoogleDate(dataLayers?.imageryDate),
-      imageryProcessedDate: formatGoogleDate(dataLayers?.imageryProcessedDate),
-      cards: dataLayerCards,
-      unavailableReason: dataLayers ? null : dataLayersError || 'No Solar data layers result for this roof.',
-    },
+  const supabase = await createAdminClient()
+  const storagePath = getProspectStoragePathFromPublicUrl(url)
+  if (!storagePath || !storagePath.startsWith(`${id}/`)) {
+    return { success: false, error: 'This reference is not a deletable prospect storage image.' }
   }
+
+  const { error } = await supabase.storage.from('prospects').remove([storagePath])
+  if (error) return { success: false, error: error.message }
+
+  const { data: prospect } = await supabase
+    .from('prospects')
+    .select('visual_preview_url,satellite_url,render_url,render_preview_url,visual_reference_exclusions,solar_reference_url')
+    .eq('id', id)
+    .maybeSingle()
+  const update: Record<string, unknown> = {
+    visual_reference_exclusions: [...new Set([...getExcludedReferenceUrls(prospect?.visual_reference_exclusions), url])],
+  }
+  if (prospect?.visual_preview_url === url || storagePath === `${id}/visual-target.png`) {
+    update.visual_preview_url = null
+  }
+  if (prospect?.satellite_url === url) update.satellite_url = null
+  if (prospect?.render_url === url) update.render_url = null
+  if (prospect?.render_preview_url === url) update.render_preview_url = null
+  if (prospect?.solar_reference_url === url || storagePath === `${id}/references/solar-api-layout.webp`) {
+    update.solar_reference_url = null
+  }
+
+  const { error: updateError } = await supabase
+    .from('prospects')
+    .update(update)
+    .eq('id', id)
+  if (updateError) return { success: false, error: updateError.message }
+
+  revalidatePath('/admin')
+  revalidatePath('/admin/pipeline')
+  return { success: true, deletedPath: storagePath }
 }
 
-function formatGoogleDate(date?: { year?: number; month?: number; day?: number }) {
-  if (!date?.year || !date.month || !date.day) return null
-  return `${date.year}-${String(date.month).padStart(2, '0')}-${String(date.day).padStart(2, '0')}`
-}
-
-function buildVisualReferenceCards(
-  referenceSet: Awaited<ReturnType<typeof collectVisualReferences>>,
-  manualStreetViewCount = 0,
+async function removeExcludedProspectReferenceFiles(
+  supabase: Awaited<ReturnType<typeof createAdminClient>>,
+  excludedUrls: string[],
 ) {
-  const cards = [
-    {
-      id: 'map-tiles',
-      label: 'Map / satellite roof frame',
-      type: 'Top-down roof geometry',
-      url: referenceSet.mapTilesImageUrl,
-      unavailableReason: referenceSet.mapTilesImageUrl
-        ? null
-        : 'Unavailable until the visual target preview is generated and saved.',
-    },
-    {
-      id: 'aerial-view',
-      label: 'Google Aerial View',
-      type: 'Optional 3D aerial identity reference',
-      url: referenceSet.aerialViewReferenceUrl,
-      unavailableReason: referenceSet.aerialViewReferenceUrl
-        ? null
-        : 'Unavailable. Google Aerial View did not return an active image/video for this address or region.',
-    },
-  ]
+  const paths = excludedUrls
+    .map(getProspectStoragePathFromPublicUrl)
+    .filter((path): path is string => Boolean(path))
 
-  for (let index = 0; index < 5; index += 1) {
-    const url = referenceSet.streetViewReferenceUrls[index] || null
-    const isManual = index < manualStreetViewCount
-    cards.push({
-      id: `street-view-${index + 1}`,
-      label: isManual ? `Manual Street View ${index + 1}` : `Street View ${index + 1}`,
-      type: isManual
-        ? 'Manually aimed facade reference'
-        : index === 0
-          ? 'Front-facing facade anchor'
-          : 'Street-level angle variant',
-      url,
-      unavailableReason: url
-        ? null
-        : 'Unavailable. Street View did not return another usable outdoor angle facing the selected home.',
-    })
-  }
-
-  return cards
+  if (!paths.length) return
+  const { error } = await supabase.storage.from('prospects').remove(paths)
+  if (error) console.error(`[pipeline] Failed to remove excluded references: ${error.message}`)
 }
 
 export async function promoteProspectToLeadAction(id: string) {
@@ -525,10 +519,10 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
     return { success: false, error: 'Could not auto-detect a reliable roof target. Verify target building before creating proposal.' }
   }
 
-  const webhookUrl = process.env.N8N_CREATE_PROPOSAL_WEBHOOK_URL
-  if (!webhookUrl) {
-    return { success: false, error: 'N8N_CREATE_PROPOSAL_WEBHOOK_URL is not configured' }
-  }
+  const solarReferenceUrl = prospectWithVisualTarget.solar_reference_enabled === false
+    ? null
+    : prospectWithVisualTarget.solar_reference_url || null
+  const visualReferenceExclusions = getExcludedReferenceUrls(prospectWithVisualTarget.visual_reference_exclusions)
 
   const { data: job, error: jobError } = await supabase
     .from('proposal_jobs')
@@ -547,6 +541,8 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
         visual_target: visualTarget,
         visual_zoom: prospectWithVisualTarget.visual_zoom || null,
         visual_preview_url: prospectWithVisualTarget.visual_preview_url || null,
+        solarApiLayoutImageUrl: solarReferenceUrl,
+        visual_reference_exclusions: visualReferenceExclusions,
       },
     }])
     .select('id')
@@ -561,66 +557,23 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
     progressPercent: 2,
   })
 
-  const response = await fetch(webhookUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      business_name: businessName,
-      address: prospectWithVisualTarget.address,
-      lat: visualTarget.lat,
-      lng: visualTarget.lng,
-      slug,
-      prospect_id: prospectWithVisualTarget.id,
-      job_id: job.id,
-      visual_target: visualTarget,
-      visual_zoom: prospectWithVisualTarget.visual_zoom || null,
-      visual_preview_url: prospectWithVisualTarget.visual_preview_url || null,
-    }),
-    cache: 'no-store',
-  })
-
-  const receiptText = await response.text()
-  const receipt = parseJsonReceipt(receiptText)
-
-  if (!response.ok) {
-    await supabase
-      .from('proposal_jobs')
-      .update({
-        status: 'failed',
-        current_step: 'n8n rejected the prospect job',
-        progress_percent: 100,
-        error_message: getReceiptMessage(receipt) || `n8n returned ${response.status}`,
-        receipt,
-      })
-      .eq('id', job.id)
-    await recordProposalJobEvent(supabase, {
-      jobId: job.id,
-      businessName,
-      status: 'failed',
-      step: 'n8n rejected the prospect job',
-      progressPercent: 100,
-      errorMessage: getReceiptMessage(receipt) || `n8n returned ${response.status}`,
-    })
-
-    return {
-      success: false,
-      error: getReceiptMessage(receipt) || `n8n returned ${response.status}`,
-    }
-  }
-
   await supabase
     .from('proposal_jobs')
     .update({
       status: 'running',
-      current_step: 'n8n workflow started',
+      current_step: 'App workflow starting',
       progress_percent: 8,
       receipt: {
-        ...(receipt || {}),
         prospect_id: prospectWithVisualTarget.id,
         source: 'prospect_table',
+        engine: 'app',
+        build_status: 'processing',
+        build_status_label: 'Processing',
         visual_target: visualTarget,
         visual_zoom: prospectWithVisualTarget.visual_zoom || null,
         visual_preview_url: prospectWithVisualTarget.visual_preview_url || null,
+        solarApiLayoutImageUrl: solarReferenceUrl,
+        visual_reference_exclusions: visualReferenceExclusions,
       },
     })
     .eq('id', job.id)
@@ -628,9 +581,10 @@ async function queueProposalForProspect(supabase: Awaited<ReturnType<typeof crea
     jobId: job.id,
     businessName,
     status: 'running',
-    step: 'n8n workflow started',
+    step: 'App workflow starting',
     progressPercent: 8,
   })
+  after(() => runInAppProposalWorkflow(job.id))
 
   return {
     success: true,
@@ -683,82 +637,31 @@ async function ensureVisualTargetForProposal(
   }
 }
 
-async function resolveAutoVisualCandidate(prospect: Prospect) {
-  const existing = getProspectVisualCandidate(prospect)
-  if (
-    prospect.visual_verified === true &&
-    existing?.source === 'saved_visual'
-  ) {
-    return existing
-  }
-
-  if (existing) {
-    const solarCandidate = await getSolarRoofCenterCandidate(existing.lat, existing.lng)
-    if (solarCandidate) return solarCandidate
-  }
-
-  return existing
-}
-
-async function getSolarRoofCenterCandidate(lat: number, lng: number) {
-  const insights = await fetchSolarInsights(lat, lng).catch((error) => {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(`[pipeline] Auto visual target solar lookup failed: ${message}`)
-    return null
-  })
-
-  const center = insights?.center
-  if (typeof center?.latitude !== 'number' || typeof center.longitude !== 'number') return null
-
-  const driftMeters = distanceMeters(lat, lng, center.latitude, center.longitude)
-  const panelCount = insights?.solarPotential?.maxArrayPanelsCount || insights?.solarPotential?.solarPanels?.length || 0
-  const roofAreaMeters = insights?.solarPotential?.maxArrayAreaMeters2 || 0
-  const looksCommercial = panelCount >= MIN_AUTO_SOLAR_PANEL_COUNT || roofAreaMeters >= MIN_AUTO_SOLAR_AREA_METERS
-
-  if (driftMeters > MAX_AUTO_SOLAR_CENTER_DRIFT_METERS || !looksCommercial) {
-    console.log('[pipeline] Auto visual target rejected', {
-      driftMeters: Math.round(driftMeters),
-      panelCount,
-      roofAreaMeters: Math.round(roofAreaMeters),
-      looksCommercial,
-    })
-    return null
-  }
-
-  return {
-    lat: center.latitude,
-    lng: center.longitude,
-    source: 'google_solar_roof_center' as const,
-    reason: `${Math.round(driftMeters)}m drift, ${panelCount} panels, ${Math.round(roofAreaMeters)}m2 roof`,
-  }
-}
-
-function distanceMeters(aLat: number, aLng: number, bLat: number, bLng: number) {
-  const earthRadiusMeters = 6371000
-  const toRadians = (degrees: number) => (degrees * Math.PI) / 180
-  const deltaLat = toRadians(bLat - aLat)
-  const deltaLng = toRadians(bLng - aLng)
-  const lat1 = toRadians(aLat)
-  const lat2 = toRadians(bLat)
-  const h =
-    Math.sin(deltaLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2
-
-  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
-}
-
 export async function clearProposalQueueAction() {
   const supabase = await createAdminClient()
+  const staleCutoff = new Date(Date.now() - 20 * 60 * 1000).toISOString()
 
-  const { data: jobs, error: fetchError } = await supabase
+  const { data: finishedJobs, error: finishedFetchError } = await supabase
     .from('proposal_jobs')
     .select('id')
     .in('status', ['completed', 'failed'])
 
-  if (fetchError) return { success: false, error: fetchError.message }
-  if (!jobs || jobs.length === 0) return { success: true, cleared: 0 }
+  if (finishedFetchError) return { success: false, error: finishedFetchError.message }
 
-  const ids = jobs.map((j) => j.id)
+  const { data: staleJobs, error: staleFetchError } = await supabase
+    .from('proposal_jobs')
+    .select('id')
+    .eq('status', 'running')
+    .lt('updated_at', staleCutoff)
+
+  if (staleFetchError) return { success: false, error: staleFetchError.message }
+
+  const ids = [...new Set([
+    ...((finishedJobs || []).map((j) => j.id)),
+    ...((staleJobs || []).map((j) => j.id)),
+  ])]
+
+  if (ids.length === 0) return { success: true, cleared: 0 }
 
   await supabase.from('proposal_job_events').delete().in('job_id', ids)
   const { error } = await supabase.from('proposal_jobs').delete().in('id', ids)
@@ -829,38 +732,4 @@ export async function triggerProspectEnrichmentAction(id: string) {
   }
 
   return { success: true }
-}
-
-function parseJsonReceipt(value: string): Record<string, unknown> | null {
-  if (!value) return null
-
-  try {
-    return JSON.parse(value) as Record<string, unknown>
-  } catch {
-    return { message: value }
-  }
-}
-
-function clampZoom(value: unknown) {
-  const zoom = Number(value)
-  if (!Number.isFinite(zoom)) return 19
-  return Math.min(Math.max(Math.round(zoom), 16), 21)
-}
-
-function getReceiptUrl(receipt: Record<string, unknown> | null) {
-  if (!receipt) return null
-
-  const candidates = [receipt.url, receipt.proposal_url, receipt.proposalUrl]
-  const url = candidates.find((value): value is string => typeof value === 'string' && value.length > 0)
-
-  return url || null
-}
-
-function getReceiptMessage(receipt: Record<string, unknown> | null) {
-  if (!receipt) return null
-
-  const candidates = [receipt.error, receipt.message]
-  const message = candidates.find((value): value is string => typeof value === 'string' && value.length > 0)
-
-  return message || null
 }

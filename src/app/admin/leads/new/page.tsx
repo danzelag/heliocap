@@ -33,9 +33,9 @@ export default function NewLeadPage() {
       <main className="mx-auto max-w-6xl px-5 py-6 lg:px-8">
         <div className="admin-panel mb-5 p-4 lg:p-5">
           <div className="admin-eyebrow">Residential prospect</div>
-          <h1 className="mt-1 text-2xl font-semibold text-stone-50">Add homeowner manually</h1>
+          <h1 className="mt-1 text-2xl font-semibold text-stone-50">Add homeowner</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            Use this when a homeowner gives you their details directly. It creates a prospect row only; verify the roof before generating a proposal.
+            Save the lead, verify the roof, then generate the proposal from Prospects.
           </p>
         </div>
 

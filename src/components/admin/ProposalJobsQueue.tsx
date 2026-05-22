@@ -5,6 +5,17 @@ import Link from 'next/link'
 import { Activity, ChevronDown, ChevronRight, ExternalLink, Loader2, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import { clearProposalQueueAction } from '@/app/admin/pipeline/actions'
+import {
+  getProposalBuildStatus,
+  getProposalQueueBadgeClass,
+  getProposalQueueDisplayStatus,
+  getProposalQueueLabel,
+  getProposalWorkflowIndex,
+  getReceiptString,
+  proposalWorkflowSteps,
+  type BuildDisplayStatus,
+  type QueueDisplayStatus,
+} from '@/lib/admin-pipeline'
 import { readClientCache, writeClientCache } from '@/lib/client-cache'
 
 export type ProposalJob = {
@@ -41,21 +52,6 @@ type ProposalJobsQueueProps = {
 
 const JOBS_CACHE_KEY = 'admin:proposal-jobs'
 const EVENTS_CACHE_KEY = 'admin:proposal-job-events'
-const STALE_RUNNING_MS = 20 * 60 * 1000
-
-type QueueDisplayStatus = ProposalJob['status'] | 'not_qualified' | 'stalled'
-type BuildDisplayStatus =
-  | 'queued'
-  | 'processing'
-  | 'qualified'
-  | 'filtered_out'
-  | 'image_generating'
-  | 'image_generated'
-  | 'video_rendering'
-  | 'video_complete'
-  | 'proposal_publishing'
-  | 'proposal_published'
-  | 'failed'
 
 function isBatchJob(job: ProposalJob) {
   return job.slug.startsWith('batch-')
@@ -70,67 +66,106 @@ function parseBatchAddress(address: string) {
 }
 
 function getDisplayStatus(job: ProposalJob): QueueDisplayStatus {
-  const buildStatus = getBuildStatus(job)
-  if (buildStatus === 'filtered_out') return 'not_qualified'
-  if (buildStatus === 'failed') return 'failed'
-  if (buildStatus === 'proposal_published') return 'completed'
-
-  const text = `${job.current_step || ''} ${job.error_message || ''}`
-  if (/not\s*qualified|filtered\s*out|disqualified|filter qualified solar targets/i.test(text)) return 'not_qualified'
-  if (
-    job.status === 'running' &&
-    new Date().getTime() - new Date(job.updated_at || job.created_at).getTime() > STALE_RUNNING_MS
-  ) {
-    return 'stalled'
-  }
-  return job.status
+  return getProposalQueueDisplayStatus(job)
 }
 
 function getBuildStatus(job: ProposalJob): BuildDisplayStatus | null {
-  const value = job.receipt?.build_status
-  if (typeof value !== 'string') return null
-  if (!buildStatusLabels[value as BuildDisplayStatus]) return null
-  return value as BuildDisplayStatus
+  return getProposalBuildStatus(job)
 }
 
 function statusClass(status: QueueDisplayStatus) {
-  if (status === 'completed') return 'admin-status admin-status-success px-2 py-1'
-  if (status === 'failed') return 'admin-status admin-status-danger px-2 py-1'
-  if (status === 'not_qualified') return 'admin-status admin-status-warning px-2 py-1'
-  if (status === 'running') return 'admin-status admin-status-running px-2 py-1'
-  if (status === 'stalled') return 'admin-status admin-status-danger px-2 py-1'
-  return 'admin-status px-2 py-1'
-}
-
-function statusLabel(status: QueueDisplayStatus) {
-  if (status === 'not_qualified') return 'Not Qualified'
-  if (status === 'stalled') return 'needs update'
-  return status
-}
-
-const buildStatusLabels: Record<BuildDisplayStatus, string> = {
-  queued: 'Queued',
-  processing: 'Processing',
-  qualified: 'Qualified',
-  filtered_out: 'Not Qualified',
-  image_generating: 'Generating Image',
-  image_generated: 'Image Generated',
-  video_rendering: 'Rendering Video',
-  video_complete: 'Video Complete',
-  proposal_publishing: 'Publishing Proposal',
-  proposal_published: 'Proposal Ready',
-  failed: 'Failed',
+  return getProposalQueueBadgeClass(status)
 }
 
 function getQueueLabel(job: ProposalJob, displayStatus: QueueDisplayStatus) {
-  const buildStatus = getBuildStatus(job)
-  return buildStatus ? buildStatusLabels[buildStatus] : statusLabel(displayStatus)
+  return getProposalQueueLabel(job, displayStatus)
+}
+
+function getWorkflowIndex(job: ProposalJob) {
+  return getProposalWorkflowIndex(job)
 }
 
 function getQueueReason(job: ProposalJob) {
+  const failure = getFailureDetails(job)
+  if (failure) return failure
   const reason = job.receipt?.reason
   if (typeof reason === 'string' && reason.trim()) return reason.trim()
   return job.error_message
+}
+
+function getFailureDetails(job: ProposalJob) {
+  const receipt = job.receipt || {}
+  const failure = receipt.failure
+  if (failure && typeof failure === 'object' && !Array.isArray(failure)) {
+    const failureRecord = failure as Record<string, unknown>
+    const message = typeof failureRecord.message === 'string' ? failureRecord.message : null
+    const code = typeof failureRecord.code === 'string' ? failureRecord.code : null
+    const details = typeof failureRecord.details === 'string' ? failureRecord.details : null
+    return [getReceiptString(receipt, 'failure_step'), code, message, details].filter(Boolean).join(' · ')
+  }
+  return job.error_message
+}
+
+function getReferenceCount(job: ProposalJob) {
+  const referenceSet = job.receipt?.reference_set || job.receipt?.visual_references
+  if (!referenceSet || typeof referenceSet !== 'object' || Array.isArray(referenceSet)) return 0
+  const record = referenceSet as Record<string, unknown>
+  const streetViews = Array.isArray(record.streetViewReferenceUrls) ? record.streetViewReferenceUrls.length : 0
+  return [
+    record.solarPanelRenderUrl,
+    record.cleanedPreviewImageUrl,
+    record.mapTilesImageUrl,
+    record.solarApiLayoutImageUrl,
+    record.aerialViewReferenceUrl,
+  ].filter((value) => typeof value === 'string' && value.trim()).length + streetViews
+}
+
+function getWorkflowDiagnostics(job: ProposalJob) {
+  const receipt = job.receipt || {}
+  const solarDebug = getSolarDebug(receipt)
+  const solarLayers = getSolarLayerAssets(receipt)
+  return [
+    ['Step', job.current_step],
+    ['Build', getReceiptString(receipt, 'build_status_label') || getReceiptString(receipt, 'build_status') || getQueueLabel(job, getDisplayStatus(job))],
+    ['Failure', getFailureDetails(job)],
+    ['Solar model', getReceiptString(receipt, 'solar_model') ? 'available' : receipt.solar_model ? 'available' : null],
+    ['Solar layout', solarDebug ? `${solarDebug.selectedPanelCount}/${solarDebug.apiPanelCandidates} panels · ${solarDebug.selectedSegmentCount} roof segment${solarDebug.selectedSegmentCount === 1 ? '' : 's'}` : null],
+    ['Solar layers', solarLayers.length ? `${solarLayers.filter((layer) => layer.previewUrl || layer.originalUrl).length}/${solarLayers.length} saved` : null],
+    ['References', getReferenceCount(job) ? `${getReferenceCount(job)} collected` : null],
+    ['Media', receipt.video_required === false ? 'still image' : receipt.video_required === true ? 'video required' : null],
+    ['Proposal', getReceiptString(receipt, 'proposal_url') || job.proposal_url],
+  ].filter(([, value]) => value)
+}
+
+function getSolarLayerAssets(receipt: Record<string, unknown> | null | undefined) {
+  const value = receipt?.solar_data_layers
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+  const layers = (value as Record<string, unknown>).layers
+  if (!Array.isArray(layers)) return []
+
+  return layers
+    .filter((layer): layer is Record<string, unknown> => Boolean(layer) && typeof layer === 'object' && !Array.isArray(layer))
+    .map((layer) => ({
+      id: typeof layer.id === 'string' ? layer.id : '',
+      label: typeof layer.label === 'string' ? layer.label : 'Solar layer',
+      previewUrl: typeof layer.previewUrl === 'string' && layer.previewUrl.trim() ? layer.previewUrl.trim() : null,
+      originalUrl: typeof layer.originalUrl === 'string' && layer.originalUrl.trim() ? layer.originalUrl.trim() : null,
+      error: typeof layer.error === 'string' && layer.error.trim() ? layer.error.trim() : null,
+      contentType: typeof layer.contentType === 'string' && layer.contentType.trim() ? layer.contentType.trim() : null,
+    }))
+}
+
+function getSolarDebug(receipt: Record<string, unknown> | null | undefined) {
+  const value = receipt?.solar_layout_debug
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const record = value as Record<string, unknown>
+  const selectedSegments = Array.isArray(record.selectedSegments) ? record.selectedSegments : []
+  return {
+    apiPanelCandidates: typeof record.apiPanelCandidates === 'number' ? record.apiPanelCandidates : 0,
+    selectedPanelCount: typeof record.selectedPanelCount === 'number' ? record.selectedPanelCount : 0,
+    selectedSegmentCount: selectedSegments.length,
+    raw: record,
+  }
 }
 
 function formatTime(value: string) {
@@ -183,6 +218,25 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
     const status = getDisplayStatus(j)
     return !isBatchJob(j) && (status === 'completed' || status === 'failed' || status === 'not_qualified')
   }).length, [jobs])
+  const focusJob = useMemo(() => (
+    jobs.find((job) => !isBatchJob(job) && ['running', 'queued'].includes(getDisplayStatus(job))) ||
+    jobs.find((job) => !isBatchJob(job)) ||
+    null
+  ), [jobs])
+  const focusEvents = useMemo(() => focusJob ? getJobEvents(events, focusJob.id).slice(-5).reverse() : [], [events, focusJob])
+  const hasPendingVideo = useMemo(() => jobs.some((job) => {
+    const receipt = job.receipt || {}
+    const hasOperation = typeof receipt.veo_operation_name === 'string' && receipt.veo_operation_name.trim().length > 0
+    const retryableFailedVideo = job.status === 'failed' &&
+      receipt.video_required === true &&
+      receipt.video_complete !== true &&
+      Boolean(receipt.reference_set || receipt.visual_references)
+    return (
+      job.status === 'running' &&
+      receipt.build_status === 'video_rendering' &&
+      hasOperation
+    ) || retryableFailedVideo
+  }), [jobs])
 
   const setJobs = (next: SetStateAction<ProposalJob[]>) => {
     setJobsState((prev) => {
@@ -202,15 +256,22 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
 
   const handleClearQueue = () => {
     if (finishedCount === 0) return
-    if (!window.confirm(`Clear ${finishedCount} finished job${finishedCount === 1 ? '' : 's'} from the queue?`)) return
     setClearError(null)
     startClearTransition(async () => {
       const result = await clearProposalQueueAction()
       if (!result.success) {
         setClearError(result.error || 'Failed to clear queue.')
       } else {
-        setJobs([])
-        setEvents([])
+        setJobs((prev) => prev.filter((job) => {
+          const status = getDisplayStatus(job)
+          return status !== 'completed' && status !== 'failed' && status !== 'not_qualified'
+        }))
+        setEvents((prev) => prev.filter((event) => {
+          const job = jobs.find((candidate) => candidate.id === event.job_id)
+          if (!job) return false
+          const status = getDisplayStatus(job)
+          return status !== 'completed' && status !== 'failed' && status !== 'not_qualified'
+        }))
       }
     })
   }
@@ -264,8 +325,31 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
     }
   }, [])
 
+  useEffect(() => {
+    if (!hasPendingVideo) return
+
+    let stopped = false
+    const processVideos = async () => {
+      try {
+        await fetch('/api/proposal-jobs/process-videos', {
+          method: 'POST',
+          cache: 'no-store',
+        })
+      } catch (error) {
+        if (!stopped) console.error('[ProposalJobsQueue] video processor failed', error)
+      }
+    }
+
+    processVideos()
+    const poller = window.setInterval(processVideos, 20000)
+    return () => {
+      stopped = true
+      window.clearInterval(poller)
+    }
+  }, [hasPendingVideo])
+
   return (
-    <section className={`admin-panel self-start transition-all ${collapsed ? 'p-3 lg:p-4' : 'p-4 lg:p-5'}`}>
+    <section className={`admin-panel admin-ops-panel min-w-0 self-start overflow-hidden rounded-lg border border-[#30343b] bg-[#181a1f] shadow-[0_14px_34px_rgba(0,0,0,0.24)] transition-all ${collapsed ? 'p-3 lg:p-4' : 'p-4 lg:p-5'}`}>
       <div className={`flex items-center justify-between ${collapsed ? '' : 'admin-divider mb-3 border-b pb-3'}`}>
         <button
           type="button"
@@ -275,7 +359,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
           {collapsed ? <ChevronRight className="h-3.5 w-3.5 text-slate-500" /> : <ChevronDown className="h-3.5 w-3.5 text-slate-500" />}
           <Activity className="h-3.5 w-3.5 text-primary" />
           <span className="text-sm font-semibold text-stone-100">
-            Build queue
+            Live workflow
             {activeCount > 0 && (
               <span className="ml-2 font-mono text-xs text-primary">{activeCount} active</span>
             )}
@@ -297,11 +381,69 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
       {clearError && <div className="mb-3 text-xs text-red-300">{clearError}</div>}
 
       {!collapsed && (
-        <div className="admin-scroll-panel overflow-hidden">
+        <div className="space-y-3">
+          <div className="admin-live-card min-w-0 overflow-hidden rounded-lg border border-[#343a42] bg-[#15171b] p-3.5">
+            {focusJob ? (
+              <>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold uppercase text-slate-500">Current job</div>
+                    <div className="mt-1 truncate text-base font-semibold text-stone-50">{focusJob.business_name}</div>
+                    <div className="mt-1 truncate text-xs text-slate-500">{focusJob.current_step}</div>
+                  </div>
+                  <span className={statusClass(getDisplayStatus(focusJob))}>{getQueueLabel(focusJob, getDisplayStatus(focusJob))}</span>
+                </div>
+                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#2a2f36]">
+                  <div
+                    className="h-full rounded-full bg-[#d99a3d] transition-all"
+                    style={{ width: `${Math.max(4, Math.min(100, focusJob.progress_percent || 0))}%` }}
+                  />
+                </div>
+                <div className="admin-mini-workflow mt-4 grid min-w-0 grid-cols-2 gap-1.5 sm:grid-cols-3 2xl:grid-cols-6">
+                  {proposalWorkflowSteps.map((step, index) => {
+                    const currentIndex = getWorkflowIndex(focusJob)
+                    const done = index < currentIndex || getDisplayStatus(focusJob) === 'completed'
+                    const current = index === currentIndex && getDisplayStatus(focusJob) !== 'completed'
+                    return (
+                      <div key={step.id} className={`admin-mini-step flex min-w-0 items-center gap-1.5 text-[0.68rem] font-bold uppercase ${done ? 'admin-mini-step-done' : ''} ${current ? 'admin-mini-step-current' : ''}`}>
+                        <span className="admin-mini-dot" />
+                        <span>{step.label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                {focusEvents.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    {focusEvents.map((event) => (
+                      <div key={event.id} className="grid grid-cols-[4.5rem_1fr] gap-2 text-xs">
+                        <span className="text-slate-600">{formatTime(event.created_at)}</span>
+                        <span className="truncate text-slate-400">{event.error_message || event.step}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="mt-4 rounded-lg border border-stone-800 bg-stone-950/60 p-3">
+                  <div className="mb-2 text-[11px] font-semibold uppercase text-slate-500">Live diagnostics</div>
+                  <div className="grid gap-2 text-xs">
+                    {getWorkflowDiagnostics(focusJob).map(([label, value]) => (
+                      <div key={label} className="grid min-w-0 grid-cols-[5.5rem_minmax(0,1fr)] gap-2">
+                        <span className="text-slate-600">{label}</span>
+                        <span className="min-w-0 break-words text-slate-300">{String(value)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="p-2 text-sm text-slate-500">No active proposal workflow.</div>
+            )}
+          </div>
+
+          <div className="admin-scroll-panel min-w-0 overflow-hidden rounded-lg border border-[#30343b] bg-[#202329]">
           {jobs.length === 0 ? (
             <div className="p-5 text-sm text-slate-500">No jobs yet.</div>
           ) : (
-            <div className="max-h-[340px] divide-y divide-stone-800/80 overflow-y-auto">
+            <div className="max-h-[320px] divide-y divide-stone-800/80 overflow-y-auto">
               {jobs.map((job) => {
                 if (isBatchJob(job)) {
                   const { count, category, location } = parseBatchAddress(job.address)
@@ -360,6 +502,65 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
                       </div>
                     ) : null}
 
+                    {job.receipt && (
+                      <details className="mt-2 rounded-lg border border-stone-800 bg-stone-950/50 px-3 py-2 text-xs">
+                        <summary className="cursor-pointer text-slate-400">Workflow details</summary>
+                        <div className="mt-2 grid gap-1.5">
+                          {getWorkflowDiagnostics(job).map(([label, value]) => (
+                            <div key={label} className="grid min-w-0 grid-cols-[5rem_minmax(0,1fr)] gap-2">
+                              <span className="text-slate-600">{label}</span>
+                              <span className="min-w-0 break-words text-slate-300">{String(value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {getSolarDebug(job.receipt) ? (
+                          <details className="mt-3 rounded-md border border-stone-800 bg-black/20 px-2 py-2">
+                            <summary className="cursor-pointer text-slate-400">Solar API layout data</summary>
+                            <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded bg-black/30 p-2 font-mono text-[0.68rem] leading-relaxed text-slate-300">
+                              {JSON.stringify(getSolarDebug(job.receipt)?.raw, null, 2)}
+                            </pre>
+                          </details>
+                        ) : null}
+                        {getSolarLayerAssets(job.receipt).length ? (
+                          <details className="mt-3 rounded-md border border-stone-800 bg-black/20 px-2 py-2">
+                            <summary className="cursor-pointer text-slate-400">Solar data layer previews</summary>
+                            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                              {getSolarLayerAssets(job.receipt).map((layer) => (
+                                <div key={layer.id || layer.label} className="overflow-hidden rounded-md border border-stone-800 bg-stone-950">
+                                  <div className="flex items-center justify-between gap-2 border-b border-stone-800 px-2 py-1.5">
+                                    <span className="text-[11px] font-semibold text-stone-200">{layer.label}</span>
+                                    {layer.originalUrl ? (
+                                      <Link
+                                        href={layer.originalUrl}
+                                        target="_blank"
+                                        className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-stone-100"
+                                      >
+                                        TIFF <ExternalLink className="h-3 w-3" />
+                                      </Link>
+                                    ) : null}
+                                  </div>
+                                  {layer.previewUrl ? (
+                                    <Link href={layer.previewUrl} target="_blank">
+                                      <img
+                                        src={layer.previewUrl}
+                                        alt={layer.label}
+                                        className="aspect-video w-full bg-black object-contain"
+                                        loading="lazy"
+                                      />
+                                    </Link>
+                                  ) : (
+                                    <div className="px-2 py-3 text-[11px] text-amber-200">
+                                      {layer.error || 'Preview unavailable.'}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        ) : null}
+                      </details>
+                    )}
+
                     {jobEvents.length > 0 && (
                       <div className="admin-divider mt-3 space-y-1.5 border-l pl-3">
                         {jobEvents.map((event) => {
@@ -383,6 +584,7 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
               })}
             </div>
           )}
+          </div>
         </div>
       )}
     </section>

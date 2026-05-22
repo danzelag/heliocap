@@ -282,7 +282,7 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
             <Radar className="h-4 w-4" />
             Proposals
           </div>
-          <h2 className="mt-1 text-xl font-semibold text-stone-50">Proposal targets</h2>
+          <h2 className="mt-1 text-xl font-semibold text-stone-50">Live proposals</h2>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -370,7 +370,7 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
                 <td colSpan={6} className="px-4 py-12 text-center">
                   <div className="mx-auto max-w-sm rounded-lg border border-dashed border-stone-600 bg-stone-900/60 p-6">
                     <Crosshair className="mx-auto h-7 w-7 text-slate-400" />
-                    <div className="mt-3 text-sm font-semibold text-stone-300">No targets</div>
+                    <div className="mt-3 text-sm font-semibold text-stone-300">No proposals</div>
                   </div>
                 </td>
               </tr>

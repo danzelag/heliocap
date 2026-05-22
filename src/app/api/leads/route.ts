@@ -119,21 +119,20 @@ export async function POST(request: Request) {
       }, { status: 400 })
     }
 
+    if (requestedVideoUrl && !isUsableVideoUrl(video_url)) {
+      return NextResponse.json({
+        error: 'video_url must be an absolute http(s) URL when provided',
+      }, { status: 400 })
+    }
+
     if (!isUsableVideoUrl(video_url)) {
       await updateProposalJobProgress(supabase, {
         jobId: job_id,
         businessName: business_name,
         status: 'running',
-        step: 'Waiting for proposal video',
+        step: 'Publishing still-image proposal',
         progressPercent: 92,
       })
-
-      return NextResponse.json({
-        success: false,
-        pending: true,
-        source: 'pending_video',
-        reason: 'Proposal video is required before publishing',
-      }, { status: 202 })
     }
 
     await updateProposalJobProgress(supabase, {
@@ -329,7 +328,8 @@ export async function POST(request: Request) {
       const updatedReceipt = mergeMetadata(job?.receipt || null, {
         build_status: 'proposal_published',
         build_status_label: 'Proposal Ready',
-        video_complete: true,
+        video_complete: isUsableVideoUrl(video_url),
+        video_optional: !isUsableVideoUrl(video_url),
         video_url,
         lead_id: data.id,
         proposal_url: proposalUrl,

@@ -13,14 +13,12 @@ function applyTheme(theme: AdminTheme) {
 }
 
 export function AdminThemeToggle() {
-  const [theme, setTheme] = useState<AdminTheme>('light')
+  const [theme, setTheme] = useState<AdminTheme>('dark')
   const isDark = theme === 'dark'
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY)
-    const nextTheme: AdminTheme = stored === 'dark' ? 'dark' : 'light'
-    setTheme(nextTheme)
-    applyTheme(nextTheme)
+    window.localStorage.setItem(STORAGE_KEY, 'dark')
+    applyTheme('dark')
   }, [])
 
   const toggleTheme = () => {

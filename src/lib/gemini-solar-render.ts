@@ -10,23 +10,23 @@ const DEFAULT_TIMEOUT_MS = 45_000
 const PREVIEW_WIDTH = 1280
 const PREVIEW_HEIGHT = 720
 
-const PREMIUM_SOLAR_RENDER_PROMPT = `This is a strict image-to-image cleanup. The output must be the exact same property from the input image, not a redesigned or substituted building.
+const PREMIUM_SOLAR_RENDER_PROMPT = `This is a strict top-down residential proposal image cleanup. The output must be the exact same residential property from the input image, not a redesigned or substituted building.
 
-Treat the input image as the exact target property, not inspiration. Preserve the same building footprint, roof outline, roof angles, roof proportions, parking lot, roads, lot boundaries, surrounding context, shadows, and camera angle.
+Important: do not draw solar panels. Solar panels are composited later by deterministic code from Google Solar API coordinates. This image-generation step only cleans the base satellite image.
 
-Do not redesign, replace, expand, simplify, or invent the building. Do not add nearby buildings, extra roads, new lots, city blocks, entrances, roof sections, roof planes, parking rows, or unrelated structures. Do not create a new architectural concept.
+Keep the camera as a locked top-down satellite view. Do not create a 3D render, oblique view, drone angle, cinematic flyover, perspective tilt, new house, new roof, or alternate neighborhood.
 
-Do not add solar panels. Do not add solar arrays, solar modules, rooftop rectangles, panel guides, blue panels, black panels, or any proposed equipment. The image-generation step is cleanup only.
+Preserve the same building footprint, roof outline, roof planes, driveway, yard, street, neighbors, lot boundaries, surrounding context, shadows, and camera angle. Do not redesign, replace, expand, simplify, or invent the building. Do not add nearby buildings, extra roads, new lots, roof sections, roof planes, fences, vehicles, people, labels, or unrelated structures.
+
+Do not add solar panels, solar arrays, solar modules, rooftop rectangles, panel guides, colored panels, black panels, blue panels, or any proposed equipment. Do not infer where panels might go. Leave the roof clean.
 
 Remove ALL overlays completely: Google Maps watermarks, Google logo, copyright notices, map UI controls, attribution text, compass rose, scale bar, labels, pins, borders, icons, cars, people, logos, and any other non-building artifacts. The output image must contain zero text, zero UI elements, and zero watermarks.
 
-Improve clarity aggressively: sharpen roof edges, clean muddy texture, improve contrast, clarify shadows, fix JPEG/satellite compression artifacts, and boost overall image sharpness while preserving the exact camera angle and site geometry.
+Improve visual quality without changing geometry: sharpen roof edges, clean muddy satellite texture, improve contrast, normalize lighting, clarify shadows, remove compression artifacts, smooth the ugly map-photo look, and make the result feel like a premium solar proposal render.
 
-If a second image is provided, do not copy any solar panels from it. Use it only to understand the same target property boundaries if helpful, while keeping the output free of solar panels.
+Do not beautify by inventing details. Do not turn it into a fantasy render. The output should still look like a real top-down aerial image of the exact property, just cleaner, sharper, watermark-free, and more pleasing.
 
-The output must look like a pristine, ultra-high-quality aerial proposal image of the exact same property — photorealistic, sharp, watermark-free, suitable as a cinematic video seed frame.
-
-Return only a clean 16:9 aerial image of the same property for Veo video generation.`
+Return only one clean 16:9 top-down image of the same property, suitable for deterministic solar panel compositing and a subtle 2D zoom video.`
 
 export type PremiumSolarRenderSource = 'ai_generated' | 'executive_render' | 'fallback_roof_image'
 

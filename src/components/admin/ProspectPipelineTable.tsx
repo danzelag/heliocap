@@ -6,6 +6,8 @@ import { Crosshair, ExternalLink, Loader2, RadioTower, Rocket, Send, Trash2, Tri
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { getProspectVisualCandidate, sortProspectsForAdmin, type Prospect, type ProspectStage, prospectStages } from '@/lib/prospect'
+import { getProspectStageBadgeClass, prospectStageLabels } from '@/lib/admin-pipeline'
+import { buildVisualReferenceCards, type VisualReferenceCard } from '@/lib/prospect-admin'
 import {
   bulkDeleteProspectsAction,
   bulkPromoteProspectsToLeadsAction,
@@ -14,6 +16,8 @@ import {
   getProspectVisualReferencesAction,
   getProspectSolarCapabilityAction,
   promoteProspectToLeadAction,
+  deleteProspectVisualReferenceAction,
+  saveProspectSolarReferenceAction,
   saveProspectStreetViewCaptureAction,
   saveProspectVisualTargetAction,
   triggerProspectEnrichmentAction,
@@ -32,15 +36,13 @@ type VisualReferencePreview = {
   mapTilesImageUrl: string | null
   aerialViewReferenceUrl: string | null
   streetViewReferenceUrls: string[]
+  cleanedPreviewImageUrl?: string | null
+  solarApiLayoutImageUrl: string | null
+  solarReferenceEnabled: boolean
+  solarReferenceLat: number | null
+  solarReferenceLng: number | null
+  solarReferenceZoom: number | null
   referenceCards: VisualReferenceCard[]
-}
-
-type VisualReferenceCard = {
-  id: string
-  label: string
-  type: string
-  url: string | null
-  unavailableReason: string | null
 }
 
 type SolarCapability = {
@@ -72,22 +74,12 @@ type SolarCapability = {
       label: string
       available: boolean
       reason: string | null
+      previewUrl?: string | null
+      originalUrl?: string | null
     }>
   }
 }
 
-const stageLabels: Record<ProspectStage, string> = {
-  sourced: 'Sourced',
-  coordinate_review: 'Coordinate Review',
-  solar_fetched: 'Solar Fetched',
-  enriched: 'Enriched',
-  microsite_live: 'Live',
-  emailed: 'Emailed',
-  replied: 'Replied',
-  booked: 'Booked',
-  snoozed: 'Snoozed',
-  dead: 'Not Qualified',
-}
 const PROSPECTS_CACHE_KEY = 'admin:prospects'
 const activeStageOptions = prospectStages.filter((stage) => stage !== 'dead' && stage !== 'microsite_live')
 
@@ -101,17 +93,6 @@ function formatUSD(value: number | null) {
 
 function formatNumber(value: number | null) {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value || 0)
-}
-
-function stageClass(stage: ProspectStage) {
-  if (stage === 'booked' || stage === 'microsite_live') return 'admin-status admin-status-success px-2.5 py-1'
-  if (stage === 'coordinate_review') return 'admin-status admin-status-warning px-2.5 py-1'
-  if (stage === 'dead') return 'admin-status admin-status-warning px-2.5 py-1'
-  if (stage === 'snoozed') return 'admin-status admin-status-warning px-2.5 py-1'
-  if (stage === 'solar_fetched' || stage === 'enriched' || stage === 'emailed' || stage === 'replied') {
-    return 'admin-status admin-status-running px-2.5 py-1'
-  }
-  return 'admin-status px-2.5 py-1'
 }
 
 function isProposalTarget(prospect: Prospect) {
@@ -144,39 +125,13 @@ function parseCoordinate(value: string) {
 }
 
 function fallbackReferenceCards(references: VisualReferencePreview): VisualReferenceCard[] {
-  return [
-    {
-      id: 'map-tiles',
-      label: 'Map / satellite roof frame',
-      type: 'Top-down roof geometry',
-      url: references.mapTilesImageUrl,
-      unavailableReason: references.mapTilesImageUrl
-        ? null
-        : 'Unavailable until the visual target preview is generated and saved.',
-    },
-    {
-      id: 'aerial-view',
-      label: 'Google Aerial View',
-      type: 'Optional 3D aerial identity reference',
-      url: references.aerialViewReferenceUrl,
-      unavailableReason: references.aerialViewReferenceUrl
-        ? null
-        : 'Unavailable. Google Aerial View did not return an active image/video for this address or region.',
-    },
-    ...Array.from({ length: 5 }, (_, index) => {
-      const url = references.streetViewReferenceUrls[index] || null
-
-      return {
-        id: `street-view-${index + 1}`,
-        label: `Street View ${index + 1}`,
-        type: index === 0 ? 'Front-facing facade anchor' : 'Street-level angle variant',
-        url,
-        unavailableReason: url
-          ? null
-          : 'Unavailable. Street View did not return another usable outdoor angle facing the selected home.',
-      }
-    }),
-  ]
+  return buildVisualReferenceCards({
+    mapTilesImageUrl: references.mapTilesImageUrl,
+    aerialViewReferenceUrl: references.aerialViewReferenceUrl,
+    streetViewReferenceUrls: references.streetViewReferenceUrls,
+    cleanedPreviewImageUrl: references.cleanedPreviewImageUrl || null,
+    solarApiLayoutImageUrl: references.solarApiLayoutImageUrl,
+  }, 0)
 }
 
 export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTableProps) {
@@ -195,6 +150,12 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
   const [visualReferences, setVisualReferences] = useState<VisualReferencePreview | null>(null)
   const [visualReferencesLoading, setVisualReferencesLoading] = useState(false)
   const [streetViewCaptureLoading, setStreetViewCaptureLoading] = useState(false)
+  const [deletingReferenceUrl, setDeletingReferenceUrl] = useState<string | null>(null)
+  const [solarReferenceLoading, setSolarReferenceLoading] = useState(false)
+  const [solarReferenceEnabled, setSolarReferenceEnabled] = useState(true)
+  const [solarReferenceLat, setSolarReferenceLat] = useState('')
+  const [solarReferenceLng, setSolarReferenceLng] = useState('')
+  const [solarReferenceZoom, setSolarReferenceZoom] = useState(19)
   const [solarCapability, setSolarCapability] = useState<SolarCapability | null>(null)
   const [solarCapabilityLoading, setSolarCapabilityLoading] = useState(false)
   const [visualError, setVisualError] = useState<string | null>(null)
@@ -353,6 +314,10 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
     setVisualPreviewSource(candidate?.source || null)
     setVisualReferences(null)
     setSolarCapability(null)
+    setSolarReferenceEnabled(prospect.solar_reference_enabled !== false)
+    setSolarReferenceLat(formatCoordinate(prospect.solar_reference_lat ?? candidate?.lat ?? null))
+    setSolarReferenceLng(formatCoordinate(prospect.solar_reference_lng ?? candidate?.lng ?? null))
+    setSolarReferenceZoom(prospect.solar_reference_zoom || prospect.visual_zoom || 19)
     setVisualError(null)
 
     if (candidate) {
@@ -402,8 +367,17 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
         mapTilesImageUrl: result.mapTilesImageUrl || null,
         aerialViewReferenceUrl: result.aerialViewReferenceUrl || null,
         streetViewReferenceUrls: result.streetViewReferenceUrls || [],
+        solarApiLayoutImageUrl: result.solarApiLayoutImageUrl || null,
+        solarReferenceEnabled: result.solarReferenceEnabled !== false,
+        solarReferenceLat: result.solarReferenceLat ?? null,
+        solarReferenceLng: result.solarReferenceLng ?? null,
+        solarReferenceZoom: result.solarReferenceZoom ?? null,
         referenceCards: result.referenceCards || [],
       })
+      setSolarReferenceEnabled(result.solarReferenceEnabled !== false)
+      if (typeof result.solarReferenceLat === 'number') setSolarReferenceLat(String(result.solarReferenceLat))
+      if (typeof result.solarReferenceLng === 'number') setSolarReferenceLng(String(result.solarReferenceLng))
+      if (typeof result.solarReferenceZoom === 'number') setSolarReferenceZoom(result.solarReferenceZoom)
     } else {
       setVisualReferences(null)
       setVisualError(result.error || 'Failed to load visual references.')
@@ -484,6 +458,11 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
           mapTilesImageUrl: result.visual_preview_url ?? prev?.mapTilesImageUrl ?? visualPreviewUrl,
           aerialViewReferenceUrl: prev?.aerialViewReferenceUrl ?? null,
           streetViewReferenceUrls: prev?.streetViewReferenceUrls ?? [],
+          solarApiLayoutImageUrl: prev?.solarApiLayoutImageUrl ?? null,
+          solarReferenceEnabled: prev?.solarReferenceEnabled ?? solarReferenceEnabled,
+          solarReferenceLat: prev?.solarReferenceLat ?? parseCoordinate(solarReferenceLat),
+          solarReferenceLng: prev?.solarReferenceLng ?? parseCoordinate(solarReferenceLng),
+          solarReferenceZoom: prev?.solarReferenceZoom ?? solarReferenceZoom,
           referenceCards: prev?.referenceCards ?? [],
         }))
         void loadVisualReferences(visualProspect.id, latValue, lngValue)
@@ -518,7 +497,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
     if (!result.success) {
       setVisualError(result.error || 'Failed to save Street View capture.')
     } else {
-      setMessage('Manual Street View reference saved for Veo.')
+      setMessage('Manual Street View context saved.')
       await loadVisualReferences(
         visualProspect.id,
         parseCoordinate(visualLat),
@@ -526,6 +505,63 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
       )
     }
     setStreetViewCaptureLoading(false)
+  }
+
+  const deleteVisualReference = async (reference: VisualReferenceCard) => {
+    if (!visualProspect || !reference.url) return
+
+    setDeletingReferenceUrl(reference.url)
+    setVisualError(null)
+    const result = await deleteProspectVisualReferenceAction({
+      id: visualProspect.id,
+      url: reference.url,
+    })
+
+    if (!result.success) {
+      setVisualError(result.error || 'Failed to delete reference image.')
+    } else {
+      if (reference.url === visualPreviewUrl) setVisualPreviewUrl(null)
+      setMessage(`${reference.label} deleted.`)
+      await loadVisualReferences(
+        visualProspect.id,
+        parseCoordinate(visualLat),
+        parseCoordinate(visualLng),
+      )
+    }
+    setDeletingReferenceUrl(null)
+  }
+
+  const saveSolarReference = async () => {
+    if (!visualProspect) return
+    const latValue = parseCoordinate(solarReferenceLat)
+    const lngValue = parseCoordinate(solarReferenceLng)
+
+    if (solarReferenceEnabled && (latValue == null || lngValue == null)) {
+      setVisualError('Enter valid Solar API reference latitude and longitude.')
+      return
+    }
+
+    setSolarReferenceLoading(true)
+    setVisualError(null)
+    const result = await saveProspectSolarReferenceAction({
+      id: visualProspect.id,
+      lat: latValue ?? parseCoordinate(visualLat) ?? 0,
+      lng: lngValue ?? parseCoordinate(visualLng) ?? 0,
+      zoom: solarReferenceZoom,
+      enabled: solarReferenceEnabled,
+    })
+
+    if (!result.success) {
+      setVisualError(result.error || 'Failed to update Solar API reference.')
+    } else {
+      setMessage(solarReferenceEnabled ? 'Solar API roof reference updated.' : 'Solar API roof reference excluded.')
+      await loadVisualReferences(
+        visualProspect.id,
+        parseCoordinate(visualLat),
+        parseCoordinate(visualLng),
+      )
+    }
+    setSolarReferenceLoading(false)
   }
 
   const handleToggleSelection = (id: string) => {
@@ -617,7 +653,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
   }
 
   return (
-    <section className="admin-panel overflow-hidden">
+    <section className="admin-panel min-w-0 overflow-hidden rounded-lg border border-[#30343b] bg-[#181a1f] shadow-[0_14px_34px_rgba(0,0,0,0.24)]">
       <div className="flex flex-col gap-4 border-b border-stone-700/70 p-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
@@ -635,7 +671,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
             className="h-9 rounded-lg bg-amber-300 px-3 text-sm font-semibold text-stone-950 hover:bg-amber-200 disabled:opacity-50"
           >
             {isPending && !activeId ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-2 h-3.5 w-3.5" />}
-            Create <span className="text-slate-300">{selectedIds.length}</span>
+            Create proposal <span className="text-slate-300">{selectedIds.length}</span>
           </Button>
           <Button
             type="button"
@@ -670,7 +706,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
               className={`admin-chip px-3 py-2 transition-colors ${activeStage === stage ? 'admin-chip-active' : 'hover:border-stone-600 hover:text-stone-300'}`}
               onClick={() => setActiveStage(stage)}
             >
-              {stageLabels[stage]} <span className="text-slate-500">{counts[stage]}</span>
+              {prospectStageLabels[stage]} <span className="text-slate-500">{counts[stage]}</span>
             </button>
           ))}
         </div>
@@ -683,8 +719,8 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1180px] text-left text-sm">
+      <div className="min-w-0 overflow-x-auto">
+        <table className="admin-data-table w-full min-w-[1060px] table-fixed text-left text-sm">
           <thead>
             <tr className="border-b border-stone-700/70 bg-stone-900/60 text-xs font-semibold uppercase text-slate-500">
               <th className="w-12 px-4 py-3">
@@ -696,12 +732,12 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                   className="h-4 w-4 rounded-sm border-stone-600 accent-emerald-600"
                 />
               </th>
-              <th className="px-4 py-3">Prospect</th>
-              <th className="px-4 py-3">Parcel</th>
-              <th className="px-4 py-3">Solar</th>
-              <th className="px-4 py-3">Owner</th>
-              <th className="px-4 py-3">Stage</th>
-              <th className="px-4 py-3 text-right">Actions</th>
+              <th className="w-[26%] px-4 py-3">Prospect</th>
+              <th className="w-[18%] px-4 py-3">Home</th>
+              <th className="w-[16%] px-4 py-3">Solar</th>
+              <th className="w-[16%] px-4 py-3">Contact</th>
+              <th className="w-[12%] px-4 py-3">Stage</th>
+              <th className="w-[12%] px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-800">
@@ -741,8 +777,8 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                       />
                     </td>
                     <td className="px-4 py-4 align-top">
-                      <div className="font-semibold text-stone-50">{prospect.business_name || prospect.address.split(',')[0]}</div>
-                      <div className="mt-1 max-w-xs text-xs text-slate-500">{prospect.address}</div>
+                      <div className="truncate font-semibold text-stone-50">{prospect.business_name || prospect.address.split(',')[0]}</div>
+                      <div className="mt-1 line-clamp-2 max-w-xs text-xs leading-5 text-slate-500">{prospect.address}</div>
                       <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-400">
                         {hasProposal && <span className="admin-status admin-status-success px-2 py-1">proposal made</span>}
                         {prospect.visual_verified && <span className="admin-status admin-status-success px-2 py-1">visual verified</span>}
@@ -795,13 +831,13 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                       </div>
                     </td>
                     <td className="px-4 py-4 align-top">
-                      <div className="text-sm text-stone-100">{prospect.owner_name || prospect.owner_llc || 'Owner pending'}</div>
-                      <div className="mt-1 text-xs text-slate-500">{prospect.owner_title || prospect.enrichment_source || 'Not enriched'}</div>
-                      <div className="mt-1 text-xs text-slate-500">{prospect.owner_email || 'No email yet'}</div>
+                      <div className="truncate text-sm text-stone-100">{prospect.first_name || prospect.last_name ? `${prospect.first_name || ''} ${prospect.last_name || ''}`.trim() : prospect.owner_name || prospect.owner_llc || 'Contact pending'}</div>
+                      <div className="mt-1 truncate text-xs text-slate-500">{prospect.homeowner_email || prospect.owner_email || 'No email yet'}</div>
+                      <div className="mt-1 truncate text-xs text-slate-500">{prospect.homeowner_phone || prospect.owner_title || prospect.enrichment_source || 'No phone yet'}</div>
                     </td>
                     <td className="px-4 py-4 align-top">
-                      <div className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${stageClass(prospect.pipeline_stage)}`}>
-                        {stageLabels[prospect.pipeline_stage]}
+                      <div className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getProspectStageBadgeClass(prospect.pipeline_stage)}`}>
+                        {prospectStageLabels[prospect.pipeline_stage]}
                       </div>
                       <select
                         value={prospect.pipeline_stage}
@@ -810,7 +846,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                         className="admin-input mt-3 block px-2 py-2 text-xs text-stone-300"
                       >
                         {prospectStages.map((stage) => (
-                          <option key={stage} value={stage}>{stageLabels[stage]}</option>
+                          <option key={stage} value={stage}>{prospectStageLabels[stage]}</option>
                         ))}
                       </select>
                     </td>
@@ -896,122 +932,155 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
           }
         }}
       >
-        <DialogContent className="max-h-[92vh] overflow-y-auto border border-stone-700/70 bg-stone-950 text-stone-50 shadow-[0_24px_70px_rgba(15,23,42,0.35)] sm:max-w-6xl">
+        <DialogContent className="max-h-[92vh] overflow-y-auto border border-stone-700/70 bg-stone-950 text-stone-50 shadow-[0_24px_70px_rgba(15,23,42,0.35)] sm:max-w-[min(96vw,1500px)]">
           <DialogHeader>
-            <DialogTitle className="text-xl text-stone-50">Verify target building</DialogTitle>
+            <DialogTitle className="text-xl text-stone-50">Verify solar target</DialogTitle>
             <DialogDescription className="text-slate-500">
-              Drag and zoom the map until the amber reticle sits on the target home roof. Save keeps this window open so you can check the saved satellite frame and street-level angles before creating a proposal.
+              Use the map only to lock coordinates. Confirm the actual roof with Google Solar imagery before proposal generation.
             </DialogDescription>
           </DialogHeader>
 
           {visualProspect && (
-            <div className="grid gap-5 xl:grid-cols-[1.35fr_0.95fr]">
-              <div className="overflow-hidden rounded-2xl border border-stone-700/70 bg-stone-900/60">
-                <div className="flex items-center justify-between border-b border-stone-700/70 px-3 py-2 text-xs text-slate-500">
-                  <span>{visualPreviewSource ? `Map source: ${visualPreviewSource}` : 'Interactive satellite map'}</span>
-                  {visualLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-300" />}
-                </div>
-                {parseCoordinate(visualLat) != null && parseCoordinate(visualLng) != null ? (
-                  <VisualTargetMap
-                    lat={parseCoordinate(visualLat)!}
-                    lng={parseCoordinate(visualLng)!}
-                    zoom={visualZoom}
-                    onChange={(target) => {
-                      setVisualLat(String(target.lat))
-                      setVisualLng(String(target.lng))
-                      setVisualZoom(target.zoom)
-                      setVisualPreviewUrl(null)
-                      setVisualReferences(null)
-                      setSolarCapability(null)
-                    }}
-                  />
-                ) : (
-                  <div className="flex aspect-video items-center justify-center bg-stone-950 px-6 text-center text-sm text-slate-500">
-                    No coordinates available. Paste latitude and longitude, then refresh.
+            <div className="space-y-5">
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <div className="admin-eyebrow">Solar target</div>
+                    <div className="mt-1 text-sm font-semibold text-stone-100">
+                      First center the target, then inspect the Solar API roof image that the render will use.
+                    </div>
                   </div>
-                )}
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <span className="rounded-full border border-stone-700/70 bg-stone-950/70 px-3 py-1 text-slate-300">1. Track on map</span>
+                    <span className="rounded-full border border-stone-700/70 bg-stone-950/70 px-3 py-1 text-slate-300">2. Review Solar image</span>
+                    <span className="rounded-full border border-stone-700/70 bg-stone-950/70 px-3 py-1 text-slate-300">3. Confirm target</span>
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-4">
-                <div className="rounded-xl border border-stone-700/70 bg-stone-900/60 p-4">
-                  <div className="text-sm font-semibold text-stone-100">
-                    {visualProspect.business_name || visualProspect.address.split(',')[0]}
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_440px]">
+                <div className="overflow-hidden rounded-2xl border border-stone-700/70 bg-stone-900/60 shadow-[0_18px_45px_rgba(0,0,0,0.22)]">
+                  <div className="flex items-center justify-between border-b border-stone-700/70 px-3 py-2 text-xs text-slate-500">
+                    <span>{visualPreviewSource ? `Tracker source: ${visualPreviewSource}` : 'Interactive map tracker'}</span>
+                    {visualLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-300" />}
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">{visualProspect.address}</div>
-                  <div className="mt-3 text-xs text-slate-500">
-                    Places coords: {formatCoordinate(visualProspect.lat)}, {formatCoordinate(visualProspect.lng)}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">
-                    Geocode coords: {formatCoordinate(visualProspect.geocode_lat)}, {formatCoordinate(visualProspect.geocode_lng)}
-                  </div>
+                  {parseCoordinate(visualLat) != null && parseCoordinate(visualLng) != null ? (
+                    <VisualTargetMap
+                      lat={parseCoordinate(visualLat)!}
+                      lng={parseCoordinate(visualLng)!}
+                      zoom={visualZoom}
+                      onChange={(target) => {
+                        setVisualLat(String(target.lat))
+                        setVisualLng(String(target.lng))
+                        setVisualZoom(target.zoom)
+                        setVisualPreviewUrl(null)
+                        setVisualReferences(null)
+                        setSolarCapability(null)
+                      }}
+                    />
+                  ) : (
+                    <div className="flex aspect-video items-center justify-center bg-stone-950 px-6 text-center text-sm text-slate-500">
+                      No coordinates available. Paste latitude and longitude, then refresh.
+                    </div>
+                  )}
                 </div>
 
-                <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  Visual latitude
-                  <input
-                    value={visualLat}
-                    onChange={(event) => setVisualLat(event.target.value)}
-                    className="admin-input mt-2 px-3 py-2.5 text-sm text-stone-100"
-                    placeholder="43.123456"
-                  />
-                </label>
-
-                <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  Visual longitude
-                  <input
-                    value={visualLng}
-                    onChange={(event) => setVisualLng(event.target.value)}
-                    className="admin-input mt-2 px-3 py-2.5 text-sm text-stone-100"
-                    placeholder="-79.123456"
-                  />
-                </label>
-
-                <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  Map zoom
-                  <input
-                    value={visualZoom}
-                    onChange={(event) => setVisualZoom(Number(event.target.value))}
-                    type="number"
-                    min="16"
-                    max="21"
-                    className="admin-input mt-2 px-3 py-2.5 text-sm text-stone-100"
-                  />
-                </label>
-
-                <label className="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-                  Review note
-                  <textarea
-                    value={visualNote}
-                    onChange={(event) => setVisualNote(event.target.value)}
-                    className="admin-input mt-2 min-h-20 px-3 py-2.5 text-sm text-stone-100"
-                    placeholder="Optional note, e.g. corrected from Google Maps pin"
-                  />
-                </label>
-
-                {visualPreviewUrl && (
-                  <div className="rounded-xl border border-stone-700/70 bg-stone-900/60 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Saved proposal frame</div>
-                      <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200">
-                        Used by n8n
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-stone-700/70 bg-stone-900/60 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="admin-eyebrow">Target</div>
+                        <div className="mt-1 text-base font-semibold text-stone-100">
+                          {visualProspect.business_name || visualProspect.address.split(',')[0]}
+                        </div>
+                        <div className="mt-1 text-xs leading-5 text-slate-500">{visualProspect.address}</div>
+                      </div>
+                      <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200">
+                        Visual lock
                       </span>
                     </div>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={visualPreviewUrl}
-                      alt={`Saved satellite preview for ${visualProspect.business_name || visualProspect.address}`}
-                      className="mt-3 aspect-video w-full rounded-lg object-cover"
-                    />
-                  </div>
-                )}
 
-                <div className="rounded-xl border border-stone-700/70 bg-stone-900/60 p-3">
+                    <div className="mt-4 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                      <div className="rounded-lg border border-stone-800 bg-stone-950/70 px-3 py-2">
+                        <div className="text-[10px] uppercase tracking-[0.14em]">Places</div>
+                        <div className="mt-1 font-mono text-stone-300">{formatCoordinate(visualProspect.lat)}, {formatCoordinate(visualProspect.lng)}</div>
+                      </div>
+                      <div className="rounded-lg border border-stone-800 bg-stone-950/70 px-3 py-2">
+                        <div className="text-[10px] uppercase tracking-[0.14em]">Geocode</div>
+                        <div className="mt-1 font-mono text-stone-300">{formatCoordinate(visualProspect.geocode_lat) || 'none'}, {formatCoordinate(visualProspect.geocode_lng) || 'none'}</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Latitude
+                        <input
+                          value={visualLat}
+                          onChange={(event) => setVisualLat(event.target.value)}
+                          className="admin-input mt-2 px-3 py-2.5 font-mono text-sm text-stone-100"
+                          placeholder="43.123456"
+                        />
+                      </label>
+
+                      <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Longitude
+                        <input
+                          value={visualLng}
+                          onChange={(event) => setVisualLng(event.target.value)}
+                          className="admin-input mt-2 px-3 py-2.5 font-mono text-sm text-stone-100"
+                          placeholder="-79.123456"
+                        />
+                      </label>
+
+                      <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Zoom
+                        <input
+                          value={visualZoom}
+                          onChange={(event) => setVisualZoom(Number(event.target.value))}
+                          type="number"
+                          min="16"
+                          max="21"
+                          className="admin-input mt-2 px-3 py-2.5 font-mono text-sm text-stone-100"
+                        />
+                      </label>
+
+                      <label className="block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                        Note
+                        <input
+                          value={visualNote}
+                          onChange={(event) => setVisualNote(event.target.value)}
+                          className="admin-input mt-2 px-3 py-2.5 text-sm text-stone-100"
+                          placeholder="Optional"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {visualPreviewUrl && (
+                    <div className="rounded-2xl border border-stone-700/70 bg-stone-900/60 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Solar API roof image</div>
+                        <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200">
+                          Review before confirming
+                        </span>
+                      </div>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={visualPreviewUrl}
+                        alt={`Google Solar roof imagery for ${visualProspect.business_name || visualProspect.address}`}
+                        className="mt-3 max-h-[340px] w-full rounded-lg object-contain"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(390px,0.85fr)]">
+                <div className="rounded-2xl border border-stone-700/70 bg-stone-900/60 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Veo reference angles</div>
-                      <p className="mt-1 text-xs text-slate-500">
-                        These are the extra identity anchors we send alongside the roof frame.
-                      </p>
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Reference deck</div>
+                      <p className="mt-1 text-xs text-slate-500">Optional context only. The proposal render uses Solar API imagery and panel geometry.</p>
                     </div>
                     <Button
                       type="button"
@@ -1022,14 +1091,14 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                       onClick={() => void loadVisualReferences()}
                     >
                       {visualReferencesLoading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <RadioTower className="mr-2 h-3.5 w-3.5" />}
-                      Load angles
+                      Refresh deck
                     </Button>
                   </div>
 
                   {visualReferencesLoading ? (
                     <div className="mt-3 flex aspect-video items-center justify-center rounded-lg border border-stone-800 bg-stone-950 text-xs text-slate-500">
                       <Loader2 className="mr-2 h-4 w-4 animate-spin text-amber-300" />
-                      Collecting Google Street View angles...
+                      Collecting optional site context...
                     </div>
                   ) : (
                     parseCoordinate(visualLat) != null && parseCoordinate(visualLng) != null && (
@@ -1053,7 +1122,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                   )}
 
                   {!visualReferencesLoading && visualReferences && (
-                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
                       {(visualReferences.referenceCards.length
                         ? visualReferences.referenceCards
                         : fallbackReferenceCards(visualReferences)
@@ -1067,13 +1136,28 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                           <div className="border-b border-stone-800 px-3 py-2">
                             <div className="flex items-center justify-between gap-2">
                               <div className="text-xs font-semibold text-stone-200">{reference.label}</div>
-                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-                                reference.url
-                                  ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
-                                  : 'border border-amber-500/30 bg-amber-500/10 text-amber-200'
-                              }`}>
-                                {reference.url ? 'Available' : 'Unavailable'}
-                              </span>
+                              <div className="flex shrink-0 items-center gap-1.5">
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                                  reference.url
+                                    ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                                    : 'border border-amber-500/30 bg-amber-500/10 text-amber-200'
+                                }`}>
+                                  {reference.url ? 'Ready' : 'Missing'}
+                                </span>
+                                {reference.url && reference.canDelete && (
+                                  <button
+                                    type="button"
+                                    className="grid h-6 w-6 place-items-center rounded-md border border-red-900/50 bg-red-950/20 text-red-300 transition-colors hover:bg-red-950/40 disabled:opacity-50"
+                                    disabled={deletingReferenceUrl === reference.url}
+                                    onClick={() => void deleteVisualReference(reference)}
+                                    title={`Delete ${reference.label}`}
+                                  >
+                                    {deletingReferenceUrl === reference.url
+                                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      : <Trash2 className="h-3.5 w-3.5" />}
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             <div className="mt-1 text-[11px] text-slate-500">{reference.type}</div>
                           </div>
@@ -1099,18 +1183,16 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
 
                   {visualReferences && !visualReferences.mapTilesImageUrl && !visualReferences.aerialViewReferenceUrl && visualReferences.streetViewReferenceUrls.length === 0 && (
                     <div className="mt-3 rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
-                      No street-level angles were available for these coordinates. Veo will use the saved satellite frame.
+                      No optional context images were available. The proposal render can still use Solar API imagery.
                     </div>
                   )}
                 </div>
 
-                <div className="rounded-xl border border-stone-700/70 bg-stone-900/60 p-3">
+                <div className="rounded-2xl border border-stone-700/70 bg-stone-900/60 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Solar API roof intelligence</div>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Roof segments, panel candidates, sunlight, and data-layer availability.
-                      </p>
+                      <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Solar API</div>
+                      <p className="mt-1 text-xs text-slate-500">These are the source layers. The RGB image is the real roof image used for the proposal render.</p>
                     </div>
                     <Button
                       type="button"
@@ -1121,7 +1203,59 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                       onClick={() => void loadSolarCapability()}
                     >
                       {solarCapabilityLoading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-2 h-3.5 w-3.5" />}
-                      Load roof data
+                      Load data
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-stone-800 bg-stone-950/70 p-3">
+                    <label className="flex items-center justify-between gap-3 text-sm font-semibold text-stone-200">
+                      Include Solar API roof reference
+                      <input
+                        type="checkbox"
+                        checked={solarReferenceEnabled}
+                        onChange={(event) => setSolarReferenceEnabled(event.target.checked)}
+                        className="h-4 w-4 accent-amber-300"
+                      />
+                    </label>
+                    <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                      <label className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        Lat
+                        <input
+                          value={solarReferenceLat}
+                          onChange={(event) => setSolarReferenceLat(event.target.value)}
+                          className="admin-input mt-2 px-3 py-2 font-mono text-xs text-stone-100"
+                        />
+                      </label>
+                      <label className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        Lng
+                        <input
+                          value={solarReferenceLng}
+                          onChange={(event) => setSolarReferenceLng(event.target.value)}
+                          className="admin-input mt-2 px-3 py-2 font-mono text-xs text-stone-100"
+                        />
+                      </label>
+                      <label className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                        Zoom
+                        <input
+                          value={solarReferenceZoom}
+                          onChange={(event) => setSolarReferenceZoom(Number(event.target.value))}
+                          type="number"
+                          min="16"
+                          max="21"
+                          className="admin-input mt-2 px-3 py-2 font-mono text-xs text-stone-100"
+                        />
+                      </label>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="mt-3 w-full rounded-lg border-stone-700/70 bg-stone-900/70 text-stone-300 hover:bg-stone-800"
+                      disabled={solarReferenceLoading}
+                      onClick={() => void saveSolarReference()}
+                    >
+                      {solarReferenceLoading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-2 h-3.5 w-3.5" />}
+                      {solarReferenceEnabled ? 'Update Solar reference' : 'Exclude Solar reference'}
                     </Button>
                   </div>
 
@@ -1185,6 +1319,26 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                             {!layer.available && layer.reason && (
                               <div className="mt-1 text-[11px] leading-4 text-amber-200/90">{layer.reason}</div>
                             )}
+                            {layer.previewUrl && (
+                              <>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={layer.previewUrl}
+                                  alt={`${layer.label} preview for ${visualProspect.business_name || visualProspect.address}`}
+                                  className="mt-2 max-h-44 w-full rounded-md border border-stone-800/80 bg-stone-950 object-contain"
+                                />
+                              </>
+                            )}
+                            {layer.originalUrl && (
+                              <a
+                                href={layer.originalUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-2 inline-flex text-[11px] font-semibold text-amber-200 hover:text-amber-100"
+                              >
+                                Open GeoTIFF
+                              </a>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1199,7 +1353,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                 </div>
 
                 {visualError && (
-                  <div className="rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
+                  <div className="rounded-lg border border-amber-900/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200 xl:col-span-2">
                     {visualError}
                   </div>
                 )}
@@ -1216,7 +1370,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
               onClick={() => void refreshVisualPreview()}
             >
               {visualLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Crosshair className="mr-2 h-4 w-4" />}
-              Generate Preview
+              Load Solar Image
             </Button>
             <Button
               type="button"
@@ -1225,7 +1379,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
               onClick={saveVisualTarget}
             >
               {(visualLoading || isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save + Mark Verified
+              Confirm Solar Target
             </Button>
           </DialogFooter>
         </DialogContent>

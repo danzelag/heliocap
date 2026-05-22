@@ -18,18 +18,7 @@ export function ProposalRoofRender({
   return (
     <div className="relative aspect-video w-full overflow-hidden bg-slate-950">
       <div className="absolute inset-0 flex items-center justify-center overflow-hidden">
-        {videoUrl && displayUrl ? (
-          <video
-            src={videoUrl}
-            poster={displayUrl}
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="h-full w-full object-cover"
-            aria-label={alt}
-          />
-        ) : displayUrl ? (
+        {displayUrl ? (
           <img
             src={displayUrl}
             alt={alt}

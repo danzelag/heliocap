@@ -1,4 +1,4 @@
-import { ArrowRight, Building2, Download, PlayCircle, Sparkles } from 'lucide-react'
+import { ArrowRight, Building2, Download, Sparkles } from 'lucide-react'
 import type { ProposalViewModel } from './types'
 
 function formatUSD(n: number) {
@@ -50,27 +50,7 @@ export function Hero({ proposal }: { proposal: ProposalViewModel }) {
         <div className="animate-fade-up order-2 lg:order-1">
           <div className="relative overflow-hidden rounded-[28px] border border-[color:var(--border-strong)] bg-black shadow-[0_28px_80px_rgba(0,0,0,0.42)]">
             <div className="aspect-video w-full bg-[#111820]">
-              {proposal.videoUrl ? (
-                <>
-                  <video
-                    src={proposal.videoUrl}
-                    poster={proposal.heroImageUrl ?? undefined}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    className="h-full w-full object-cover motion-reduce:hidden"
-                  />
-                  {proposal.heroImageUrl ? (
-                    <img
-                      src={proposal.heroImageUrl}
-                      alt=""
-                      aria-hidden="true"
-                      className="h-full w-full object-cover motion-safe:hidden"
-                    />
-                  ) : null}
-                </>
-              ) : proposal.heroImageUrl ? (
+              {proposal.heroImageUrl ? (
                 <img
                   src={proposal.heroImageUrl}
                   alt={`Aerial solar proposal preview for ${proposal.businessName}`}
@@ -114,11 +94,7 @@ export function Hero({ proposal }: { proposal: ProposalViewModel }) {
 
         <div className="order-1 flex flex-col items-start lg:order-2">
           <div className="animate-fade-up inline-flex items-center gap-2 rounded-full border border-[color:var(--border-strong)] bg-white/[0.04] px-3.5 py-1.5 text-xs text-[color:var(--text-secondary)] backdrop-blur-md">
-            {proposal.videoUrl ? (
-              <PlayCircle className="h-3.5 w-3.5 text-[color:var(--solar-gold)]" strokeWidth={2} />
-            ) : (
-              <Sparkles className="h-3.5 w-3.5 text-[color:var(--solar-gold)]" strokeWidth={2} />
-            )}
+            <Sparkles className="h-3.5 w-3.5 text-[color:var(--solar-gold)]" strokeWidth={2} />
             <span className="font-mono uppercase tracking-widest">
               Personalized for {proposal.businessName}
             </span>
