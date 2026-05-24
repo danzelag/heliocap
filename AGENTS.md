@@ -8,7 +8,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <claude-mem-context>
 # Memory Context
 
-# [solar-lead-gen] recent context, 2026-05-22 4:57pm EDT
+# [solar-lead-gen] recent context, 2026-05-24 2:13pm EDT
 
 Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
 Format: ID TIME TYPE TITLE
@@ -85,3 +85,22 @@ S102 HELIOCAP UX/API overhaul: commit bulk delete, then add queue-clearing and c
 
 Access 672k tokens of past work via get_observations([IDs]) or mem-search skill.
 </claude-mem-context>
+
+## Agent: Antigravity (Landing Page & Brand Experience)
+* **Timestamp**: 2026-05-22 6:01 PM EDT
+* **Files touched**:
+  - `src/components/site/PixelCard.tsx` (NEW)
+  - `src/app/page.tsx` (MODIFIED)
+* **What changed**:
+  - Redesigned landing page with a full-bleed cinematic hero, premium oversized typography, and deep dark luxury backgrounds.
+  - Implemented smooth scroll-driven storytelling sections.
+  - Created `PixelCard.tsx`, an animated canvas pixel shimmer hover component to showcase Firefly Solar, EV Charging Partner, and Heat Pump Partner.
+  - Re-integrated the functional `HomeEnergyIntakeForm` into the final luxury CTA (keeping it fully connected to the prospects table logic).
+* **Intentionally avoided**:
+  - Command Centre, backend API routes, Supabase migrations, `HomeEnergyIntakeForm.tsx` internals, proposal generation workflows.
+* **Risks**:
+  - Premium stock images (Unsplash) are currently linked directly. If these URLs break or rotate, they'll need to be hosted locally.
+* **Preview Instructions**:
+  - Run `npm run dev` and navigate to `http://localhost:3000` to view the new landing page.
+* **Lint/Build**:
+  - Passed successfully (`npm run build` compiled without errors).

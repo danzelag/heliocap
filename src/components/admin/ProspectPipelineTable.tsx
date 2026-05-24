@@ -134,6 +134,33 @@ function fallbackReferenceCards(references: VisualReferencePreview): VisualRefer
   }, 0)
 }
 
+function ReadinessDot({ ok, warn, fail, label }: { ok?: boolean | null; warn?: boolean | null; fail?: boolean | null; label: string }) {
+  const color = fail ? '#c4685e' : warn ? '#d99a3d' : ok ? '#7ba87a' : '#4c5460'
+  return (
+    <span className="inline-flex items-center gap-1.5 font-mono text-[10.5px] text-[#7c8694]" title={label}>
+      <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+      {label}
+    </span>
+  )
+}
+
+function ReadinessBar({ prospect }: { prospect: Prospect }) {
+  const dead = prospect.pipeline_stage === 'dead'
+  const coordWarn = isCoordinateReview(prospect)
+  const solarOk = prospect.solar_quality === 'google_solar' || Boolean(prospect.panel_count || prospect.system_kw)
+  const solarWarn = prospect.solar_quality === 'fallback'
+  const published = Boolean(prospect.lead_id || prospect.microsite_slug || prospect.pipeline_stage === 'microsite_live')
+
+  return (
+    <div className="grid gap-1.5">
+      <ReadinessDot ok={prospect.visual_verified} fail={dead} label="v" />
+      <ReadinessDot ok={!coordWarn} warn={coordWarn} fail={dead} label="c" />
+      <ReadinessDot ok={solarOk} warn={solarWarn} fail={dead} label="s" />
+      <ReadinessDot ok={published} fail={dead} label="p" />
+    </div>
+  )
+}
+
 export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTableProps) {
   const [prospects, setProspectsState] = useState(() => sortProspectsForAdmin(readClientCache<Prospect[]>(PROSPECTS_CACHE_KEY) || initialProspects))
   const [activeStage, setActiveStage] = useState<ProspectStage | 'active' | 'not_qualified'>('active')
@@ -653,14 +680,16 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
   }
 
   return (
-    <section className="admin-panel min-w-0 overflow-hidden rounded-lg border border-[#30343b] bg-[#181a1f] shadow-[0_14px_34px_rgba(0,0,0,0.24)]">
-      <div className="flex flex-col gap-4 border-b border-stone-700/70 p-4 lg:flex-row lg:items-center lg:justify-between">
+    <section className="min-w-0 overflow-hidden rounded-lg border border-[#2a2e36] bg-[#1f2229] shadow-[0_18px_44px_rgba(0,0,0,0.22)]">
+      <div className="flex flex-col gap-4 border-b border-[#2a2e36] bg-[#1c1e24] p-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase text-slate-500">
+          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-[#5c6672]">
             <RadioTower className="h-4 w-4" />
-            Prospects
+            Prospect workbench
           </div>
-          <h2 className="mt-1 text-xl font-semibold text-stone-50">Pipeline</h2>
+          <h2 className="mt-1 text-[18px] font-semibold text-[#e8e4dc]">
+            {filteredProspects.length} <span className="font-mono text-[12px] font-normal text-[#7c8694]">/ {prospects.length} prospects</span>
+          </h2>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -668,7 +697,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
             type="button"
             disabled={isPending || selectedIds.length === 0}
             onClick={handleBulkPromote}
-            className="h-9 rounded-lg bg-amber-300 px-3 text-sm font-semibold text-stone-950 hover:bg-amber-200 disabled:opacity-50"
+            className="h-8 rounded-md bg-[#d99a3d] px-3 text-[12px] font-bold text-[#1a0e00] hover:bg-[#e6a84a] disabled:opacity-50"
           >
             {isPending && !activeId ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-2 h-3.5 w-3.5" />}
             Create proposal <span className="text-slate-300">{selectedIds.length}</span>
@@ -677,33 +706,33 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
             type="button"
             disabled={isPending || selectedIds.length === 0}
             onClick={handleBulkDelete}
-            className="h-9 rounded-lg border border-red-900/60 bg-stone-950/70 px-3 text-sm font-semibold text-red-300 hover:bg-red-950/30 disabled:opacity-50"
+            className="h-8 rounded-md border border-[#3a2521] bg-[#241814] px-3 text-[12px] font-semibold text-[#d77c70] hover:bg-[#2b1b17] disabled:opacity-50"
           >
             <Trash2 className="mr-2 h-3.5 w-3.5" />
             Delete <span className="text-red-400">{selectedIds.length}</span>
           </Button>
           <button
             type="button"
-            className={`admin-chip px-3 py-2 transition-colors ${activeStage === 'active' ? 'admin-chip-active' : 'hover:border-stone-600 hover:text-stone-300'}`}
+            className={`rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${activeStage === 'active' ? 'border-[#363c45] bg-white/[0.03] text-[#e8e4dc]' : 'border-[#2a2e36] text-[#7c8694] hover:border-[#363c45] hover:text-[#e8e4dc]'}`}
             onClick={() => setActiveStage('active')}
           >
             Active <span className="text-slate-500">{activeProspects.length}</span>
           </button>
           <button
             type="button"
-            className={`admin-chip px-3 py-2 transition-colors ${activeStage === 'not_qualified' ? 'admin-chip-active' : 'hover:border-stone-600 hover:text-stone-300'}`}
+            className={`rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${activeStage === 'not_qualified' ? 'border-[#3a2f1e] bg-[#15120b] text-[#d99a3d]' : 'border-[#2a2e36] text-[#7c8694] hover:border-[#363c45] hover:text-[#e8e4dc]'}`}
             onClick={() => setActiveStage('not_qualified')}
           >
             Not Qualified <span className="text-amber-400">{notQualifiedProspects.length}</span>
           </button>
-          <Link href="/admin" prefetch className="admin-chip px-3 py-2 transition-colors hover:border-stone-600 hover:text-stone-300">
-            Proposal Targets <span className="text-emerald-400">{proposalTargetCount}</span>
+          <Link href="/admin" prefetch className="rounded-md border border-[#2a2e36] px-2.5 py-1.5 text-[11px] font-medium text-[#7c8694] transition-colors hover:border-[#363c45] hover:text-[#e8e4dc]">
+            Proposal Targets <span className="text-[#8eb98c]">{proposalTargetCount}</span>
           </Link>
           {activeStageOptions.map((stage) => (
             <button
               key={stage}
               type="button"
-              className={`admin-chip px-3 py-2 transition-colors ${activeStage === stage ? 'admin-chip-active' : 'hover:border-stone-600 hover:text-stone-300'}`}
+              className={`rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${activeStage === stage ? 'border-[#3a2f1e] bg-[#15120b] text-[#d99a3d]' : 'border-[#2a2e36] text-[#7c8694] hover:border-[#363c45] hover:text-[#e8e4dc]'}`}
               onClick={() => setActiveStage(stage)}
             >
               {prospectStageLabels[stage]} <span className="text-slate-500">{counts[stage]}</span>
@@ -713,40 +742,40 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
       </div>
 
       {message && (
-        <div className="flex items-center gap-2 border-b border-stone-700/70 bg-stone-900/60 px-4 py-3 text-sm text-stone-400">
-          <TriangleAlert className="h-4 w-4 text-amber-300" />
+        <div className="flex items-center gap-2 border-b border-[#2a2e36] bg-[#15120b] px-4 py-3 text-[12px] text-[#d99a3d]">
+          <TriangleAlert className="h-4 w-4 text-[#d99a3d]" />
           {message}
         </div>
       )}
 
       <div className="min-w-0 overflow-x-auto">
-        <table className="admin-data-table w-full min-w-[1060px] table-fixed text-left text-sm">
+        <table className="w-full min-w-[1040px] table-fixed text-left text-sm">
           <thead>
-            <tr className="border-b border-stone-700/70 bg-stone-900/60 text-xs font-semibold uppercase text-slate-500">
+            <tr className="border-b border-[#2a2e36] bg-[#1d2027] text-[10px] font-bold uppercase tracking-[0.16em] text-[#5c6672]">
               <th className="w-12 px-4 py-3">
                 <input
                   type="checkbox"
                   aria-label="Select all visible prospects"
                   checked={allVisibleSelected}
                   onChange={handleToggleVisibleSelection}
-                  className="h-4 w-4 rounded-sm border-stone-600 accent-emerald-600"
+                  className="h-4 w-4 rounded-sm border-[#4c5460] accent-[#d99a3d]"
                 />
               </th>
               <th className="w-[26%] px-4 py-3">Prospect</th>
-              <th className="w-[18%] px-4 py-3">Home</th>
+              <th className="w-[10%] px-4 py-3">Ready</th>
               <th className="w-[16%] px-4 py-3">Solar</th>
-              <th className="w-[16%] px-4 py-3">Contact</th>
+              <th className="w-[20%] px-4 py-3">Contact</th>
               <th className="w-[12%] px-4 py-3">Stage</th>
-              <th className="w-[12%] px-4 py-3 text-right">Actions</th>
+              <th className="w-[16%] px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-stone-800">
+          <tbody className="divide-y divide-[#272a31]">
             {filteredProspects.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-4 py-12 text-center">
-                  <div className="mx-auto max-w-sm rounded-lg border border-dashed border-stone-600 bg-stone-900/60 p-6">
-                    <Rocket className="mx-auto h-7 w-7 text-slate-400" />
-                    <div className="mt-3 text-sm font-semibold text-stone-300">
+                  <div className="mx-auto max-w-sm rounded-lg border border-dashed border-[#363c45] bg-[#1c1e24] p-6">
+                    <Rocket className="mx-auto h-7 w-7 text-[#7c8694]" />
+                    <div className="mt-3 text-sm font-semibold text-[#a8b1bb]">
                       {activeStage === 'not_qualified' ? 'No filtered prospects' : 'No active prospects'}
                     </div>
                   </div>
@@ -766,84 +795,76 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                   prospect.render_preview_url
                 )
                 return (
-                  <tr key={prospect.id} className="transition-colors hover:bg-stone-900/60">
+                  <tr key={prospect.id} className="transition-colors hover:bg-[#23262d]">
                     <td className="px-4 py-4 align-top">
                       <input
                         type="checkbox"
                         aria-label={`Select ${prospect.business_name || prospect.address}`}
                         checked={selectedIds.includes(prospect.id)}
                         onChange={() => handleToggleSelection(prospect.id)}
-                        className="h-4 w-4 rounded-sm border-stone-600 accent-emerald-600"
+                        className="h-4 w-4 rounded-sm border-[#4c5460] accent-[#d99a3d]"
                       />
                     </td>
                     <td className="px-4 py-4 align-top">
-                      <div className="truncate font-semibold text-stone-50">{prospect.business_name || prospect.address.split(',')[0]}</div>
-                      <div className="mt-1 line-clamp-2 max-w-xs text-xs leading-5 text-slate-500">{prospect.address}</div>
-                      <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-400">
-                        {hasProposal && <span className="admin-status admin-status-success px-2 py-1">proposal made</span>}
-                        {prospect.visual_verified && <span className="admin-status admin-status-success px-2 py-1">visual verified</span>}
-                        {isCoordinateReview(prospect) && <span className="admin-status admin-status-warning px-2 py-1">check coordinates</span>}
-                        <span>{prospect.metro || 'Metro pending'} · {prospect.county || 'County pending'}</span>
+                      <div className="truncate font-semibold text-[#e8e4dc]">{prospect.business_name || prospect.address.split(',')[0]}</div>
+                      <div className="mt-1 line-clamp-2 max-w-xs text-xs leading-5 text-[#7c8694]">{prospect.address}</div>
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-[#7c8694]">
+                        {hasProposal && <span className="rounded border border-[#34433a] bg-[#18241b] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8eb98c]">proposal</span>}
+                        {prospect.visual_verified && <span className="rounded border border-[#34433a] bg-[#18241b] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8eb98c]">verified</span>}
+                        {isCoordinateReview(prospect) && <span className="rounded border border-[#3a2f1e] bg-[#15120b] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#d99a3d]">check target</span>}
+                        <span className="font-mono text-[10.5px]">{prospect.metro || 'Metro pending'} · {prospect.county || 'County pending'}</span>
                       </div>
                       {isCoordinateReview(prospect) && (
-                        <div className="mt-2 max-w-xs text-xs text-amber-300">
+                        <div className="mt-2 max-w-xs font-mono text-[10.5px] text-[#d99a3d]">
                           {prospect.review_reason || 'Coordinate validation needs review'}
                           {prospect.coordinate_drift_meters != null ? ` · ${Math.round(prospect.coordinate_drift_meters)}m drift` : ''}
                         </div>
                       )}
                     </td>
                     <td className="px-4 py-4 align-top">
-                      <div className="text-xs font-medium text-stone-300">{prospect.place_id || prospect.parcel_id || 'No ID'}</div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        {prospect.sqft ? `${formatNumber(prospect.sqft)} sqft` : 'Area pending'} · {prospect.year_built || 'Year unknown'}
-                      </div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        {prospect.use_code || prospect.category || 'Use code pending'}
-                      </div>
-                      <div className="mt-2 text-xs text-slate-500">
-                        Visual: {prospect.visual_verified ? `${formatCoordinate(prospect.visual_lat)}, ${formatCoordinate(prospect.visual_lng)}` : 'not verified'}
+                      <ReadinessBar prospect={prospect} />
+                      <div className="mt-2 font-mono text-[9.5px] leading-4 text-[#4c5460]">
+                        v/c/s/p
                       </div>
                     </td>
                     <td className="px-4 py-4 align-top">
                       {hasSolarData ? (
                         <>
-                          <div className="text-xs font-medium text-stone-300">
+                          <div className="text-xs font-medium text-[#e8e4dc]">
                             {formatNumber(prospect.panel_count)} panels · {prospect.system_kw || 0} kW
                           </div>
-                          <div className="mt-1 text-xs text-slate-500">
+                          <div className="mt-1 text-xs text-[#7c8694]">
                             {formatUSD(prospect.annual_savings)} annual · {formatUSD(prospect.federal_itc)} ITC
                           </div>
                         </>
                       ) : (
-                        <div className="text-xs font-medium text-stone-300">Solar pending</div>
+                        <div className="text-xs font-medium text-[#a8b1bb]">Solar pending</div>
                       )}
-                      <div className="mt-2 flex gap-2">
-                        {prospect.satellite_url && (
-                          <a href={prospect.satellite_url} target="_blank" rel="noreferrer" className="text-xs font-medium text-slate-500 hover:text-primary">
-                            Satellite
-                          </a>
-                        )}
+                      <div className="mt-2 text-[10.5px] leading-4 text-[#7c8694]">
+                        {prospect.sqft ? `${formatNumber(prospect.sqft)} sqft` : 'Area pending'} · {prospect.year_built || 'Year unknown'}
+                      </div>
+                      <div className="mt-1 flex gap-2">
                         {(prospect.render_preview_url || prospect.render_url) && (
-                          <a href={prospect.render_preview_url || prospect.render_url || '#'} target="_blank" rel="noreferrer" className="text-xs font-medium text-slate-500 hover:text-primary">
+                          <a href={prospect.render_preview_url || prospect.render_url || '#'} target="_blank" rel="noreferrer" className="text-xs font-medium text-[#a8b1bb] hover:text-[#d99a3d]">
                             Render
                           </a>
                         )}
                       </div>
                     </td>
                     <td className="px-4 py-4 align-top">
-                      <div className="truncate text-sm text-stone-100">{prospect.first_name || prospect.last_name ? `${prospect.first_name || ''} ${prospect.last_name || ''}`.trim() : prospect.owner_name || prospect.owner_llc || 'Contact pending'}</div>
-                      <div className="mt-1 truncate text-xs text-slate-500">{prospect.homeowner_email || prospect.owner_email || 'No email yet'}</div>
-                      <div className="mt-1 truncate text-xs text-slate-500">{prospect.homeowner_phone || prospect.owner_title || prospect.enrichment_source || 'No phone yet'}</div>
+                      <div className="truncate text-sm text-[#e8e4dc]">{prospect.first_name || prospect.last_name ? `${prospect.first_name || ''} ${prospect.last_name || ''}`.trim() : prospect.owner_name || prospect.owner_llc || 'Contact pending'}</div>
+                      <div className="mt-1 truncate text-xs text-[#7c8694]">{prospect.homeowner_email || prospect.owner_email || 'No email yet'}</div>
+                      <div className="mt-1 truncate text-xs text-[#7c8694]">{prospect.homeowner_phone || prospect.owner_title || prospect.enrichment_source || 'No phone yet'}</div>
                     </td>
                     <td className="px-4 py-4 align-top">
-                      <div className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getProspectStageBadgeClass(prospect.pipeline_stage)}`}>
+                      <div className={`inline-flex rounded-md border px-2.5 py-1 text-xs font-semibold ${getProspectStageBadgeClass(prospect.pipeline_stage)}`}>
                         {prospectStageLabels[prospect.pipeline_stage]}
                       </div>
                       <select
                         value={prospect.pipeline_stage}
                         onChange={(event) => handleStageChange(prospect.id, event.target.value as ProspectStage)}
                         disabled={busy}
-                        className="admin-input mt-3 block px-2 py-2 text-xs text-stone-300"
+                        className="mt-3 block w-full rounded-md border border-[#363c45] bg-[#1c1e24] px-2 py-2 text-xs text-[#e8e4dc] outline-none focus:border-[#d99a3d]"
                       >
                         {prospectStages.map((stage) => (
                           <option key={stage} value={stage}>{prospectStageLabels[stage]}</option>
@@ -857,7 +878,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                             type="button"
                             size="sm"
                             variant="outline"
-                            className="rounded-md border-stone-700/70 bg-stone-950/70 text-stone-400 hover:bg-stone-900/60"
+                            className="h-8 rounded-md border-[#363c45] bg-[#23262d] text-[#a8b1bb] hover:bg-[#2a2e36] hover:text-[#e8e4dc]"
                             disabled={busy}
                             onClick={() => handleEnrich(prospect.id)}
                           >
@@ -868,7 +889,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="rounded-md border-stone-700/70 bg-stone-950/70 text-stone-400 hover:bg-stone-900/60"
+                          className="h-8 rounded-md border-[#363c45] bg-[#23262d] text-[#a8b1bb] hover:bg-[#2a2e36] hover:text-[#e8e4dc]"
                           disabled={busy}
                           onClick={() => openVisualVerifier(prospect)}
                           title="Preview and verify the exact building before proposal generation"
@@ -878,7 +899,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                         <Button
                           type="button"
                           size="sm"
-                          className="rounded-md bg-amber-300 text-stone-950 hover:bg-amber-200"
+                          className="h-8 rounded-md bg-[#d99a3d] text-[#1a0e00] hover:bg-[#e6a84a]"
                           disabled={busy || blocksProposalGeneration(prospect) || hasProposal}
                           onClick={() => handlePromote(prospect.id)}
                           title={
@@ -894,7 +915,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                         {prospect.microsite_slug && (
                           <Link
                             href={`/proposal/${prospect.microsite_slug}`}
-                            className="inline-flex h-9 items-center justify-center rounded-md border border-stone-700/70 px-3 text-stone-400 transition-colors hover:bg-stone-900/60"
+                            className="inline-flex h-8 items-center justify-center rounded-md border border-[#363c45] px-3 text-[#a8b1bb] transition-colors hover:bg-[#2a2e36] hover:text-[#e8e4dc]"
                             target="_blank"
                           >
                             <ExternalLink className="h-4 w-4" />
@@ -904,7 +925,7 @@ export function ProspectPipelineTable({ initialProspects }: ProspectPipelineTabl
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="rounded-md border-red-900/60 bg-stone-950/70 text-red-300 hover:bg-red-950/30"
+                          className="h-8 rounded-md border-[#3a2521] bg-[#241814] text-[#d77c70] hover:bg-[#2b1b17]"
                           disabled={busy}
                           onClick={() => handleDelete(prospect)}
                           title="Delete prospect"

@@ -1,10 +1,10 @@
 import { ArrowRight, Building2, Download, Sparkles } from 'lucide-react'
 import type { ProposalViewModel } from './types'
 
-function formatUSD(n: number) {
-  return new Intl.NumberFormat('en-US', {
+function formatCAD(n: number) {
+  return new Intl.NumberFormat('en-CA', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'CAD',
     maximumFractionDigits: 0,
   }).format(n)
 }
@@ -49,16 +49,17 @@ export function Hero({ proposal }: { proposal: ProposalViewModel }) {
       <div className="mx-auto grid max-w-7xl items-center gap-10 px-6 pb-28 pt-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(360px,0.75fr)] lg:px-10 lg:pb-32 lg:pt-14">
         <div className="animate-fade-up order-2 lg:order-1">
           <div className="relative overflow-hidden rounded-[28px] border border-[color:var(--border-strong)] bg-black shadow-[0_28px_80px_rgba(0,0,0,0.42)]">
-            <div className="aspect-video w-full bg-[#111820]">
+            <div className="aspect-[16/10] w-full bg-[#0B0E10]">
               {proposal.heroImageUrl ? (
                 <img
                   src={proposal.heroImageUrl}
                   alt={`Aerial solar proposal preview for ${proposal.businessName}`}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain"
                 />
               ) : (
-                <div className="flex h-full w-full items-center justify-center bg-[color:var(--card)] text-[color:var(--text-muted)]">
+                <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-[color:var(--card)] px-6 text-center text-[color:var(--text-muted)]">
                   <Building2 className="h-10 w-10" strokeWidth={1.5} />
+                  <p className="max-w-sm text-sm">Roof imagery is being prepared for this proposal.</p>
                 </div>
               )}
             </div>
@@ -101,13 +102,13 @@ export function Hero({ proposal }: { proposal: ProposalViewModel }) {
           </div>
 
           <h1 className="animate-fade-up stagger-1 mt-7 max-w-3xl text-balance text-5xl font-semibold leading-[1.02] tracking-tight md:text-6xl xl:text-7xl">
-            Your property, modeled with solar in motion.
+            Solar layout for your property.
           </h1>
 
           <p className="animate-fade-up stagger-2 mt-6 max-w-xl text-lg text-[color:var(--text-secondary)] md:text-xl">
-            A cinematic view of{' '}
+            A still preview of{' '}
             <span className="text-[color:var(--text-primary)]">{proposal.address}</span> with the
-            proposed rooftop array staged against verified roof geometry.
+            proposed black-panel rooftop array placed from available Solar API roof data.
           </p>
 
           <div className="animate-fade-up stagger-3 mt-8 rounded-[24px] border border-[color:var(--border-soft)] bg-white/[0.035] p-5 backdrop-blur-md">
@@ -115,7 +116,7 @@ export function Hero({ proposal }: { proposal: ProposalViewModel }) {
               Estimated annual savings
             </span>
             <div className="num mt-2 text-5xl font-semibold tracking-tight text-[color:var(--solar-gold)] md:text-6xl">
-              {formatUSD(proposal.annualSavings)}
+              {formatCAD(proposal.annualSavings)}
             </div>
             <p className="mt-3 text-sm text-[color:var(--text-secondary)]">
               {proposal.confidenceBasis}

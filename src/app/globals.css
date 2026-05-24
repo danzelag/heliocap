@@ -1079,9 +1079,48 @@
 
 /* ── Nav ──────────────────────────────────────────────────────────────────── */
 .cc-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   background: #0c0e11 !important;
   border-bottom: 1px solid #1e2329 !important;
   backdrop-filter: blur(20px) saturate(140%);
+}
+
+.cc-nav-inner,
+.cc-status-inner,
+.cc-main {
+  width: min(100%, 1536px);
+  margin: 0 auto;
+}
+
+.cc-nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+}
+
+.cc-nav-brand,
+.cc-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.cc-nav-actions {
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cc-user-chip {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cc-brand-mark {
@@ -1172,6 +1211,10 @@
   background: #0c0e11;
 }
 
+.cc-status-inner {
+  padding: 0 20px;
+}
+
 .cc-status-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -1226,6 +1269,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.cc-main {
+  padding: 24px 20px;
+}
+
+.cc-table-section {
+  margin-top: 24px;
 }
 
 /* Pulse dot */
@@ -1777,6 +1828,20 @@
 }
 
 @media (max-width: 900px) {
+  .cc-nav-inner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cc-nav-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .cc-user-chip {
+    display: none;
+  }
+
   .cc-status-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

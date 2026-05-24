@@ -151,12 +151,17 @@ async function readSolarGeoTiffSpatialInfo(buffer: Buffer): Promise<{
   const tiff = await fromArrayBuffer(arrayBuffer)
   const image = await tiff.getImage()
   const bbox = image.getBoundingBox()
+  const geoKeys = image.getGeoKeys()
+  const epsgCode = typeof geoKeys?.ProjectedCSTypeGeoKey === 'number'
+    ? geoKeys.ProjectedCSTypeGeoKey
+    : null
   const bounds = Array.isArray(bbox) && bbox.length === 4
     ? {
         west: Number(bbox[0]),
         south: Number(bbox[1]),
         east: Number(bbox[2]),
         north: Number(bbox[3]),
+        epsgCode,
       }
     : null
 

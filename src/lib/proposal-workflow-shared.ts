@@ -6,6 +6,7 @@ import type {
   SolarDataLayerAsset,
   SolarGeoBounds,
   SolarModel,
+  SolarRoofFocusCrop,
   SolarRasterPlacement,
   VisualReferenceSet,
 } from '@/lib/openclaw-google'
@@ -13,6 +14,9 @@ import type {
 export const DEFAULT_SITE_URL = 'https://heliocap.vercel.app'
 export const PROPOSAL_RENDER_WIDTH = 1280
 export const PROPOSAL_RENDER_HEIGHT = 720
+export const PROPOSAL_RENDER_WIDE = { width: 1600, height: 1000 }
+export const PROPOSAL_RENDER_SQUARE = { width: 1400, height: 1400 }
+export const PROPOSAL_RENDER_TALL = { width: 1200, height: 1600 }
 
 export type AdminSupabase = Awaited<ReturnType<typeof createAdminClient>>
 
@@ -51,17 +55,30 @@ export type ProspectLookup = Pick<
 }
 
 export type UsableSolarRgbLayer = SolarDataLayerAsset & {
+  sourceUrl: string
+  sourceWidth: number
+  sourceHeight: number
   previewUrl: string
   bounds: SolarGeoBounds
   previewWidth: number
   previewHeight: number
 }
 
+export type ProposalRenderSize = {
+  width: number
+  height: number
+  aspect: 'wide' | 'square' | 'tall'
+}
+
 export type RoofAssets = {
   roofImageUrl: string
+  roofImageSourceUrl: string
+  maskImageUrl: string | null
   renderImageUrl: string
   renderPreviewUrl: string
   panelLayerSvg: string
+  focusCrop: SolarRoofFocusCrop | null
+  renderSize: ProposalRenderSize
   presentationRotationDegrees: number
   solarDataLayers: SolarDataLayerAsset[]
   solarRgbLayer: UsableSolarRgbLayer
@@ -156,7 +173,13 @@ export function getStringArray(value: unknown) {
 
 export function getUsableSolarRgbLayer(layers: SolarDataLayerAsset[]): UsableSolarRgbLayer | null {
   const rgbLayer = layers.find((layer) => layer.id === 'rgb')
+  const sourceUrl = rgbLayer?.originalUrl || rgbLayer?.previewUrl
+  const sourceWidth = rgbLayer?.originalUrl && rgbLayer.width ? rgbLayer.width : rgbLayer?.previewWidth
+  const sourceHeight = rgbLayer?.originalUrl && rgbLayer.height ? rgbLayer.height : rgbLayer?.previewHeight
   if (
+    !sourceUrl ||
+    !sourceWidth ||
+    !sourceHeight ||
     !rgbLayer?.previewUrl ||
     !rgbLayer.bounds ||
     !rgbLayer.previewWidth ||
@@ -167,6 +190,9 @@ export function getUsableSolarRgbLayer(layers: SolarDataLayerAsset[]): UsableSol
 
   return {
     ...rgbLayer,
+    sourceUrl,
+    sourceWidth,
+    sourceHeight,
     previewUrl: rgbLayer.previewUrl,
     bounds: rgbLayer.bounds,
     previewWidth: rgbLayer.previewWidth,
@@ -174,22 +200,78 @@ export function getUsableSolarRgbLayer(layers: SolarDataLayerAsset[]): UsableSol
   }
 }
 
-export function getSolarRgbRasterPlacement(layer: UsableSolarRgbLayer): SolarRasterPlacement {
+export function selectProposalRenderSize(
+  focusCrop: SolarRoofFocusCrop | null,
+  layer: Pick<UsableSolarRgbLayer, 'sourceWidth' | 'sourceHeight'>,
+): ProposalRenderSize {
+  const width = focusCrop?.width || layer.sourceWidth
+  const height = focusCrop?.height || layer.sourceHeight
+  const aspect = width / Math.max(height, 1)
+
+  if (aspect >= 1.4) return { ...PROPOSAL_RENDER_WIDE, aspect: 'wide' }
+  if (aspect <= 0.7) return { ...PROPOSAL_RENDER_TALL, aspect: 'tall' }
+  return { ...PROPOSAL_RENDER_SQUARE, aspect: 'square' }
+}
+
+export function buildRenderQualityFlags({
+  panelCount,
+  focusCrop,
+  layer,
+  rotationDegrees,
+  hasMask,
+}: {
+  panelCount: number
+  focusCrop: SolarRoofFocusCrop | null
+  layer: Pick<UsableSolarRgbLayer, 'sourceWidth' | 'sourceHeight'>
+  rotationDegrees: number
+  hasMask: boolean
+}) {
+  const flags: string[] = []
+  if (panelCount < 6 || panelCount > 800) flags.push('panel_count_sanity')
+  if (!hasMask) flags.push('mask_unavailable')
+  if (Math.abs(rotationDegrees) > 15) flags.push('rotation_magnitude')
+
+  if (focusCrop) {
+    const sourceArea = Math.max(1, layer.sourceWidth * layer.sourceHeight)
+    const cropCoverage = (focusCrop.width * focusCrop.height) / sourceArea
+    if (cropCoverage < 0.08) flags.push('roof_coverage_too_small')
+    if (cropCoverage > 0.85) flags.push('roof_coverage_too_large')
+  } else {
+    flags.push('roof_focus_missing')
+  }
+
+  return flags
+}
+
+export function getSolarRgbRasterPlacement(
+  layer: UsableSolarRgbLayer,
+  renderSize: Pick<ProposalRenderSize, 'width' | 'height'> = {
+    width: PROPOSAL_RENDER_WIDTH,
+    height: PROPOSAL_RENDER_HEIGHT,
+  },
+  focusCrop?: SolarRoofFocusCrop | null,
+): SolarRasterPlacement {
+  const cropWidth = focusCrop?.width || layer.sourceWidth
+  const cropHeight = focusCrop?.height || layer.sourceHeight
   const scale = Math.min(
-    PROPOSAL_RENDER_WIDTH / layer.previewWidth,
-    PROPOSAL_RENDER_HEIGHT / layer.previewHeight,
+    renderSize.width / cropWidth,
+    renderSize.height / cropHeight,
   )
-  const renderedWidth = Math.round(layer.previewWidth * scale)
-  const renderedHeight = Math.round(layer.previewHeight * scale)
+  const renderedWidth = Math.round(cropWidth * scale)
+  const renderedHeight = Math.round(cropHeight * scale)
 
   return {
     bounds: layer.bounds,
-    sourceWidth: layer.previewWidth,
-    sourceHeight: layer.previewHeight,
+    sourceWidth: layer.sourceWidth,
+    sourceHeight: layer.sourceHeight,
+    sourceLeft: focusCrop?.left || 0,
+    sourceTop: focusCrop?.top || 0,
+    cropWidth,
+    cropHeight,
     renderedWidth,
     renderedHeight,
-    left: Math.round((PROPOSAL_RENDER_WIDTH - renderedWidth) / 2),
-    top: Math.round((PROPOSAL_RENDER_HEIGHT - renderedHeight) / 2),
+    left: Math.round((renderSize.width - renderedWidth) / 2),
+    top: Math.round((renderSize.height - renderedHeight) / 2),
   }
 }
 

@@ -1,4 +1,3 @@
-import sharp from 'sharp'
 import {
   buildSolarLayoutDebug,
   buildSolarModel,
@@ -6,6 +5,7 @@ import {
   collectVisualReferences,
   fetchAndUploadSolarDataLayerAssets,
   fetchSolarInsights,
+  getSolarRoofFocusCrop,
   listManualStreetViewReferenceUrls,
   selectStaticMapCenter,
   uploadLeadAsset,
@@ -17,10 +17,11 @@ import {
   getSolarRgbRasterPlacement,
   getStringArray,
   getUsableSolarRgbLayer,
-  PROPOSAL_RENDER_HEIGHT,
-  PROPOSAL_RENDER_WIDTH,
+  buildRenderQualityFlags,
+  selectProposalRenderSize,
   setWorkflowProgress,
 } from '@/lib/proposal-workflow-shared'
+import { buildSolarRgbProposalRender } from '@/lib/proposal-image-compose'
 
 export async function generateRoofAssets(
   supabase: AdminSupabase,
@@ -64,7 +65,10 @@ export async function generateRoofAssets(
   if (!solarRgbLayer) {
     throw new Error('Solar API RGB imagery is unavailable for this roof. Verify the target or choose another source before publishing.')
   }
+  const roofImageSourceUrl = solarRgbLayer.sourceUrl
   const roofImageUrl = solarRgbLayer.previewUrl
+  const maskLayer = solarDataLayerAssets?.layers.find((layer) => layer.id === 'mask') || null
+  const maskImageUrl = maskLayer?.originalUrl || maskLayer?.previewUrl || null
 
   const visualReferences = await collectVisualReferences({
     supabase,
@@ -90,7 +94,7 @@ export async function generateRoofAssets(
   if (prospect?.solar_reference_enabled === false) {
     visualReferences.solarApiLayoutImageUrl = null
   } else {
-    visualReferences.solarApiLayoutImageUrl = prospect?.solar_reference_url || roofImageUrl
+    visualReferences.solarApiLayoutImageUrl = prospect?.solar_reference_url || solarRgbLayer.previewUrl
   }
 
   const excludedReferenceUrls = getStringArray(prospect?.visual_reference_exclusions)
@@ -98,15 +102,33 @@ export async function generateRoofAssets(
     ? filterExcludedReferences(visualReferences, excludedReferenceUrls)
     : visualReferences
 
-  const rasterPlacement = getSolarRgbRasterPlacement(solarRgbLayer)
+  const focusCrop = getSolarRoofFocusCrop({
+    insights: solarInsights,
+    model: solarModel,
+    layer: {
+      bounds: solarRgbLayer.bounds,
+      previewWidth: solarRgbLayer.sourceWidth,
+      previewHeight: solarRgbLayer.sourceHeight,
+    },
+  })
+  const renderSize = selectProposalRenderSize(focusCrop, solarRgbLayer)
+  const rasterPlacement = getSolarRgbRasterPlacement(solarRgbLayer, renderSize, focusCrop)
+  const solarLayoutDebug = buildSolarLayoutDebug(solarInsights, solarModel)
+  const presentationRotationDegrees = getPresentationRotationDegrees(solarLayoutDebug)
+  const renderQualityFlags = buildRenderQualityFlags({
+    panelCount: solarModel.panelCount,
+    focusCrop,
+    layer: solarRgbLayer,
+    rotationDegrees: presentationRotationDegrees,
+    hasMask: Boolean(maskImageUrl),
+  })
   const panelLayerSvg = buildSolarPanelLayerSvg({
     insights: solarInsights,
     model: solarModel,
-    width: PROPOSAL_RENDER_WIDTH,
-    height: PROPOSAL_RENDER_HEIGHT,
+    width: renderSize.width,
+    height: renderSize.height,
     rasterPlacement,
   })
-  const solarLayoutDebug = buildSolarLayoutDebug(solarInsights, solarModel)
 
   await setWorkflowProgress(supabase, job, {
     step: 'Black panel layout generated',
@@ -117,6 +139,11 @@ export async function generateRoofAssets(
       solarPanelCount: solarModel.panelCount,
       solar_layout_debug: solarLayoutDebug,
       solar_data_layers: solarDataLayerAssets,
+      render_aspect: renderSize.aspect,
+      render_size: renderSize,
+      mask_source: maskImageUrl ? 'google_solar_mask' : 'none',
+      render_quality: renderQualityFlags.length ? 'needs_review' : 'awaiting_review',
+      render_quality_flags: renderQualityFlags,
     },
   })
 
@@ -129,7 +156,15 @@ export async function generateRoofAssets(
     contentType: 'image/svg+xml',
   })
 
-  const renderPreviewBuffer = await buildSolarRgbProposalRender(roofImageUrl, panelLayerSvg)
+  const renderPreviewBuffer = await buildSolarRgbProposalRender({
+    roofImageUrl: roofImageSourceUrl,
+    panelLayerSvg,
+    outputWidth: renderSize.width,
+    outputHeight: renderSize.height,
+    focusCrop,
+    maskImageUrl,
+    rotationDegrees: presentationRotationDegrees,
+  })
   const renderPreviewUrl = await uploadLeadAsset({
     supabase,
     bucket: 'leads',
@@ -156,6 +191,13 @@ export async function generateRoofAssets(
       solar_data_layers: solarDataLayerAssets,
       technicalRenderUrl: renderImageUrl,
       solarPanelRenderUrl: renderPreviewUrl,
+      roof_focus_crop: focusCrop,
+      render_aspect: renderSize.aspect,
+      render_size: renderSize,
+      presentationRotationDegrees,
+      mask_source: maskImageUrl ? 'google_solar_mask' : 'none',
+      render_quality: renderQualityFlags.length ? 'needs_review' : 'awaiting_review',
+      render_quality_flags: renderQualityFlags,
     },
   })
 
@@ -170,7 +212,7 @@ export async function generateRoofAssets(
         system_cost: solarModel.systemCost,
         federal_itc: solarModel.federalItc,
         payback_years: solarModel.estimatedPayback,
-        satellite_url: roofImageUrl,
+        satellite_url: solarRgbLayer.previewUrl,
         render_url: renderImageUrl,
         render_preview_url: renderPreviewUrl,
         solar_quality: solarModel.quality,
@@ -181,10 +223,14 @@ export async function generateRoofAssets(
 
   return {
     roofImageUrl,
+    roofImageSourceUrl,
+    maskImageUrl,
     renderImageUrl,
     renderPreviewUrl,
     panelLayerSvg,
-    presentationRotationDegrees: getPresentationRotationDegrees(solarLayoutDebug),
+    focusCrop,
+    renderSize,
+    presentationRotationDegrees,
     solarDataLayers: solarDataLayerAssets?.layers || [],
     solarRgbLayer,
     visualReferences: filteredVisualReferences,
@@ -204,7 +250,15 @@ export async function generateProposalPreview(
     buildStatus: 'image_generating',
   })
 
-  const finalRenderBuffer = await buildSolarRgbProposalRender(roofAssets.roofImageUrl, roofAssets.panelLayerSvg)
+  const finalRenderBuffer = await buildSolarRgbProposalRender({
+    roofImageUrl: roofAssets.roofImageSourceUrl,
+    panelLayerSvg: roofAssets.panelLayerSvg,
+    outputWidth: roofAssets.renderSize.width,
+    outputHeight: roofAssets.renderSize.height,
+    focusCrop: roofAssets.focusCrop,
+    maskImageUrl: roofAssets.maskImageUrl,
+    rotationDegrees: roofAssets.presentationRotationDegrees,
+  })
 
   const renderPreviewUrl = await uploadLeadAsset({
     supabase,
@@ -227,46 +281,4 @@ export async function generateProposalPreview(
   })
 
   return { renderPreviewUrl, source: 'deterministic_solar_rgb_plus_solar_api_panels' as const }
-}
-
-async function buildSolarRgbProposalRender(roofImageUrl: string, panelLayerSvg: string) {
-  const roofBuffer = await fetchImageBuffer(roofImageUrl)
-  const metadata = await sharp(roofBuffer).metadata()
-  const sourceWidth = metadata.width || PROPOSAL_RENDER_WIDTH
-  const sourceHeight = metadata.height || PROPOSAL_RENDER_HEIGHT
-  const scale = Math.min(PROPOSAL_RENDER_WIDTH / sourceWidth, PROPOSAL_RENDER_HEIGHT / sourceHeight)
-  const renderedWidth = Math.round(sourceWidth * scale)
-  const renderedHeight = Math.round(sourceHeight * scale)
-  const left = Math.round((PROPOSAL_RENDER_WIDTH - renderedWidth) / 2)
-  const top = Math.round((PROPOSAL_RENDER_HEIGHT - renderedHeight) / 2)
-  const background = await sharp(roofBuffer)
-    .resize(PROPOSAL_RENDER_WIDTH, PROPOSAL_RENDER_HEIGHT, { fit: 'cover', position: 'center' })
-    .blur(18)
-    .modulate({ brightness: 0.62, saturation: 0.72 })
-    .linear(0.92, -8)
-    .webp({ quality: 82, effort: 4 })
-    .toBuffer()
-  const foreground = await sharp(roofBuffer)
-    .resize(renderedWidth, renderedHeight, { fit: 'fill' })
-    .modulate({ brightness: 1.06, saturation: 0.9 })
-    .linear(1.04, -3)
-    .sharpen({ sigma: 0.6, m1: 0.45, m2: 1.2 })
-    .webp({ quality: 94, effort: 5 })
-    .toBuffer()
-
-  return sharp(background)
-    .composite([
-      { input: foreground, left, top },
-      { input: Buffer.from(panelLayerSvg), left: 0, top: 0 },
-    ])
-    .webp({ quality: 94, effort: 6 })
-    .toBuffer()
-}
-
-async function fetchImageBuffer(url: string) {
-  const response = await fetch(url, { cache: 'no-store' })
-  if (!response.ok) {
-    throw new Error(`Image fetch failed: ${response.status}`)
-  }
-  return Buffer.from(await response.arrayBuffer())
 }

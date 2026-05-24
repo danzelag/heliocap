@@ -127,16 +127,28 @@ export type SolarGeoBounds = {
   south: number
   east: number
   north: number
+  epsgCode?: number | null
 }
 
 export type SolarRasterPlacement = {
   bounds: SolarGeoBounds
   sourceWidth: number
   sourceHeight: number
+  sourceLeft?: number
+  sourceTop?: number
+  cropWidth?: number
+  cropHeight?: number
   renderedWidth: number
   renderedHeight: number
   left: number
   top: number
+}
+
+export type SolarRoofFocusCrop = {
+  left: number
+  top: number
+  width: number
+  height: number
 }
 
 
@@ -509,6 +521,70 @@ export function buildSolarLayoutDebug(insights: GoogleSolarInsights | null, mode
   }
 }
 
+export function getSolarRoofFocusCrop({
+  insights,
+  model,
+  layer,
+}: {
+  insights: GoogleSolarInsights | null
+  model: SolarModel
+  layer: {
+    bounds: SolarGeoBounds
+    previewWidth: number
+    previewHeight: number
+  }
+}): SolarRoofFocusCrop | null {
+  const roofSegments = insights?.solarPotential?.roofSegmentStats || []
+  const panels = selectCoherentPanelLayout(
+    insights?.solarPotential?.solarPanels || [],
+    roofSegments,
+    model.panelCount,
+  ).filter((panel) => Boolean(panel.center))
+
+  if (!panels.length) return null
+
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+
+  for (const panel of panels) {
+    if (!panel.center) continue
+    const point = latLngToRasterSourcePixel(
+      panel.center.latitude,
+      panel.center.longitude,
+      layer.bounds,
+      layer.previewWidth,
+      layer.previewHeight,
+    )
+    minX = Math.min(minX, point.x)
+    minY = Math.min(minY, point.y)
+    maxX = Math.max(maxX, point.x)
+    maxY = Math.max(maxY, point.y)
+  }
+
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {
+    return null
+  }
+
+  const spanX = Math.max(1, maxX - minX)
+  const spanY = Math.max(1, maxY - minY)
+  const paddingX = Math.max(72, spanX * 1.15)
+  const paddingY = Math.max(72, spanY * 1.15)
+
+  const left = clamp(Math.floor(minX - paddingX), 0, Math.max(0, layer.previewWidth - 1))
+  const top = clamp(Math.floor(minY - paddingY), 0, Math.max(0, layer.previewHeight - 1))
+  const right = clamp(Math.ceil(maxX + paddingX), left + 1, layer.previewWidth)
+  const bottom = clamp(Math.ceil(maxY + paddingY), top + 1, layer.previewHeight)
+
+  return {
+    left,
+    top,
+    width: right - left,
+    height: bottom - top,
+  }
+}
+
 function selectCoherentPanelLayout(
   allPanels: GoogleSolarPanel[],
   roofSegments: GoogleRoofSegment[],
@@ -604,16 +680,48 @@ function getPanelSvgRotation(azimuth: number, orientation?: string) {
 }
 
 function latLngToRasterOutputPixel(lat: number, lng: number, placement: SolarRasterPlacement) {
-  const sourceX = ((lng - placement.bounds.west) / (placement.bounds.east - placement.bounds.west)) * placement.sourceWidth
-  const sourceY = ((placement.bounds.north - lat) / (placement.bounds.north - placement.bounds.south)) * placement.sourceHeight
+  const rasterCoordinate = latLngToRasterCoordinate(lat, lng, placement.bounds)
+  const sourceX = ((rasterCoordinate.x - placement.bounds.west) / (placement.bounds.east - placement.bounds.west)) * placement.sourceWidth
+  const sourceY = ((placement.bounds.north - rasterCoordinate.y) / (placement.bounds.north - placement.bounds.south)) * placement.sourceHeight
+  const croppedSourceX = sourceX - (placement.sourceLeft || 0)
+  const croppedSourceY = sourceY - (placement.sourceTop || 0)
+  const cropWidth = placement.cropWidth || placement.sourceWidth
+  const cropHeight = placement.cropHeight || placement.sourceHeight
 
   return {
-    x: placement.left + sourceX * (placement.renderedWidth / placement.sourceWidth),
-    y: placement.top + sourceY * (placement.renderedHeight / placement.sourceHeight),
+    x: placement.left + croppedSourceX * (placement.renderedWidth / cropWidth),
+    y: placement.top + croppedSourceY * (placement.renderedHeight / cropHeight),
+  }
+}
+
+function latLngToRasterSourcePixel(
+  lat: number,
+  lng: number,
+  bounds: SolarGeoBounds,
+  sourceWidth: number,
+  sourceHeight: number,
+) {
+  const rasterCoordinate = latLngToRasterCoordinate(lat, lng, bounds)
+
+  return {
+    x: ((rasterCoordinate.x - bounds.west) / (bounds.east - bounds.west)) * sourceWidth,
+    y: ((bounds.north - rasterCoordinate.y) / (bounds.north - bounds.south)) * sourceHeight,
   }
 }
 
 function getRasterMetersPerOutputPixel(placement: SolarRasterPlacement) {
+  if (isProjectedUtmBounds(placement.bounds)) {
+    const widthMeters = Math.abs(placement.bounds.east - placement.bounds.west)
+    const heightMeters = Math.abs(placement.bounds.north - placement.bounds.south)
+    const metersPerSourcePixel = Math.max(
+      widthMeters / Math.max(placement.sourceWidth, 1),
+      heightMeters / Math.max(placement.sourceHeight, 1),
+    )
+    const outputScale = placement.renderedWidth / Math.max(placement.cropWidth || placement.sourceWidth, 1)
+
+    return metersPerSourcePixel / Math.max(outputScale, 0.0001)
+  }
+
   const midLat = (placement.bounds.north + placement.bounds.south) / 2
   const metersPerDegreeLat = 111_320
   const metersPerDegreeLng = 111_320 * Math.cos((midLat * Math.PI) / 180)
@@ -623,9 +731,62 @@ function getRasterMetersPerOutputPixel(placement: SolarRasterPlacement) {
     widthMeters / Math.max(placement.sourceWidth, 1),
     heightMeters / Math.max(placement.sourceHeight, 1),
   )
-  const outputScale = placement.renderedWidth / Math.max(placement.sourceWidth, 1)
+  const outputScale = placement.renderedWidth / Math.max(placement.cropWidth || placement.sourceWidth, 1)
 
   return metersPerSourcePixel / Math.max(outputScale, 0.0001)
+}
+
+function latLngToRasterCoordinate(lat: number, lng: number, bounds: SolarGeoBounds) {
+  if (isProjectedUtmBounds(bounds)) {
+    return latLngToUtm(lat, lng, bounds.epsgCode!)
+  }
+
+  return { x: lng, y: lat }
+}
+
+function isProjectedUtmBounds(bounds: SolarGeoBounds) {
+  return typeof bounds.epsgCode === 'number' &&
+    ((bounds.epsgCode >= 32601 && bounds.epsgCode <= 32660) ||
+      (bounds.epsgCode >= 32701 && bounds.epsgCode <= 32760))
+}
+
+function latLngToUtm(lat: number, lng: number, epsgCode: number) {
+  const zone = epsgCode % 100
+  const northernHemisphere = epsgCode >= 32601 && epsgCode <= 32660
+  const a = 6378137
+  const f = 1 / 298.257223563
+  const k0 = 0.9996
+  const e = Math.sqrt(f * (2 - f))
+  const ePrimeSquared = (e * e) / (1 - e * e)
+  const latRad = (lat * Math.PI) / 180
+  const lngRad = (lng * Math.PI) / 180
+  const originLngRad = (((zone - 1) * 6 - 180 + 3) * Math.PI) / 180
+  const n = a / Math.sqrt(1 - e * e * Math.sin(latRad) * Math.sin(latRad))
+  const t = Math.tan(latRad) * Math.tan(latRad)
+  const c = ePrimeSquared * Math.cos(latRad) * Math.cos(latRad)
+  const lngDelta = Math.cos(latRad) * (lngRad - originLngRad)
+  const meridianArc = a * (
+    (1 - e * e / 4 - 3 * e ** 4 / 64 - 5 * e ** 6 / 256) * latRad -
+    (3 * e * e / 8 + 3 * e ** 4 / 32 + 45 * e ** 6 / 1024) * Math.sin(2 * latRad) +
+    (15 * e ** 4 / 256 + 45 * e ** 6 / 1024) * Math.sin(4 * latRad) -
+    (35 * e ** 6 / 3072) * Math.sin(6 * latRad)
+  )
+  const easting = k0 * n * (
+    lngDelta +
+    (1 - t + c) * lngDelta ** 3 / 6 +
+    (5 - 18 * t + t * t + 72 * c - 58 * ePrimeSquared) * lngDelta ** 5 / 120
+  ) + 500_000
+  let northing = k0 * (
+    meridianArc + n * Math.tan(latRad) * (
+      lngDelta * lngDelta / 2 +
+      (5 - t + 9 * c + 4 * c * c) * lngDelta ** 4 / 24 +
+      (61 - 58 * t + t * t + 600 * c - 330 * ePrimeSquared) * lngDelta ** 6 / 720
+    )
+  )
+
+  if (!northernHemisphere) northing += 10_000_000
+
+  return { x: easting, y: northing }
 }
 
 function samplePanelsForGuide(panels: GoogleSolarPanel[], maxPanels: number) {

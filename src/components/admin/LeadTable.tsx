@@ -53,10 +53,10 @@ const statusActions: Array<{ status: LeadStatus; label: string; icon: typeof Pho
   { status: 'booked', label: 'Mark Booked', icon: CalendarCheck },
 ]
 
-function formatUSD(value: number | null) {
-  return new Intl.NumberFormat('en-US', {
+function formatCAD(value: number | null) {
+  return new Intl.NumberFormat('en-CA', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'CAD',
     maximumFractionDigits: 0,
   }).format(value || 0)
 }
@@ -386,9 +386,18 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex items-center gap-3">
-                      <div className="grid h-9 w-9 place-items-center rounded-lg border border-stone-700/70 bg-stone-900/60 text-xs font-semibold text-slate-500">
-                        {String(index + 1).padStart(2, '0')}
-                      </div>
+                      {lead.render_preview_url || lead.roof_image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={lead.render_preview_url || lead.roof_image_url!}
+                          alt=""
+                          className="h-9 w-9 shrink-0 rounded-md border border-[#1e2530] object-cover"
+                        />
+                      ) : (
+                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md border border-stone-700/70 bg-stone-900/60 text-xs font-semibold text-slate-500">
+                          {String(index + 1).padStart(2, '0')}
+                        </div>
+                      )}
                       <div>
                         <div className="font-semibold text-stone-50">{lead.business_name}</div>
                         <div className="mt-1 max-w-[22rem] truncate text-xs text-slate-500">{lead.address || 'No address'}</div>
@@ -405,7 +414,7 @@ export function LeadTable({ initialLeads }: LeadTableProps) {
                     </span>
                   </td>
                   <td className="px-4 py-4 text-right">
-                    <div className="num text-base font-semibold text-stone-50">{formatUSD(lead.estimated_savings)}</div>
+                    <div className="num text-base font-semibold text-stone-50">{formatCAD(lead.estimated_savings)}</div>
                   </td>
                   <td className="px-4 py-4 text-right">
                     <div className="flex justify-end gap-2">

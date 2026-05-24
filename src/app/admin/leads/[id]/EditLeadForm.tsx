@@ -1,13 +1,13 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Button } from '@/components/ui/button'
 import { Loader2, Satellite } from 'lucide-react'
 import AddressAutocomplete, { type PlaceResult } from '@/components/AddressAutocomplete'
 import { updateLeadAction } from './actions'
 
-const inputClass = 'admin-input px-3 py-2.5 text-sm placeholder:text-slate-400'
-const labelClass = 'text-xs font-semibold text-stone-400'
+const inputCls = 'w-full rounded-lg border border-[#1e2530] bg-[#0c0d10] px-3 py-2.5 text-[13px] text-[#e0ddd8] placeholder:text-[#2a3040] outline-none transition-colors focus:border-[#d99a3d]/50 focus:ring-1 focus:ring-[#d99a3d]/15'
+const selectCls = `${inputCls} appearance-none cursor-pointer`
+const labelCls = 'block text-[10px] font-bold uppercase tracking-[0.15em] text-[#4a5560] mb-1.5'
 
 interface Lead {
   id: string
@@ -30,13 +30,16 @@ export default function EditLeadForm({ lead }: { lead: Lead }) {
   const [roofPreview, setRoofPreview] = useState<string | null>(lead.roof_image_url)
   const [roofGenerating, setRoofGenerating] = useState(false)
 
+  const staticMapUrl = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY && lead.address
+    ? `https://maps.googleapis.com/maps/api/staticmap?center=${encodeURIComponent(lead.address)}&zoom=18&size=900x500&maptype=satellite&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}`
+    : null
+
+  const displayImage = roofPreview || staticMapUrl
+
   async function handlePlaceSelect({ formattedAddress, lat, lng }: PlaceResult) {
     if (latRef.current) latRef.current.value = String(lat)
     if (lngRef.current) lngRef.current.value = String(lng)
 
-    // Derive slug from lead id path doesn't change, use existing slug hint from business name
-    // We pass the formatted address as fallback; the backend uses slug for storage path.
-    // The slug is already set for this lead — pass it via a data attribute on the form.
     const form = document.getElementById('edit-lead-form') as HTMLFormElement | null
     const slug = form?.dataset.slug || formattedAddress.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
 
@@ -70,7 +73,7 @@ export default function EditLeadForm({ lead }: { lead: Lead }) {
       id="edit-lead-form"
       data-slug={lead.business_name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')}
       action={updateLeadAction}
-      className="admin-panel space-y-6 p-4 lg:p-6"
+      className="space-y-5"
     >
       <input type="hidden" name="id" value={lead.id} />
       <input type="hidden" name="lat" ref={latRef} />
@@ -78,103 +81,127 @@ export default function EditLeadForm({ lead }: { lead: Lead }) {
       <input type="hidden" name="roof_image_url" ref={roofImageUrlRef} defaultValue={lead.roof_image_url || ''} />
       <input type="hidden" name="render_preview_url" ref={renderPreviewUrlRef} defaultValue={lead.render_preview_url || ''} />
 
-      <div className="grid gap-5 md:grid-cols-2">
-        <div className="space-y-2">
-          <label className={labelClass}>Business name</label>
-          <input
-            name="business_name"
-            defaultValue={lead.business_name}
-            required
-            className={inputClass}
-          />
+      {/* Core fields */}
+      <div className="rounded-xl border border-[#1e2530] bg-[#111418] overflow-hidden">
+        <div className="border-b border-[#1e2530] px-5 py-4 bg-[#0f1216]">
+          <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#4a5560]">Proposal</div>
+          <div className="mt-1 text-[15px] font-semibold text-[#e0ddd8]">Lead details</div>
         </div>
-        <div className="space-y-2">
-          <label className={labelClass}>Status</label>
-          <select
-            name="status"
-            defaultValue={lead.status}
-            className={`${inputClass} appearance-none`}
-          >
-            <option value="published">Published</option>
-            <option value="contacted">Contacted</option>
-            <option value="emailed">Emailed</option>
-            <option value="replied">Replied</option>
-            <option value="booked">Booked</option>
-            <option value="archived">Archived</option>
-          </select>
+        <div className="space-y-4 p-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className={labelCls}>Business name</label>
+              <input
+                name="business_name"
+                defaultValue={lead.business_name}
+                required
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Status</label>
+              <select
+                name="status"
+                defaultValue={lead.status}
+                className={selectCls}
+              >
+                <option value="published">Published</option>
+                <option value="contacted">Contacted</option>
+                <option value="emailed">Emailed</option>
+                <option value="replied">Replied</option>
+                <option value="booked">Booked</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className={labelCls}>Contact name</label>
+              <input
+                name="contact_name"
+                defaultValue={lead.contact_name || ''}
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Estimated savings (CAD)</label>
+              <input
+                name="estimated_savings"
+                type="number"
+                defaultValue={lead.estimated_savings || ''}
+                className={inputCls}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className={labelCls}>Business address</label>
+            <AddressAutocomplete
+              name="address"
+              defaultValue={lead.address || ''}
+              placeholder="Start typing an address"
+              onPlaceSelect={handlePlaceSelect}
+              className={inputCls}
+            />
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-5 md:grid-cols-2">
-        <div className="space-y-2">
-          <label className={labelClass}>Contact name</label>
-          <input
-            name="contact_name"
-            defaultValue={lead.contact_name || ''}
-            className={inputClass}
-          />
-        </div>
-        <div className="space-y-2">
-          <label className={labelClass}>Estimated savings ($)</label>
-          <input
-            name="estimated_savings"
-            type="number"
-            defaultValue={lead.estimated_savings || ''}
-            className={inputClass}
-          />
-        </div>
-      </div>
-
-      {/* Address with autocomplete */}
-      <div className="space-y-2">
-        <label className={labelClass}>Business address</label>
-        <AddressAutocomplete
-          name="address"
-          defaultValue={lead.address || ''}
-          placeholder="Start typing an address"
-          onPlaceSelect={handlePlaceSelect}
-          className={inputClass}
-        />
-      </div>
-
-      {/* Roof preview after address selection */}
-      {(roofGenerating || roofPreview) && (
-        <div className="space-y-3">
-          <label className={`${labelClass} flex items-center gap-2`}>
-            <Satellite className="w-3 h-3" /> Roof image
-          </label>
-          <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-lg border border-stone-700/70 bg-stone-900/60">
-            {roofGenerating ? (
-              <div className="flex flex-col items-center gap-2 text-slate-500">
-                <Loader2 className="w-6 h-6 animate-spin text-emerald-300" />
-                <p className="text-sm font-medium">Fetching image</p>
-              </div>
-            ) : (
-              <>
-                <img src={roofPreview!} className="w-full h-full object-cover" alt="Roof satellite view" />
-                <div className="absolute left-2 top-2 rounded-full bg-stone-950/90 px-2 py-1 text-xs font-semibold text-stone-300">
-                  Generated
+      {/* Roof image preview */}
+      {(roofGenerating || displayImage) && (
+        <div className="rounded-xl border border-[#1e2530] bg-[#111418] overflow-hidden">
+          <div className="border-b border-[#1e2530] px-5 py-4 bg-[#0f1216]">
+            <label className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] text-[#4a5560]">
+              <Satellite className="h-3 w-3" />
+              Roof image
+            </label>
+          </div>
+          <div className="p-5">
+            <div className="relative aspect-video overflow-hidden rounded-xl border border-[#1e2530] bg-[#080a0c]">
+              {roofGenerating ? (
+                <div className="flex h-full flex-col items-center justify-center gap-2">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#d99a3d]" />
+                  <span className="text-xs text-[#4a5560]">Generating satellite + panel render…</span>
                 </div>
-              </>
-            )}
+              ) : displayImage ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={displayImage} className="h-full w-full object-cover" alt="Property satellite view" />
+                  <div className="absolute bottom-2 left-2 rounded border border-white/10 bg-black/70 px-2 py-1 text-[10px] font-semibold text-white/60 backdrop-blur-sm">
+                    {roofPreview === lead.roof_image_url ? 'Current render' : roofPreview ? 'New render' : 'Satellite preview'}
+                  </div>
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
       )}
 
-      <div className="space-y-2">
-        <label className={labelClass}>Notes</label>
-        <textarea
-          name="notes"
-          rows={4}
-          defaultValue={lead.notes || ''}
-          className={inputClass}
-        />
+      {/* Notes */}
+      <div className="rounded-xl border border-[#1e2530] bg-[#111418] overflow-hidden">
+        <div className="border-b border-[#1e2530] px-5 py-4 bg-[#0f1216]">
+          <div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#4a5560]">Notes</div>
+        </div>
+        <div className="p-5">
+          <textarea
+            name="notes"
+            rows={4}
+            defaultValue={lead.notes || ''}
+            placeholder="Internal notes about this lead…"
+            className={inputCls}
+          />
+        </div>
       </div>
 
-      <div className="flex justify-end border-t border-stone-700/70 pt-4">
-        <Button type="submit" className="h-10 rounded-lg bg-amber-300 px-5 text-sm font-semibold text-stone-950 hover:bg-amber-200">
+      {/* Save button */}
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          className="w-full rounded-lg bg-[#d99a3d] px-5 py-2.5 text-[13px] font-bold text-[#1a0e00] hover:bg-[#e6a845] transition-colors"
+        >
           Save changes
-        </Button>
+        </button>
       </div>
     </form>
   )

@@ -33,6 +33,12 @@ export async function publishLead({
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || DEFAULT_SITE_URL).replace(/\/$/, '')
   const contactName = getContactName(prospect)
   const existingLead = await getExistingLead(supabase, job.slug)
+  const currentReceipt = asRecord(job.receipt)
+  const renderQuality = currentReceipt.render_approved_by
+    ? 'approved'
+    : typeof currentReceipt.render_quality === 'string'
+      ? currentReceipt.render_quality
+      : 'awaiting_review'
   const leadPayload = {
     business_name: job.business_name,
     contact_name: contactName,
@@ -77,6 +83,8 @@ export async function publishLead({
         lead_id: lead.id,
         proposal_url: proposalUrl,
         render_source: renderSource,
+        render_quality: renderQuality,
+        render_approved_by: currentReceipt.render_approved_by || null,
         video_complete: false,
         video_optional: false,
         video_required: false,
@@ -119,6 +127,8 @@ export async function publishLead({
     lead_id: lead.id,
     proposal_url: proposalUrl,
     render_source: renderSource,
+    render_quality: renderQuality,
+    render_approved_by: currentReceipt.render_approved_by || null,
     video_complete: false,
     video_optional: false,
     video_required: false,

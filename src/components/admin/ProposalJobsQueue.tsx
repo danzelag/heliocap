@@ -4,13 +4,17 @@ import { useEffect, useMemo, useState, useTransition, type SetStateAction } from
 import Link from 'next/link'
 import {
   Activity,
-  Archive,
-  ChevronDown,
+  AlertTriangle,
+  CheckCircle2,
+  CircleDot,
+  Clock3,
   Copy,
   ExternalLink,
+  Layers,
   Loader2,
   Mail,
-  RefreshCw,
+  MapPinned,
+  RadioTower,
   Trash2,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
@@ -59,186 +63,101 @@ const STALE_RUNNING_MS = 20 * 60 * 1000
 
 type QueueDisplayStatus = ProposalJob['status'] | 'not_qualified' | 'stalled'
 type BuildDisplayStatus =
-  | 'queued'
-  | 'processing'
-  | 'qualified'
-  | 'filtered_out'
-  | 'image_generating'
-  | 'image_generated'
-  | 'video_rendering'
-  | 'video_complete'
-  | 'proposal_publishing'
-  | 'proposal_published'
-  | 'failed'
+  | 'queued' | 'processing' | 'qualified' | 'filtered_out'
+  | 'image_generating' | 'image_generated' | 'video_rendering' | 'video_complete'
+  | 'proposal_publishing' | 'proposal_published' | 'failed'
 
-// ─── Pure helpers (all unchanged from original) ────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────
 
-function isBatchJob(job: ProposalJob) {
-  return job.slug.startsWith('batch-')
-}
+function isBatchJob(j: ProposalJob) { return j.slug.startsWith('batch-') }
 
 function parseBatchAddress(address: string) {
   const [left = '', location = ''] = address.split(' · ')
   const idx = left.indexOf(' ')
-  const count = idx > -1 ? left.slice(0, idx) : ''
-  const category = idx > -1 ? left.slice(idx + 1) : left
-  return { count, category, location }
-}
-
-function getDisplayStatus(job: ProposalJob): QueueDisplayStatus {
-  const buildStatus = getBuildStatus(job)
-  if (buildStatus === 'filtered_out') return 'not_qualified'
-  if (buildStatus === 'failed') return 'failed'
-  if (buildStatus === 'proposal_published') return 'completed'
-
-  const text = `${job.current_step || ''} ${job.error_message || ''}`
-  if (/not\s*qualified|filtered\s*out|disqualified|filter qualified solar targets/i.test(text)) return 'not_qualified'
-  if (
-    job.status === 'running' &&
-    new Date().getTime() - new Date(job.updated_at || job.created_at).getTime() > STALE_RUNNING_MS
-  ) {
-    return 'stalled'
-  }
-  return job.status
-}
-
-function getBuildStatus(job: ProposalJob): BuildDisplayStatus | null {
-  const value = job.receipt?.build_status
-  if (typeof value !== 'string') return null
-  if (!buildStatusLabels[value as BuildDisplayStatus]) return null
-  return value as BuildDisplayStatus
-}
-
-function statusLabel(status: QueueDisplayStatus) {
-  if (status === 'not_qualified') return 'Not Qualified'
-  if (status === 'stalled') return 'Stalled'
-  return status.charAt(0).toUpperCase() + status.slice(1)
+  return { count: idx > -1 ? left.slice(0, idx) : '', category: idx > -1 ? left.slice(idx + 1) : left, location }
 }
 
 const buildStatusLabels: Record<BuildDisplayStatus, string> = {
-  queued: 'Queued',
-  processing: 'Processing',
-  qualified: 'Qualified',
-  filtered_out: 'Not Qualified',
-  image_generating: 'Generating Image',
-  image_generated: 'Image Generated',
-  video_rendering: 'Rendering Video',
-  video_complete: 'Video Complete',
-  proposal_publishing: 'Publishing Proposal',
-  proposal_published: 'Proposal Ready',
-  failed: 'Failed',
+  queued: 'Queued', processing: 'Processing', qualified: 'Qualified', filtered_out: 'Not Qualified',
+  image_generating: 'Generating', image_generated: 'Image Ready', video_rendering: 'Rendering',
+  video_complete: 'Video Done', proposal_publishing: 'Publishing', proposal_published: 'Live', failed: 'Failed',
 }
 
-const workflowSteps: Array<{ id: BuildDisplayStatus; label: string }> = [
-  { id: 'queued', label: 'Queued' },
-  { id: 'processing', label: 'Started' },
-  { id: 'qualified', label: 'Roof' },
-  { id: 'image_generating', label: 'Image' },
-  { id: 'proposal_publishing', label: 'Publish' },
-  { id: 'video_rendering', label: 'Video' },
-  { id: 'proposal_published', label: 'Live' },
-]
-
-function getQueueLabel(job: ProposalJob, displayStatus: QueueDisplayStatus) {
-  const buildStatus = getBuildStatus(job)
-  return buildStatus ? buildStatusLabels[buildStatus] : statusLabel(displayStatus)
+function getBuildStatus(job: ProposalJob): BuildDisplayStatus | null {
+  const v = job.receipt?.build_status
+  if (typeof v !== 'string' || !buildStatusLabels[v as BuildDisplayStatus]) return null
+  return v as BuildDisplayStatus
 }
 
-function getWorkflowIndex(job: ProposalJob) {
-  const buildStatus = getBuildStatus(job)
-  if (buildStatus === 'image_generated') return workflowSteps.findIndex((step) => step.id === 'image_generating')
-  if (buildStatus === 'video_complete') return workflowSteps.findIndex((step) => step.id === 'video_rendering')
-  if (buildStatus) {
-    const index = workflowSteps.findIndex((step) => step.id === buildStatus)
-    if (index >= 0) return index
-  }
-  if (job.status === 'completed') return workflowSteps.length - 1
-  if (job.status === 'running') return 1
-  return 0
+function getDisplayStatus(job: ProposalJob): QueueDisplayStatus {
+  const bs = getBuildStatus(job)
+  if (bs === 'filtered_out') return 'not_qualified'
+  if (bs === 'failed') return 'failed'
+  if (bs === 'proposal_published') return 'completed'
+  const text = `${job.current_step || ''} ${job.error_message || ''}`
+  if (/not\s*qualified|filtered\s*out|disqualified|filter qualified solar targets/i.test(text)) return 'not_qualified'
+  if (job.status === 'running' && Date.now() - new Date(job.updated_at || job.created_at).getTime() > STALE_RUNNING_MS) return 'stalled'
+  return job.status
 }
 
-function getQueueReason(job: ProposalJob) {
-  const failure = getFailureDetails(job)
-  if (failure) return failure
-  const reason = job.receipt?.reason
-  if (typeof reason === 'string' && reason.trim()) return reason.trim()
-  return job.error_message
+function getQueueLabel(job: ProposalJob, ds: QueueDisplayStatus) {
+  const bs = getBuildStatus(job)
+  if (bs) return buildStatusLabels[bs]
+  if (ds === 'not_qualified') return 'Not Qualified'
+  if (ds === 'stalled') return 'Stalled'
+  return ds.charAt(0).toUpperCase() + ds.slice(1)
 }
 
-function getReceiptString(receipt: Record<string, unknown> | null | undefined, key: string) {
-  const value = receipt?.[key]
-  return typeof value === 'string' && value.trim() ? value.trim() : null
+function getReceiptStr(receipt: Record<string, unknown> | null | undefined, key: string) {
+  const v = receipt?.[key]
+  return typeof v === 'string' && v.trim() ? v.trim() : null
 }
 
 function getFailureDetails(job: ProposalJob) {
-  const receipt = job.receipt || {}
-  const failure = receipt.failure
-  if (failure && typeof failure === 'object' && !Array.isArray(failure)) {
-    const failureRecord = failure as Record<string, unknown>
-    const message = typeof failureRecord.message === 'string' ? failureRecord.message : null
-    const code = typeof failureRecord.code === 'string' ? failureRecord.code : null
-    const details = typeof failureRecord.details === 'string' ? failureRecord.details : null
-    return [getReceiptString(receipt, 'failure_step'), code, message, details].filter(Boolean).join(' · ')
+  const r = job.receipt || {}
+  const f = r.failure
+  if (f && typeof f === 'object' && !Array.isArray(f)) {
+    const fo = f as Record<string, unknown>
+    return [
+      getReceiptStr(r, 'failure_step'),
+      typeof fo.code === 'string' ? fo.code : null,
+      typeof fo.message === 'string' ? fo.message : null,
+      typeof fo.details === 'string' ? fo.details : null,
+    ].filter(Boolean).join(' · ')
   }
   return job.error_message
 }
 
-function getReferenceCount(job: ProposalJob) {
-  const referenceSet = job.receipt?.reference_set || job.receipt?.visual_references
-  if (!referenceSet || typeof referenceSet !== 'object' || Array.isArray(referenceSet)) return 0
-  const record = referenceSet as Record<string, unknown>
-  const streetViews = Array.isArray(record.streetViewReferenceUrls) ? record.streetViewReferenceUrls.length : 0
-  return [
-    record.solarPanelRenderUrl,
-    record.cleanedPreviewImageUrl,
-    record.mapTilesImageUrl,
-    record.solarApiLayoutImageUrl,
-    record.aerialViewReferenceUrl,
-  ].filter((value) => typeof value === 'string' && value.trim()).length + streetViews
+function getQueueReason(job: ProposalJob) {
+  const f = getFailureDetails(job)
+  if (f) return f
+  const r = job.receipt?.reason
+  if (typeof r === 'string' && r.trim()) return r.trim()
+  return job.error_message
 }
 
-function getWorkflowDiagnostics(job: ProposalJob) {
-  const receipt = job.receipt || {}
-  return [
-    ['Step', job.current_step],
-    ['Build', getReceiptString(receipt, 'build_status_label') || getReceiptString(receipt, 'build_status') || getQueueLabel(job, getDisplayStatus(job))],
-    ['Failure', getFailureDetails(job)],
-    ['Solar model', getReceiptString(receipt, 'solar_model') ? 'available' : receipt.solar_model ? 'available' : null],
-    ['References', getReferenceCount(job) ? `${getReferenceCount(job)} collected` : null],
-    ['Veo op', getReceiptString(receipt, 'veo_operation_name')],
-    ['Video', receipt.video_complete === true ? 'uploaded' : receipt.video_required === true ? 'required' : null],
-    ['Proposal', getReceiptString(receipt, 'proposal_url') || job.proposal_url],
-  ].filter(([, value]) => value)
-}
-
-function formatTime(value: string) {
-  return new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(new Date(value))
-}
-
-function formatRelativeTime(value: string) {
-  const diff = Math.floor((Date.now() - new Date(value).getTime()) / 1000)
-  if (diff < 60) return `${diff}s ago`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  return `${Math.floor(diff / 3600)}h ago`
+function getJobRenderUrl(job: ProposalJob): string | null {
+  const ref = job.receipt?.reference_set || job.receipt?.visual_references
+  const direct =
+    getReceiptStr(job.receipt, 'render_preview_url') ||
+    getReceiptStr(job.receipt, 'render_url') ||
+    getReceiptStr(job.receipt, 'solar_panel_render_url')
+  if (direct) return direct
+  if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return null
+  const r = ref as Record<string, unknown>
+  return (
+    (typeof r.solarPanelRenderUrl === 'string' && r.solarPanelRenderUrl) ||
+    (typeof r.cleanedPreviewImageUrl === 'string' && r.cleanedPreviewImageUrl) ||
+    (typeof r.solarApiLayoutImageUrl === 'string' && r.solarApiLayoutImageUrl) ||
+    null
+  )
 }
 
 function sortJobs(jobs: ProposalJob[]) {
-  const rank: Record<QueueDisplayStatus, number> = {
-    running: 0,
-    queued: 1,
-    stalled: 2,
-    not_qualified: 3,
-    failed: 4,
-    completed: 5,
-  }
+  const rank: Record<QueueDisplayStatus, number> = { running: 0, queued: 1, stalled: 2, not_qualified: 3, failed: 4, completed: 5 }
   return [...jobs].sort((a, b) => {
-    const statusDelta = rank[getDisplayStatus(a)] - rank[getDisplayStatus(b)]
-    if (statusDelta !== 0) return statusDelta
-    return new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
+    const d = rank[getDisplayStatus(a)] - rank[getDisplayStatus(b)]
+    return d !== 0 ? d : new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
   }).slice(0, 24)
 }
 
@@ -247,26 +166,114 @@ function sortEvents(events: ProposalJobEvent[]) {
 }
 
 function getJobEvents(events: ProposalJobEvent[], jobId: string) {
-  return events
-    .filter((e) => e.job_id === jobId)
-    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+  return events.filter((e) => e.job_id === jobId).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 }
 
-// ─── Status pill styles ────────────────────────────────────────────────────
+function copyToClipboard(text: string) { navigator.clipboard.writeText(text).catch(() => {}) }
 
-function statusPillClass(status: QueueDisplayStatus) {
-  if (status === 'completed') return 'cc-pill cc-pill-success'
-  if (status === 'running') return 'cc-pill cc-pill-running'
-  if (status === 'failed') return 'cc-pill cc-pill-danger'
-  if (status === 'stalled') return 'cc-pill cc-pill-danger'
-  if (status === 'not_qualified') return 'cc-pill cc-pill-warning'
-  return 'cc-pill cc-pill-idle'
+function formatRelTime(value: string) {
+  const d = Math.floor((Date.now() - new Date(value).getTime()) / 1000)
+  if (d < 60) return `${d}s`
+  if (d < 3600) return `${Math.floor(d / 60)}m`
+  return `${Math.floor(d / 3600)}h`
 }
 
-// ─── Copy helper ──────────────────────────────────────────────────────────
+const WORKFLOW_STEPS = [
+  { id: 'queued', label: 'Queued', percent: 0 },
+  { id: 'solar', label: 'Solar data fetched', percent: 18 },
+  { id: 'layout', label: 'Black panel layout generated', percent: 42 },
+  { id: 'reference', label: 'Reference image uploaded', percent: 58 },
+  { id: 'publish', label: 'Proposal published', percent: 82 },
+  { id: 'live', label: 'Live', percent: 100 },
+]
 
-function copyToClipboard(text: string) {
-  navigator.clipboard.writeText(text).catch(() => {})
+const statusStyles: Record<QueueDisplayStatus, { label: string; dot: string; fg: string; bg: string; border: string }> = {
+  running: { label: 'Running', dot: '#d99a3d', fg: '#e2a64f', bg: 'rgba(217,154,61,0.10)', border: '#3a2f1e' },
+  queued: { label: 'Queued', dot: '#7c8694', fg: '#a8b1bb', bg: 'rgba(124,134,148,0.08)', border: '#363c45' },
+  completed: { label: 'Live', dot: '#7ba87a', fg: '#8eb98c', bg: 'rgba(123,168,122,0.08)', border: '#34433a' },
+  failed: { label: 'Failed', dot: '#c4685e', fg: '#d77c70', bg: 'rgba(196,104,94,0.10)', border: '#3a2521' },
+  not_qualified: { label: 'Not qualified', dot: '#7c8694', fg: '#7c8694', bg: 'rgba(124,134,148,0.06)', border: '#363c45' },
+  stalled: { label: 'Stalled', dot: '#c4685e', fg: '#d77c70', bg: 'rgba(196,104,94,0.10)', border: '#3a2521' },
+}
+
+function StatusBadge({ status, label }: { status: QueueDisplayStatus; label?: string }) {
+  const tone = statusStyles[status]
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.16em]"
+      style={{ color: tone.fg, background: tone.bg, borderColor: tone.border }}
+    >
+      <span
+        className={status === 'running' ? 'h-1.5 w-1.5 animate-pulse rounded-full' : 'h-1.5 w-1.5 rounded-full'}
+        style={{ background: tone.dot }}
+      />
+      {label || tone.label}
+    </span>
+  )
+}
+
+function getReceiptArray(receipt: Record<string, unknown> | null | undefined, key: string) {
+  const value = receipt?.[key]
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+}
+
+function getReceiptRecord(receipt: Record<string, unknown> | null | undefined, key: string) {
+  const value = receipt?.[key]
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null
+}
+
+function StepLadder({ job, events }: { job: ProposalJob; events: ProposalJobEvent[] }) {
+  const status = getDisplayStatus(job)
+  const failureStep = getReceiptStr(job.receipt, 'failure_step')
+  const failedEvent = events.find((event) => event.status === 'failed')
+  const percent = status === 'completed' ? 100 : Math.max(0, Math.min(100, job.progress_percent || 0))
+
+  return (
+    <ol className="space-y-0">
+      {WORKFLOW_STEPS.map((step, index) => {
+        const reached = percent >= step.percent || status === 'completed'
+        const nextPercent = WORKFLOW_STEPS[index + 1]?.percent ?? 101
+        const current = status === 'running' && percent >= step.percent && percent < nextPercent
+        const failedHere = status === 'failed' && (current || failureStep?.includes(step.id) || failedEvent?.step?.toLowerCase().includes(step.id))
+        const dotClass = failedHere
+          ? 'border-[#3a2521] bg-[#2a1714] text-[#d77c70]'
+          : reached
+            ? 'border-[#34433a] bg-[#18241b] text-[#8eb98c]'
+            : current
+              ? 'border-[#3a2f1e] bg-[#23190f] text-[#d99a3d]'
+              : 'border-[#363c45] bg-transparent text-[#4c5460]'
+        const textClass = failedHere ? 'text-[#d77c70]' : reached || current ? 'text-[#e8e4dc]' : 'text-[#5c6672]'
+
+        return (
+          <li key={step.id} className="relative flex gap-3 pb-3 last:pb-0">
+            {index < WORKFLOW_STEPS.length - 1 && (
+              <span className="absolute left-[9px] top-[18px] h-full w-px bg-[#2a2e36]" />
+            )}
+            <span className={`relative z-10 grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full border ${dotClass}`}>
+              {failedHere ? (
+                <AlertTriangle className="h-2.5 w-2.5" />
+              ) : reached ? (
+                <CheckCircle2 className="h-2.5 w-2.5" />
+              ) : current ? (
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
+              ) : (
+                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+              )}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className={`truncate text-[12px] ${textClass}`}>{step.label}</span>
+                <span className="font-mono text-[10px] text-[#4c5460]">{step.percent}%</span>
+              </div>
+              {failedHere && getFailureDetails(job) && (
+                <div className="mt-1 line-clamp-2 font-mono text-[10px] leading-snug text-[#a86157]">{getFailureDetails(job)}</div>
+              )}
+            </div>
+          </li>
+        )
+      })}
+    </ol>
+  )
 }
 
 // ─── Component ────────────────────────────────────────────────────────────
@@ -276,458 +283,377 @@ export function ProposalJobsQueue({ initialJobs, initialEvents }: ProposalJobsQu
   const [events, setEventsState] = useState(() => readClientCache<ProposalJobEvent[]>(EVENTS_CACHE_KEY) || sortEvents(initialEvents))
   const [clearError, setClearError] = useState<string | null>(null)
   const [isClearing, startClearTransition] = useTransition()
-  const [logsOpen, setLogsOpen] = useState(false)
+  const [overrideJobId, setOverrideJobId] = useState<string | null>(null)
 
-  const activeCount = useMemo(() => jobs.filter((j) => {
-    const status = getDisplayStatus(j)
-    return status === 'queued' || status === 'running'
-  }).length, [jobs])
-
-  const finishedCount = useMemo(() => jobs.filter((j) => {
-    const status = getDisplayStatus(j)
-    return !isBatchJob(j) && (status === 'completed' || status === 'failed' || status === 'not_qualified')
-  }).length, [jobs])
+  const activeCount = useMemo(() => jobs.filter((j) => { const s = getDisplayStatus(j); return s === 'queued' || s === 'running' }).length, [jobs])
+  const finishedCount = useMemo(() => jobs.filter((j) => { const s = getDisplayStatus(j); return !isBatchJob(j) && (s === 'completed' || s === 'failed' || s === 'not_qualified') }).length, [jobs])
 
   const focusJob = useMemo(() => (
-    jobs.find((job) => !isBatchJob(job) && ['running', 'queued'].includes(getDisplayStatus(job))) ||
-    jobs.find((job) => !isBatchJob(job)) ||
-    null
+    jobs.find((j) => !isBatchJob(j) && ['running', 'queued'].includes(getDisplayStatus(j))) ||
+    jobs.find((j) => !isBatchJob(j)) || null
   ), [jobs])
 
-  const focusEvents = useMemo(() => focusJob ? getJobEvents(events, focusJob.id) : [], [events, focusJob])
+  const selectedJob = useMemo(() => {
+    if (overrideJobId) { const o = jobs.find((j) => j.id === overrideJobId); if (o) return o }
+    return focusJob
+  }, [overrideJobId, jobs, focusJob])
 
   const hasPendingVideo = useMemo(() => jobs.some((job) => {
-    const receipt = job.receipt || {}
-    const hasOperation = typeof receipt.veo_operation_name === 'string' && receipt.veo_operation_name.trim().length > 0
-    const retryableFailedVideo = job.status === 'failed' &&
-      receipt.video_required === true &&
-      receipt.video_complete !== true &&
-      Boolean(receipt.reference_set || receipt.visual_references)
-    return (
-      job.status === 'running' &&
-      receipt.build_status === 'video_rendering' &&
-      hasOperation
-    ) || retryableFailedVideo
+    const r = job.receipt || {}
+    const hasOp = typeof r.veo_operation_name === 'string' && r.veo_operation_name.trim().length > 0
+    const retryFail = job.status === 'failed' && r.video_required === true && r.video_complete !== true && Boolean(r.reference_set || r.visual_references)
+    return (job.status === 'running' && r.build_status === 'video_rendering' && hasOp) || retryFail
   }), [jobs])
 
-  const setJobs = (next: SetStateAction<ProposalJob[]>) => {
-    setJobsState((prev) => {
-      const resolved = typeof next === 'function' ? next(prev) : next
-      writeClientCache(JOBS_CACHE_KEY, resolved)
-      return resolved
-    })
-  }
+  const setJobs = (next: SetStateAction<ProposalJob[]>) => setJobsState((prev) => {
+    const r = typeof next === 'function' ? next(prev) : next
+    writeClientCache(JOBS_CACHE_KEY, r); return r
+  })
 
-  const setEvents = (next: SetStateAction<ProposalJobEvent[]>) => {
-    setEventsState((prev) => {
-      const resolved = typeof next === 'function' ? next(prev) : next
-      writeClientCache(EVENTS_CACHE_KEY, resolved)
-      return resolved
-    })
-  }
+  const setEvents = (next: SetStateAction<ProposalJobEvent[]>) => setEventsState((prev) => {
+    const r = typeof next === 'function' ? next(prev) : next
+    writeClientCache(EVENTS_CACHE_KEY, r); return r
+  })
 
   const handleClearQueue = () => {
     if (finishedCount === 0) return
     setClearError(null)
     startClearTransition(async () => {
       const result = await clearProposalQueueAction()
-      if (!result.success) {
-        setClearError(result.error || 'Failed to clear queue.')
-      } else {
-        setJobs((prev) => prev.filter((job) => {
-          const status = getDisplayStatus(job)
-          return status !== 'completed' && status !== 'failed' && status !== 'not_qualified'
-        }))
-        setEvents((prev) => prev.filter((event) => {
-          const job = jobs.find((candidate) => candidate.id === event.job_id)
-          if (!job) return false
-          const status = getDisplayStatus(job)
-          return status !== 'completed' && status !== 'failed' && status !== 'not_qualified'
-        }))
-      }
+      if (!result.success) { setClearError(result.error || 'Failed to clear queue.'); return }
+      setJobs((prev) => prev.filter((j) => { const s = getDisplayStatus(j); return s !== 'completed' && s !== 'failed' && s !== 'not_qualified' }))
+      setEvents((prev) => prev.filter((e) => { const j = jobs.find((c) => c.id === e.job_id); if (!j) return false; const s = getDisplayStatus(j); return s !== 'completed' && s !== 'failed' && s !== 'not_qualified' }))
     })
   }
 
-  // ── Realtime + polling (unchanged) ──────────────────────────────────────
   useEffect(() => {
-    const supabase = createClient()
-    let mounted = true
-
+    const supabase = createClient(); let mounted = true
     const refresh = async () => {
-      const [{ data: jobData }, { data: eventData }] = await Promise.all([
-        supabase
-          .from('proposal_jobs')
-          .select('id, business_name, address, slug, status, current_step, progress_percent, proposal_url, error_message, receipt, created_at, updated_at')
-          .order('created_at', { ascending: false })
-          .limit(24),
-        supabase
-          .from('proposal_job_events')
-          .select('id, job_id, business_name, status, step, progress_percent, proposal_url, error_message, created_at')
-          .order('created_at', { ascending: false })
-          .limit(200),
+      const [{ data: jd }, { data: ed }] = await Promise.all([
+        supabase.from('proposal_jobs').select('id, business_name, address, slug, status, current_step, progress_percent, proposal_url, error_message, receipt, created_at, updated_at').order('created_at', { ascending: false }).limit(24),
+        supabase.from('proposal_job_events').select('id, job_id, business_name, status, step, progress_percent, proposal_url, error_message, created_at').order('created_at', { ascending: false }).limit(200),
       ])
       if (!mounted) return
-      if (jobData) setJobs(sortJobs(jobData as ProposalJob[]))
-      if (eventData) setEvents(sortEvents(eventData as ProposalJobEvent[]))
+      if (jd) setJobs(sortJobs(jd as ProposalJob[]))
+      if (ed) setEvents(sortEvents(ed as ProposalJobEvent[]))
     }
-
     refresh()
     const poller = window.setInterval(refresh, 4000)
-
-    const jobsChannel = supabase
-      .channel('admin-proposal-jobs')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_jobs' }, (payload) => {
-        const next = (payload.new || payload.old) as ProposalJob | null
-        if (!next) return
-        setJobs((prev) => sortJobs([next, ...prev.filter((j) => j.id !== next.id)]))
-      })
-      .subscribe()
-
-    const eventsChannel = supabase
-      .channel('admin-proposal-job-events')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'proposal_job_events' }, (payload) => {
-        setEvents((prev) => sortEvents([payload.new as ProposalJobEvent, ...prev]))
-      })
-      .subscribe()
-
-    return () => {
-      mounted = false
-      window.clearInterval(poller)
-      supabase.removeChannel(jobsChannel)
-      supabase.removeChannel(eventsChannel)
-    }
+    const jc = supabase.channel('admin-proposal-jobs').on('postgres_changes', { event: '*', schema: 'public', table: 'proposal_jobs' }, (p) => {
+      const next = (p.new || p.old) as ProposalJob | null
+      if (next) setJobs((prev) => sortJobs([next, ...prev.filter((j) => j.id !== next.id)]))
+    }).subscribe()
+    const ec = supabase.channel('admin-proposal-job-events').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'proposal_job_events' }, (p) => {
+      setEvents((prev) => sortEvents([p.new as ProposalJobEvent, ...prev]))
+    }).subscribe()
+    return () => { mounted = false; window.clearInterval(poller); supabase.removeChannel(jc); supabase.removeChannel(ec) }
   }, [])
 
   useEffect(() => {
     if (!hasPendingVideo) return
     let stopped = false
-    const processVideos = async () => {
-      try {
-        await fetch('/api/proposal-jobs/process-videos', { method: 'POST', cache: 'no-store' })
-      } catch (error) {
-        if (!stopped) console.error('[ProposalJobsQueue] video processor failed', error)
-      }
-    }
-    processVideos()
-    const poller = window.setInterval(processVideos, 20000)
-    return () => { stopped = true; window.clearInterval(poller) }
+    const run = async () => { try { await fetch('/api/proposal-jobs/process-videos', { method: 'POST', cache: 'no-store' }) } catch (e) { if (!stopped) console.error(e) } }
+    run(); const p = window.setInterval(run, 20000)
+    return () => { stopped = true; window.clearInterval(p) }
   }, [hasPendingVideo])
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  const selectedDisplayStatus = selectedJob ? getDisplayStatus(selectedJob) : null
+  const renderUrl = selectedJob ? getJobRenderUrl(selectedJob) : null
+  const selectedEvents = selectedJob ? getJobEvents(events, selectedJob.id) : []
+  const visibleJobs = jobs.filter((job) => !isBatchJob(job))
 
-  const focusDisplayStatus = focusJob ? getDisplayStatus(focusJob) : null
-  const focusWorkflowIndex = focusJob ? getWorkflowIndex(focusJob) : -1
-  const isRunning = focusDisplayStatus === 'running'
-  const isCompleted = focusDisplayStatus === 'completed'
-
+  // ── Render ──────────────────────────────────────────────────────────────
   return (
-    <section className="cc-mission-grid">
+    <section className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="overflow-hidden rounded-lg border border-[#2a2e36] bg-[#1f2229] shadow-[0_18px_44px_rgba(0,0,0,0.24)]">
+        {selectedJob && selectedDisplayStatus ? (
+          <>
+            <header className="flex flex-col gap-3 border-b border-[#2a2e36] bg-[#1c1e24] px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5c6672]">Active proposal job</span>
+                  <span className="font-mono text-[10px] text-[#4c5460]">{selectedJob.id}</span>
+                </div>
+                <h2 className="mt-1 truncate text-[20px] font-semibold leading-tight text-[#e8e4dc]">{selectedJob.business_name}</h2>
+                <div className="mt-1 flex min-w-0 items-center gap-2 text-[12px] text-[#7c8694]">
+                  <MapPinned className="h-3 w-3 shrink-0 text-[#5c6672]" />
+                  <span className="truncate">{selectedJob.address}</span>
+                </div>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+                <StatusBadge status={selectedDisplayStatus} label={getQueueLabel(selectedJob, selectedDisplayStatus)} />
+                {selectedJob.proposal_url ? (
+                  <>
+                    <Link
+                      href={selectedJob.proposal_url}
+                      target="_blank"
+                      className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#d99a3d] px-3 text-[12px] font-bold text-[#1a0e00] transition hover:bg-[#e6a84a]"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Open
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => selectedJob.proposal_url && copyToClipboard(selectedJob.proposal_url)}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#363c45] bg-[#23262d] px-3 text-[12px] font-semibold text-[#a8b1bb] transition hover:border-[#4c5460] hover:text-[#e8e4dc]"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy
+                    </button>
+                  </>
+                ) : (
+                  <span className="inline-flex h-8 cursor-not-allowed items-center gap-1.5 rounded-md border border-[#2a2e36] px-3 text-[12px] text-[#5c6672]">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    No URL yet
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const subject = encodeURIComponent(`Solar proposal for ${selectedJob.business_name}`)
+                    const body = encodeURIComponent(selectedJob.proposal_url ? `View your proposal: ${selectedJob.proposal_url}` : '')
+                    window.open(`mailto:?subject=${subject}&body=${body}`)
+                  }}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md border border-[#363c45] bg-[#23262d] px-3 text-[12px] font-semibold text-[#a8b1bb] transition hover:border-[#4c5460] hover:text-[#e8e4dc]"
+                >
+                  <Mail className="h-3.5 w-3.5" />
+                  Email
+                </button>
+              </div>
+            </header>
 
-      {/* ── LEFT: Active Proposal Hero ─────────────────────────── */}
-      <div className="cc-hero-card">
-        {/* Header */}
-        <div className="cc-hero-header">
-          <div className="flex items-center gap-2.5">
-            <Activity className={`h-4 w-4 ${isRunning ? 'text-[#d99a3d] animate-pulse' : 'text-[#6b7885]'}`} />
-            <span className="cc-section-eyebrow">Active Workflow</span>
-            {activeCount > 0 && (
-              <span className="cc-live-badge">
-                <span className="cc-pulse-dot" />
-                {activeCount} active
-              </span>
-            )}
+            <div className="grid min-w-0 lg:grid-cols-[minmax(0,1fr)_310px]">
+              <div className="min-w-0 border-b border-[#2a2e36] bg-[#15171c] lg:border-b-0 lg:border-r">
+                <div className="relative aspect-[16/10] min-h-[320px] overflow-hidden">
+                  {renderUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={renderUrl} alt={`Generated proposal render for ${selectedJob.business_name}`} className="absolute inset-0 h-full w-full object-contain p-4" />
+                  ) : (
+                    <div className="absolute inset-0 grid place-items-center p-6">
+                      <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+                        {selectedDisplayStatus === 'running' || selectedDisplayStatus === 'queued' ? (
+                          <Loader2 className="h-8 w-8 animate-spin text-[#d99a3d]/70" />
+                        ) : selectedDisplayStatus === 'failed' || selectedDisplayStatus === 'stalled' ? (
+                          <AlertTriangle className="h-8 w-8 text-[#d77c70]" />
+                        ) : (
+                          <Activity className="h-8 w-8 text-[#4c5460]" />
+                        )}
+                        <div>
+                          <div className="text-[13px] font-semibold text-[#e8e4dc]">
+                            {selectedDisplayStatus === 'failed' || selectedDisplayStatus === 'stalled' ? 'Render not available' : 'Render pending'}
+                          </div>
+                          <div className="mt-1 text-[11px] leading-5 text-[#7c8694]">
+                            The customer-facing proposal should use the generated Solar API render. Raw map imagery is intentionally hidden here.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="pointer-events-none absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-md border border-[#2a2e36] bg-[#1c1e24]/90 px-2 py-1 font-mono text-[9.5px] uppercase tracking-[0.18em] text-[#7c8694] backdrop-blur">
+                    <Layers className="h-3 w-3" />
+                    {renderUrl ? 'deterministic render' : 'awaiting render'}
+                  </div>
+                  <div className="pointer-events-none absolute bottom-3 right-3 rounded-md border border-[#2a2e36] bg-[#1c1e24]/90 px-2 py-1 font-mono text-[9.5px] uppercase tracking-[0.18em] text-[#7c8694] backdrop-blur">
+                    black panels only
+                  </div>
+                </div>
+
+                <div className="border-t border-[#2a2e36] px-5 py-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 text-[12px] text-[#e8e4dc]">
+                        <CircleDot className="h-3.5 w-3.5 text-[#d99a3d]" />
+                        <span className="truncate font-medium">{selectedJob.current_step || getQueueLabel(selectedJob, selectedDisplayStatus)}</span>
+                      </div>
+                      <div className="mt-2 h-[3px] overflow-hidden rounded-full bg-[#272a31]">
+                        <div
+                          className={selectedDisplayStatus === 'running' ? 'h-full bg-[#d99a3d] transition-all' : 'h-full transition-all'}
+                          style={{
+                            width: `${Math.max(0, Math.min(100, selectedJob.progress_percent || (selectedDisplayStatus === 'completed' ? 100 : 0)))}%`,
+                            background: statusStyles[selectedDisplayStatus].fg,
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="font-mono text-[22px] font-light tabular-nums text-[#e8e4dc]">
+                      {Math.round(selectedJob.progress_percent || (selectedDisplayStatus === 'completed' ? 100 : 0))}
+                      <span className="text-[#4c5460]">%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <aside className="bg-[#1c1e24]">
+                <div className="border-b border-[#2a2e36] px-4 py-3">
+                  <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5c6672]">Workflow</div>
+                  <div className="mt-1 font-mono text-[10px] text-[#7c8694]">in-app · live events</div>
+                </div>
+                <div className="px-4 py-4">
+                  <StepLadder job={selectedJob} events={selectedEvents} />
+                </div>
+              </aside>
+            </div>
+
+            <div className="grid border-t border-[#2a2e36] lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+              <details className="border-b border-[#2a2e36] px-5 py-4 lg:border-b-0 lg:border-r">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5c6672]">Render diagnostics</span>
+                  <span className="text-[11px] text-[#7c8694]">technical logs hidden</span>
+                </summary>
+                <dl className="mt-4 grid grid-cols-2 gap-3 font-mono text-[11px] sm:grid-cols-3">
+                  <div>
+                    <dt className="text-[9.5px] uppercase tracking-[0.16em] text-[#4c5460]">render source</dt>
+                    <dd className="mt-1 truncate text-[#e8e4dc]">{getReceiptStr(selectedJob.receipt, 'render_source') || 'pending'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[9.5px] uppercase tracking-[0.16em] text-[#4c5460]">quality</dt>
+                    <dd className="mt-1 text-[#e8e4dc]">{getReceiptStr(selectedJob.receipt, 'render_quality') || getReceiptStr(selectedJob.receipt, 'render_quality_status') || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[9.5px] uppercase tracking-[0.16em] text-[#4c5460]">layers</dt>
+                    <dd className="mt-1 truncate text-[#e8e4dc]">{getReceiptArray(selectedJob.receipt, 'solar_data_layers').join(' · ') || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[9.5px] uppercase tracking-[0.16em] text-[#4c5460]">build status</dt>
+                    <dd className="mt-1 text-[#e8e4dc]">{getReceiptStr(selectedJob.receipt, 'build_status') || selectedJob.status}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[9.5px] uppercase tracking-[0.16em] text-[#4c5460]">updated</dt>
+                    <dd className="mt-1 text-[#e8e4dc]">{formatRelTime(selectedJob.updated_at)} ago</dd>
+                  </div>
+                  <div>
+                    <dt className="text-[9.5px] uppercase tracking-[0.16em] text-[#4c5460]">events</dt>
+                    <dd className="mt-1 text-[#e8e4dc]">{selectedEvents.length}</dd>
+                  </div>
+                </dl>
+                {getQueueReason(selectedJob) && (
+                  <div className="mt-4 rounded-md border border-[#3a2521] bg-[#241814] px-3 py-2 font-mono text-[10.5px] leading-5 text-[#d77c70]">
+                    {getQueueReason(selectedJob)}
+                  </div>
+                )}
+                {getReceiptRecord(selectedJob.receipt, 'failure') && (
+                  <pre className="mt-3 max-h-40 overflow-auto rounded-md border border-[#2a2e36] bg-[#13151a] p-3 text-[10px] leading-5 text-[#7c8694]">
+                    {JSON.stringify(getReceiptRecord(selectedJob.receipt, 'failure'), null, 2)}
+                  </pre>
+                )}
+              </details>
+
+              <div className="px-5 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5c6672]">Event stream</span>
+                  <span className="font-mono text-[10px] text-[#4c5460]">{events.length} total</span>
+                </div>
+                <ol className="mt-3 max-h-[190px] space-y-2 overflow-y-auto pr-1">
+                  {[...selectedEvents].reverse().slice(0, 12).map((event) => {
+                    const failed = event.status === 'failed' || Boolean(event.error_message)
+                    return (
+                      <li key={event.id} className="flex items-start gap-2.5">
+                        <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${failed ? 'bg-[#c4685e]' : event.status === 'completed' ? 'bg-[#7ba87a]' : event.status === 'running' ? 'bg-[#d99a3d]' : 'bg-[#7c8694]'}`} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="truncate text-[11.5px] text-[#e8e4dc]">{event.step || event.status}</span>
+                            <span className="shrink-0 font-mono text-[10px] text-[#4c5460]">{formatRelTime(event.created_at)} ago</span>
+                          </div>
+                          {event.error_message && <div className="mt-0.5 truncate font-mono text-[10px] text-[#a86157]">{event.error_message}</div>}
+                        </div>
+                      </li>
+                    )
+                  })}
+                  {selectedEvents.length === 0 && (
+                    <li className="rounded-md border border-dashed border-[#2a2e36] px-3 py-6 text-center text-[12px] text-[#5c6672]">No events recorded yet.</li>
+                  )}
+                </ol>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="grid min-h-[360px] place-items-center p-8 text-center">
+            <div>
+              <Activity className="mx-auto h-9 w-9 text-[#4c5460]" />
+              <div className="mt-3 text-[14px] font-semibold text-[#e8e4dc]">No proposal jobs yet</div>
+              <p className="mt-1 max-w-sm text-[12px] leading-5 text-[#7c8694]">Queue a prospect to watch the generation workflow here.</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <aside className="flex min-h-[420px] flex-col overflow-hidden rounded-lg border border-[#2a2e36] bg-[#1f2229]">
+        <header className="flex items-center justify-between gap-3 border-b border-[#2a2e36] bg-[#1c1e24] px-4 py-3">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#5c6672]">Queue rail</div>
+            <div className="mt-1 flex items-center gap-2 font-mono text-[10px] text-[#7c8694]">
+              <span>{activeCount} active</span>
+              <span className="text-[#3d444d]">·</span>
+              <span>{visibleJobs.length} visible</span>
+            </div>
           </div>
           {finishedCount > 0 && (
             <button
               type="button"
               disabled={isClearing}
               onClick={handleClearQueue}
-              className="cc-ghost-btn flex items-center gap-1.5 text-xs"
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-[#363c45] bg-[#23262d] px-2 text-[11px] font-semibold text-[#a8b1bb] transition hover:border-[#4c5460] hover:text-[#e8e4dc] disabled:opacity-50"
             >
               {isClearing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
               Clear {finishedCount}
             </button>
           )}
-        </div>
-
-        {clearError && <div className="mb-3 rounded-md bg-red-500/10 px-3 py-2 text-xs text-red-300">{clearError}</div>}
-
-        {/* Focus Job */}
-        {focusJob ? (
-          <>
-            {/* Name + Status */}
-            <div className="cc-hero-identity">
-              <div className="min-w-0 flex-1">
-                <div className="cc-hero-name">{focusJob.business_name}</div>
-                <div className="cc-hero-address">{focusJob.address}</div>
+        </header>
+        {clearError && <div className="border-b border-[#3a2521] bg-[#241814] px-4 py-2 text-[11px] text-[#d77c70]">{clearError}</div>}
+        <div className="flex-1 overflow-y-auto">
+          {jobs.filter(isBatchJob).map((job) => {
+            const { count, category, location } = parseBatchAddress(job.address)
+            return (
+              <div key={job.id} className="border-b border-[#272a31] px-4 py-3 text-[11px] text-[#7c8694]">
+                <span className="font-bold uppercase tracking-wider text-[#a8b1bb]">Batch</span> {count} {category}{location ? ` · ${location}` : ''}
               </div>
-              <span className={statusPillClass(focusDisplayStatus!)}>
-                {getQueueLabel(focusJob, focusDisplayStatus!)}
-              </span>
-            </div>
-
-            {/* Progress bar */}
-            <div className="cc-progress-track">
-              <div
-                className={`cc-progress-fill ${isRunning ? 'cc-progress-fill-active' : ''}`}
-                style={{ width: `${Math.max(4, Math.min(100, focusJob.progress_percent || 0))}%` }}
-              />
-            </div>
-            <div className="cc-progress-pct">
-              {Math.round(focusJob.progress_percent || 0)}%
-            </div>
-
-            {/* Workflow Pipeline */}
-            <div className="cc-pipeline">
-              {workflowSteps.map((step, index) => {
-                const done = index < focusWorkflowIndex || isCompleted
-                const current = index === focusWorkflowIndex && !isCompleted
-                const failed = (focusDisplayStatus === 'failed' || focusDisplayStatus === 'stalled') && index === focusWorkflowIndex
-                return (
-                  <div key={step.id} className="cc-pipeline-step">
-                    <div className={`cc-pipeline-node ${done ? 'cc-node-done' : ''} ${current ? 'cc-node-current' : ''} ${failed ? 'cc-node-failed' : ''}`}>
-                      {done && !current && (
-                        <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none">
-                          <path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
+            )
+          })}
+          {visibleJobs.map((job) => {
+            const status = getDisplayStatus(job)
+            const tone = statusStyles[status]
+            const selected = selectedJob?.id === job.id
+            return (
+              <button
+                key={job.id}
+                type="button"
+                onClick={() => setOverrideJobId(job.id === overrideJobId ? null : job.id)}
+                className={`w-full border-b border-[#272a31] px-4 py-3 text-left transition ${selected ? 'bg-[#15120b]/55 shadow-[inset_2px_0_0_#d99a3d]' : 'hover:bg-[#23262d]'}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className={status === 'running' ? 'h-1.5 w-1.5 animate-pulse rounded-full' : 'h-1.5 w-1.5 rounded-full'} style={{ background: tone.dot }} />
+                      <span className="truncate text-[12.5px] font-semibold text-[#e8e4dc]">{job.business_name}</span>
                     </div>
-                    {index < workflowSteps.length - 1 && (
-                      <div className={`cc-pipeline-connector ${done ? 'cc-connector-done' : ''}`} />
-                    )}
-                    <span className={`cc-pipeline-label ${done || current ? 'cc-label-active' : ''}`}>{step.label}</span>
+                    <div className="mt-1 truncate text-[10.5px] text-[#7c8694]">{getQueueLabel(job, status)}</div>
                   </div>
-                )
-              })}
-            </div>
-
-            {/* Failure reason */}
-            {(focusDisplayStatus === 'failed' || focusDisplayStatus === 'not_qualified') && getQueueReason(focusJob) && (
-              <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-xs text-red-300 leading-relaxed">
-                {getQueueReason(focusJob)}
-              </div>
-            )}
-
-            {/* Workflow Logs — collapsed by default */}
-            <details
-              className="cc-logs-accordion"
-              open={logsOpen}
-              onToggle={(e) => setLogsOpen((e.currentTarget as HTMLDetailsElement).open)}
-            >
-              <summary className="cc-logs-summary">
-                <ChevronDown className={`h-3.5 w-3.5 transition-transform ${logsOpen ? 'rotate-180' : ''}`} />
-                Workflow Logs
-                {focusEvents.length > 0 && <span className="cc-logs-count">{focusEvents.length}</span>}
-              </summary>
-              <div className="cc-logs-body">
-                {/* Live diagnostics */}
-                {getWorkflowDiagnostics(focusJob).length > 0 && (
-                  <div className="cc-diag-grid">
-                    {getWorkflowDiagnostics(focusJob).map(([label, value]) => (
-                      <div key={label} className="cc-diag-row">
-                        <span className="cc-diag-label">{label}</span>
-                        <span className="cc-diag-value">{String(value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {/* Event timeline */}
-                {focusEvents.length > 0 && (
-                  <div className="cc-event-list">
-                    {[...focusEvents].reverse().map((event) => {
-                      const tone =
-                        /not\s*qualified|filtered\s*out|disqualified|filter qualified/i.test(`${event.step} ${event.error_message || ''}`) ? 'text-[#f0c27a]'
-                        : event.status === 'failed' ? 'text-red-300/80'
-                        : event.status === 'completed' ? 'text-[#d99a3d]/80'
-                        : event.status === 'running' ? 'text-[#d99a3d]'
-                        : 'text-[#6b7885]'
-                      return (
-                        <div key={event.id} className="cc-event-row">
-                          <span className="cc-event-time">{formatTime(event.created_at)}</span>
-                          <span className={`cc-event-text ${tone}`}>{event.error_message || event.step}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-                {focusEvents.length === 0 && getWorkflowDiagnostics(focusJob).length === 0 && (
-                  <div className="py-3 text-center text-xs text-[#6b7885]">No log entries yet.</div>
-                )}
-              </div>
-            </details>
-          </>
-        ) : (
-          <div className="cc-hero-empty">
-            <Activity className="mx-auto mb-3 h-8 w-8 text-[#3a4048]" />
-            <div className="text-sm font-medium text-[#4a5560]">No active workflow</div>
-            <div className="mt-1 text-xs text-[#3a4048]">Queue a proposal to get started</div>
-          </div>
-        )}
-      </div>
-
-      {/* ── CENTER: Action Rail ────────────────────────────────── */}
-      <div className="cc-action-rail">
-        <div className="cc-section-eyebrow mb-4">Actions</div>
-        <div className="flex flex-col gap-2">
-          {focusJob?.proposal_url ? (
-            <Link href={focusJob.proposal_url} target="_blank" className="cc-action-btn cc-action-btn-primary">
-              <ExternalLink className="h-3.5 w-3.5" />
-              View Proposal
-            </Link>
-          ) : (
-            <button type="button" disabled className="cc-action-btn cc-action-btn-primary opacity-40 cursor-not-allowed">
-              <ExternalLink className="h-3.5 w-3.5" />
-              View Proposal
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={() => focusJob?.proposal_url && copyToClipboard(focusJob.proposal_url)}
-            disabled={!focusJob?.proposal_url}
-            className="cc-action-btn cc-action-btn-ghost"
-          >
-            <Copy className="h-3.5 w-3.5" />
-            Copy Link
-          </button>
-
-          <button
-            type="button"
-            disabled={!focusJob}
-            className="cc-action-btn cc-action-btn-ghost"
-            onClick={() => {
-              if (!focusJob) return
-              const subject = encodeURIComponent(`Solar proposal for ${focusJob.business_name}`)
-              const body = encodeURIComponent(focusJob.proposal_url ? `View your proposal: ${focusJob.proposal_url}` : '')
-              window.open(`mailto:?subject=${subject}&body=${body}`)
-            }}
-          >
-            <Mail className="h-3.5 w-3.5" />
-            Send Email
-          </button>
-
-          {/* NOTE: Retry and Archive require backend actions not yet wired to this component.
-              The buttons are rendered for visual completeness but are intentionally disabled. */}
-          <button type="button" disabled className="cc-action-btn cc-action-btn-ghost opacity-40 cursor-not-allowed">
-            <RefreshCw className="h-3.5 w-3.5" />
-            Retry
-          </button>
-
-          <button type="button" disabled className="cc-action-btn cc-action-btn-ghost opacity-40 cursor-not-allowed">
-            <Archive className="h-3.5 w-3.5" />
-            Archive
-          </button>
-        </div>
-
-        {/* Divider */}
-        <div className="my-5 h-px bg-[#252a30]" />
-
-        {/* Mini stats */}
-        <div className="space-y-3">
-          <div className="cc-mini-stat">
-            <span className="cc-mini-stat-label">Queue</span>
-            <span className="cc-mini-stat-value">{jobs.filter(j => !isBatchJob(j)).length}</span>
-          </div>
-          <div className="cc-mini-stat">
-            <span className="cc-mini-stat-label">Active</span>
-            <span className={`cc-mini-stat-value ${activeCount > 0 ? 'text-[#d99a3d]' : ''}`}>{activeCount}</span>
-          </div>
-          <div className="cc-mini-stat">
-            <span className="cc-mini-stat-label">Done</span>
-            <span className="cc-mini-stat-value">{jobs.filter(j => getDisplayStatus(j) === 'completed').length}</span>
-          </div>
-          <div className="cc-mini-stat">
-            <span className="cc-mini-stat-label">Failed</span>
-            <span className={`cc-mini-stat-value ${jobs.filter(j => getDisplayStatus(j) === 'failed').length > 0 ? 'text-red-400' : ''}`}>
-              {jobs.filter(j => getDisplayStatus(j) === 'failed').length}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── RIGHT: Job Queue List ──────────────────────────────── */}
-      <div className="cc-queue-panel">
-        <div className="cc-queue-header">
-          <span className="cc-section-eyebrow">Proposal Queue</span>
-          <span className="cc-queue-count">{jobs.length}</span>
-        </div>
-
-        {jobs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <div className="text-sm text-[#4a5560]">No jobs in queue</div>
-          </div>
-        ) : (
-          <div className="cc-queue-list">
-            {jobs.map((job) => {
-              if (isBatchJob(job)) {
-                const { count, category, location } = parseBatchAddress(job.address)
-                return (
-                  <div key={job.id} className="cc-queue-row cc-queue-row-batch">
-                    <div className="text-[10px] font-semibold uppercase tracking-widest text-[#4a5560]">Batch</div>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {[count, category, location].filter(Boolean).map((chip) => (
-                        <span key={chip} className="cc-chip">{chip}</span>
-                      ))}
+                  <div className="shrink-0 text-right">
+                    <div className="font-mono text-[10.5px] tabular-nums" style={{ color: tone.fg }}>
+                      {status === 'completed' ? '100%' : status === 'failed' ? 'fail' : status === 'queued' ? 'wait' : `${Math.round(job.progress_percent || 0)}%`}
                     </div>
-                    <div className="mt-1.5 text-[10px] text-[#3a4048]">{formatRelativeTime(job.created_at)}</div>
+                    <div className="font-mono text-[9.5px] text-[#4c5460]">{formatRelTime(job.updated_at || job.created_at)} ago</div>
                   </div>
-                )
-              }
-
-              const displayStatus = getDisplayStatus(job)
-              const isFocus = focusJob?.id === job.id
-
-              return (
-                <div key={job.id} className={`cc-queue-row ${isFocus ? 'cc-queue-row-focus' : ''}`}>
-                  <div className="flex items-start justify-between gap-2 min-w-0">
-                    <div className="min-w-0 flex-1">
-                      <div className={`cc-queue-name ${isFocus ? 'text-[#e8d5b0]' : ''}`}>{job.business_name}</div>
-                      <div className="cc-queue-address">{job.address}</div>
-                    </div>
-                    <div className="flex shrink-0 flex-col items-end gap-1.5">
-                      <span className={statusPillClass(displayStatus)}>
-                        {getQueueLabel(job, displayStatus)}
-                      </span>
-                      <span className="text-[10px] text-[#4a5560]">{formatRelativeTime(job.updated_at || job.created_at)}</span>
-                    </div>
-                  </div>
-
-                  {job.proposal_url && (
-                    <Link
-                      href={job.proposal_url}
-                      target="_blank"
-                      className="mt-2 inline-flex items-center gap-1 text-[10px] text-[#d99a3d]/70 hover:text-[#d99a3d] transition-colors"
-                    >
-                      View proposal <ExternalLink className="h-2.5 w-2.5" />
-                    </Link>
-                  )}
-
-                  {(displayStatus === 'failed' || displayStatus === 'not_qualified') && getQueueReason(job) && (
-                    <div className="mt-2 rounded border border-red-500/15 bg-red-500/5 px-2 py-1.5 text-[10px] text-red-300/80 leading-relaxed">
-                      {getQueueReason(job)}
-                    </div>
-                  )}
-
-                  {/* Per-row logs — collapsed by default */}
-                  {job.receipt && (
-                    <details className="cc-row-logs">
-                      <summary className="cc-row-logs-summary">Technical details</summary>
-                      <div className="mt-1.5 space-y-1">
-                        {getWorkflowDiagnostics(job).map(([label, value]) => (
-                          <div key={label} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-1.5 text-[10px]">
-                            <span className="text-[#4a5560]">{label}</span>
-                            <span className="break-words text-[#8a929c]">{String(value)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  )}
                 </div>
-              )
-            })}
+                {status !== 'queued' && (
+                  <div className="mt-2 h-[2px] overflow-hidden rounded-full bg-[#272a31]">
+                    <div className="h-full" style={{ width: `${Math.max(0, Math.min(100, job.progress_percent || (status === 'completed' ? 100 : 0)))}%`, background: tone.fg }} />
+                  </div>
+                )}
+              </button>
+            )
+          })}
+          {visibleJobs.length === 0 && jobs.filter(isBatchJob).length === 0 && (
+            <div className="px-4 py-10 text-center text-[12px] text-[#5c6672]">Queue is empty.</div>
+          )}
+        </div>
+        <footer className="border-t border-[#2a2e36] bg-[#1c1e24] px-4 py-2.5">
+          <div className="flex items-center justify-between font-mono text-[10px] text-[#7c8694]">
+            <span className="inline-flex items-center gap-1.5"><RadioTower className="h-3 w-3 text-[#7ba87a]" /> realtime</span>
+            <span className="inline-flex items-center gap-1.5"><Clock3 className="h-3 w-3" /> 4s poll</span>
           </div>
-        )}
-      </div>
+        </footer>
+      </aside>
     </section>
   )
 }
