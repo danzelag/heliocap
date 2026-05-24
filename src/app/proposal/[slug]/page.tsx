@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { ArrowUpRight, Building2, Mail, Play, SunMedium } from 'lucide-react'
 import { PageViewTracker } from '@/components/site/PageViewTracker'
 import { LeadService, type Lead } from '@/services/lead.service'
+import { SolarRoof3D } from '@/components/proposal/SolarRoof3D'
 
 export const revalidate = 3600
 
@@ -28,6 +29,8 @@ type ProposalPageModel = {
   roofSqft: number | null
   roofAreaUsedSqft: number | null
   utilityRate: number | null
+  lat: number | null
+  lng: number | null
   media: ProposalMedia
 }
 
@@ -247,45 +250,67 @@ export default async function ProposalPage({
 
 function ProposalMediaCard({ proposal }: { proposal: ProposalPageModel }) {
   const media = proposal.media
+  const has3D = typeof proposal.lat === 'number' && typeof proposal.lng === 'number'
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#111417]">
-      <div className="flex aspect-[16/10] items-center justify-center bg-[#0b0e10] p-3 sm:p-4">
-        {media.kind === 'video' && (
-          <video
-            src={media.src}
-            poster={media.poster || undefined}
-            className="max-h-full w-full rounded-xl object-contain"
-            autoPlay
-            muted
-            loop
-            playsInline
+    <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#0b0e10]">
+      {/* 3D roof scene — primary when we have coordinates */}
+      {has3D && (
+        <div className="aspect-[16/10] w-full">
+          <SolarRoof3D
+            lat={proposal.lat!}
+            lng={proposal.lng!}
+            panelCount={proposal.systemSizeKw ? Math.round((proposal.systemSizeKw * 1000) / 400) : null}
           />
-        )}
-        {media.kind === 'render' && (
-          <img
-            src={media.src}
-            alt={`Solar proposal render for ${proposal.displayName}`}
-            className="max-h-full w-full rounded-xl object-contain"
-          />
-        )}
-        {media.kind === 'satellite' && (
-          <img
-            src={media.src}
-            alt={`Satellite roof imagery for ${proposal.displayName}`}
-            className="max-h-full w-full rounded-xl object-contain"
-          />
-        )}
-        {media.kind === 'pending' && (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-6 text-center">
-            <Building2 className="h-8 w-8 text-[#6b665e]" />
-            <div className="text-sm font-medium text-[#f2efea]">Roof imagery in progress</div>
-            <div className="max-w-md text-sm leading-6 text-[#8f887f]">
-              This proposal is waiting on its final preview image. The property and savings record are already linked to this page.
+        </div>
+      )}
+
+      {/* Stored media — shown below the 3D scene (video / render / satellite) */}
+      {!has3D && (
+        <div className="flex aspect-[16/10] items-center justify-center p-3 sm:p-4">
+          {media.kind === 'video' && (
+            <video
+              src={media.src}
+              poster={media.poster || undefined}
+              className="max-h-full w-full rounded-xl object-contain"
+              autoPlay
+              muted
+              loop
+              playsInline
+            />
+          )}
+          {media.kind === 'render' && (
+            <img
+              src={media.src}
+              alt={`Solar proposal render for ${proposal.displayName}`}
+              className="max-h-full w-full rounded-xl object-contain"
+            />
+          )}
+          {media.kind === 'satellite' && (
+            <img
+              src={media.src}
+              alt={`Satellite roof imagery for ${proposal.displayName}`}
+              className="max-h-full w-full rounded-xl object-contain"
+            />
+          )}
+          {media.kind === 'pending' && (
+            <div className="flex h-full w-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-6 text-center">
+              <Building2 className="h-8 w-8 text-[#6b665e]" />
+              <div className="text-sm font-medium text-[#f2efea]">Roof imagery in progress</div>
+              <div className="max-w-md text-sm leading-6 text-[#8f887f]">
+                This proposal is waiting on its final preview image.
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
+
+      {/* Caption strip under the 3D scene */}
+      {has3D && (
+        <div className="border-t border-white/5 px-4 py-2.5 text-[10px] font-medium tracking-[0.14em] text-[#6b665e] uppercase">
+          Stylized roof model · Google Solar API · Option 4
+        </div>
+      )}
     </div>
   )
 }
@@ -396,6 +421,8 @@ function buildProposalPageModel(lead: Lead): ProposalPageModel {
     roofSqft,
     roofAreaUsedSqft,
     utilityRate,
+    lat: lead.lat,
+    lng: lead.lng,
     media: selectMedia(lead),
   }
 }

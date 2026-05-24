@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
+
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
   title: "Helio Cap | Home Energy Savings",
@@ -14,7 +17,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className="dark h-full antialiased font-sans"
+      className={`${inter.variable} dark h-full antialiased font-sans`}
       suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">{children}</body>
