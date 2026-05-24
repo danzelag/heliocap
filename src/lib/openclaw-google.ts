@@ -521,6 +521,306 @@ export function buildSolarLayoutDebug(insights: GoogleSolarInsights | null, mode
   }
 }
 
+export function buildStylizedSolarDesignPlateSvg({
+  insights,
+  model,
+  width,
+  height,
+  address,
+}: {
+  insights: GoogleSolarInsights | null
+  model: SolarModel
+  width: number
+  height: number
+  address?: string | null
+}) {
+  const roofSegments = insights?.solarPotential?.roofSegmentStats || []
+  const selectedPanels = selectCoherentPanelLayout(
+    insights?.solarPotential?.solarPanels || [],
+    roofSegments,
+    model.panelCount,
+  ).filter((panel) => Boolean(panel.center))
+
+  if (!selectedPanels.length) {
+    return buildEmptySolarDesignPlateSvg({ width, height, model, address })
+  }
+
+  const localPanels = getLocalPanelGeometry(selectedPanels, roofSegments)
+  const projectedPoints = localPanels.flatMap((panel) => panel.corners.map((corner) => projectIso(corner.x, corner.y, panel.pitchMeters)))
+  const bounds = getPointBounds(projectedPoints)
+  const innerWidth = width * 0.74
+  const innerHeight = height * 0.58
+  const scale = Math.min(
+    innerWidth / Math.max(bounds.width, 1),
+    innerHeight / Math.max(bounds.height, 1),
+  )
+  const offsetX = width / 2 - ((bounds.minX + bounds.maxX) / 2) * scale
+  const offsetY = height * 0.48 - ((bounds.minY + bounds.maxY) / 2) * scale
+  const toCanvas = (point: { x: number; y: number }) => ({
+    x: point.x * scale + offsetX,
+    y: point.y * scale + offsetY,
+  })
+
+  const segmentPlanes = buildSegmentPlanePolygons(localPanels, roofSegments)
+    .map((plane, index) => {
+      const projected = plane.points.map((point) => toCanvas(projectIso(point.x, point.y, plane.pitchMeters)))
+      const shadow = projected.map((point) => `${point.x.toFixed(1)},${(point.y + 18).toFixed(1)}`).join(' ')
+      const points = projected.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ')
+      const tone = index % 2 === 0 ? '#25272d' : '#20232a'
+
+      return `<g>
+        <polygon points="${shadow}" fill="#050608" opacity="0.34" filter="url(#softBlur)"/>
+        <polygon points="${points}" fill="${tone}" stroke="#3b4048" stroke-width="1.2"/>
+        <polygon points="${points}" fill="url(#roofSheen)" opacity="0.28"/>
+      </g>`
+    })
+    .join('')
+
+  const panelGroups = localPanels
+    .map((panel) => {
+      const corners = panel.corners.map((corner) => toCanvas(projectIso(corner.x, corner.y, panel.pitchMeters + 0.18)))
+      const points = corners.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(' ')
+      const [a, b, c, d] = corners
+      const midTop = midpoint(a, b)
+      const midBottom = midpoint(d, c)
+      const midLeft = midpoint(a, d)
+      const midRight = midpoint(b, c)
+
+      return `<g>
+        <polygon points="${points}" fill="url(#panelGraphite)" stroke="#474b52" stroke-width="0.7"/>
+        <path d="M ${midTop.x.toFixed(1)} ${midTop.y.toFixed(1)} L ${midBottom.x.toFixed(1)} ${midBottom.y.toFixed(1)} M ${midLeft.x.toFixed(1)} ${midLeft.y.toFixed(1)} L ${midRight.x.toFixed(1)} ${midRight.y.toFixed(1)}" stroke="#111318" stroke-width="0.55" opacity="0.78"/>
+      </g>`
+    })
+    .join('')
+
+  const segmentCount = new Set(localPanels.map((panel) => panel.segmentIndex).filter((index) => index != null)).size
+  const subtitle = [
+    `${model.panelCount} black panels`,
+    `${model.systemSizeKw} kW DC`,
+    segmentCount ? `${segmentCount} roof plane${segmentCount === 1 ? '' : 's'}` : null,
+  ].filter(Boolean).join(' · ')
+  const shortAddress = address?.split(',')[0]?.trim()
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  ${buildSolarDesignPlateDefs()}
+  <rect width="${width}" height="${height}" rx="0" fill="#15171c"/>
+  <path d="M ${width * 0.08} ${height * 0.78} C ${width * 0.24} ${height * 0.91}, ${width * 0.74} ${height * 0.91}, ${width * 0.91} ${height * 0.75}" fill="none" stroke="#2a2e36" stroke-width="1.1" opacity="0.72"/>
+  <g opacity="0.7">
+    ${buildGridLines(width, height)}
+  </g>
+  <g>${segmentPlanes}</g>
+  <g filter="url(#panelLift)">${panelGroups}</g>
+  <rect x="18" y="18" width="${width - 36}" height="${height - 36}" rx="20" fill="none" stroke="#d99a3d" stroke-opacity="0.11" stroke-width="3"/>
+  <g transform="translate(${Math.round(width * 0.055)} ${Math.round(height * 0.07)})">
+    <text x="0" y="0" fill="#7c8694" font-size="18" font-family="IBM Plex Mono, JetBrains Mono, monospace" letter-spacing="2">SOLAR DESIGN PREVIEW</text>
+    <text x="0" y="34" fill="#e8e4dc" font-size="30" font-weight="650" font-family="Inter, ui-sans-serif, system-ui">${escapeXml(shortAddress || 'Verified roof target')}</text>
+    <text x="0" y="64" fill="#a8b1bb" font-size="18" font-family="Inter, ui-sans-serif, system-ui">${escapeXml(subtitle)}</text>
+  </g>
+  <g transform="translate(${Math.round(width * 0.055)} ${Math.round(height * 0.9)})">
+    <text x="0" y="0" fill="#7c8694" font-size="15" font-family="IBM Plex Mono, JetBrains Mono, monospace">Modeled from Google Solar API geometry · illustrative technical plate</text>
+  </g>
+</svg>`
+}
+
+function buildEmptySolarDesignPlateSvg({
+  width,
+  height,
+  model,
+  address,
+}: {
+  width: number
+  height: number
+  model: SolarModel
+  address?: string | null
+}) {
+  const shortAddress = address?.split(',')[0]?.trim()
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  ${buildSolarDesignPlateDefs()}
+  <rect width="${width}" height="${height}" fill="#15171c"/>
+  <g opacity="0.62">${buildGridLines(width, height)}</g>
+  <rect x="${width * 0.22}" y="${height * 0.32}" width="${width * 0.56}" height="${height * 0.26}" rx="22" fill="#1f2229" stroke="#2a2e36"/>
+  <text x="${width / 2}" y="${height * 0.43}" text-anchor="middle" fill="#e8e4dc" font-size="30" font-weight="650" font-family="Inter, ui-sans-serif, system-ui">${escapeXml(shortAddress || 'Solar preview pending')}</text>
+  <text x="${width / 2}" y="${height * 0.49}" text-anchor="middle" fill="#a8b1bb" font-size="18" font-family="Inter, ui-sans-serif, system-ui">${model.quality === 'fallback' ? 'Google Solar panel geometry unavailable' : 'Panel geometry pending review'}</text>
+  <rect x="18" y="18" width="${width - 36}" height="${height - 36}" rx="20" fill="none" stroke="#d99a3d" stroke-opacity="0.11" stroke-width="3"/>
+</svg>`
+}
+
+function buildSolarDesignPlateDefs() {
+  return `<defs>
+    <linearGradient id="roofSheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.10"/>
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.01"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.18"/>
+    </linearGradient>
+    <linearGradient id="panelGraphite" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#26282d"/>
+      <stop offset="45%" stop-color="#07080b"/>
+      <stop offset="100%" stop-color="#17191e"/>
+    </linearGradient>
+    <filter id="panelLift" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="2.2" flood-color="#000000" flood-opacity="0.42"/>
+    </filter>
+    <filter id="softBlur" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+  </defs>`
+}
+
+function buildGridLines(width: number, height: number) {
+  const lines: string[] = []
+  const spacing = Math.max(80, Math.round(Math.min(width, height) / 11))
+
+  for (let x = -width; x < width * 1.8; x += spacing) {
+    lines.push(`<path d="M ${x.toFixed(1)} ${height * 0.86} L ${(x + width * 0.62).toFixed(1)} ${height * 0.48}" stroke="#2a2e36" stroke-width="1"/>`)
+  }
+
+  for (let x = -width * 0.2; x < width * 1.4; x += spacing) {
+    lines.push(`<path d="M ${x.toFixed(1)} ${height * 0.49} L ${(x + width * 0.62).toFixed(1)} ${height * 0.86}" stroke="#2a2e36" stroke-width="1"/>`)
+  }
+
+  return lines.join('')
+}
+
+function getLocalPanelGeometry(
+  panels: GoogleSolarPanel[],
+  roofSegments: GoogleRoofSegment[],
+) {
+  const centers = panels
+    .map((panel) => panel.center)
+    .filter((center): center is GoogleLatLng => Boolean(center))
+  const origin = {
+    latitude: centers.reduce((sum, center) => sum + center.latitude, 0) / centers.length,
+    longitude: centers.reduce((sum, center) => sum + center.longitude, 0) / centers.length,
+  }
+  const metersPerDegreeLat = 111_320
+  const metersPerDegreeLng = 111_320 * Math.cos((origin.latitude * Math.PI) / 180)
+
+  return panels.map((panel) => {
+    const center = panel.center!
+    const x = (center.longitude - origin.longitude) * metersPerDegreeLng
+    const y = (center.latitude - origin.latitude) * metersPerDegreeLat
+    const segment = panel.segmentIndex != null ? roofSegments[panel.segmentIndex] : undefined
+    const azimuth = segment?.azimuthDegrees ?? 180
+    const rotation = ((azimuth - 90 + (panel.orientation === 'LANDSCAPE' ? 90 : 0)) * Math.PI) / 180
+    const longAxis = { x: Math.cos(rotation), y: Math.sin(rotation) }
+    const shortAxis = { x: -longAxis.y, y: longAxis.x }
+    const halfW = PANEL_WIDTH_METERS / 2
+    const halfH = PANEL_HEIGHT_METERS / 2
+    const pitchMeters = Math.sin(((segment?.pitchDegrees ?? 12) * Math.PI) / 180) * 1.6
+    const corners = [
+      {
+        x: x - longAxis.x * halfW - shortAxis.x * halfH,
+        y: y - longAxis.y * halfW - shortAxis.y * halfH,
+      },
+      {
+        x: x + longAxis.x * halfW - shortAxis.x * halfH,
+        y: y + longAxis.y * halfW - shortAxis.y * halfH,
+      },
+      {
+        x: x + longAxis.x * halfW + shortAxis.x * halfH,
+        y: y + longAxis.y * halfW + shortAxis.y * halfH,
+      },
+      {
+        x: x - longAxis.x * halfW + shortAxis.x * halfH,
+        y: y - longAxis.y * halfW + shortAxis.y * halfH,
+      },
+    ]
+
+    return {
+      segmentIndex: panel.segmentIndex,
+      pitchMeters,
+      corners,
+    }
+  })
+}
+
+function buildSegmentPlanePolygons(
+  panels: ReturnType<typeof getLocalPanelGeometry>,
+  roofSegments: GoogleRoofSegment[],
+) {
+  const groups = new Map<number, typeof panels>()
+  for (const panel of panels) {
+    groups.set(panel.segmentIndex ?? -1, [...(groups.get(panel.segmentIndex ?? -1) || []), panel])
+  }
+
+  return [...groups.entries()].map(([segmentIndex, segmentPanels]) => {
+    const points = segmentPanels.flatMap((panel) => panel.corners)
+    const hull = convexHull(points)
+    const center = getPointCenter(hull)
+    const paddedHull = hull.map((point) => ({
+      x: center.x + (point.x - center.x) * 1.32,
+      y: center.y + (point.y - center.y) * 1.32,
+    }))
+    const segment = segmentIndex >= 0 ? roofSegments[segmentIndex] : undefined
+
+    return {
+      points: paddedHull,
+      pitchMeters: Math.sin(((segment?.pitchDegrees ?? 12) * Math.PI) / 180) * 1.6,
+    }
+  })
+}
+
+function projectIso(x: number, y: number, z = 0) {
+  return {
+    x: (x - y) * 0.866,
+    y: (x + y) * 0.5 - z,
+  }
+}
+
+function convexHull(points: Array<{ x: number; y: number }>) {
+  if (points.length <= 3) return points
+  const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y)
+  const cross = (origin: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) =>
+    (a.x - origin.x) * (b.y - origin.y) - (a.y - origin.y) * (b.x - origin.x)
+  const lower: Array<{ x: number; y: number }> = []
+  for (const point of sorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) lower.pop()
+    lower.push(point)
+  }
+  const upper: Array<{ x: number; y: number }> = []
+  for (const point of sorted.slice().reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) upper.pop()
+    upper.push(point)
+  }
+
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)]
+}
+
+function getPointBounds(points: Array<{ x: number; y: number }>) {
+  const xs = points.map((point) => point.x)
+  const ys = points.map((point) => point.y)
+  const minX = Math.min(...xs)
+  const maxX = Math.max(...xs)
+  const minY = Math.min(...ys)
+  const maxY = Math.max(...ys)
+
+  return {
+    minX,
+    maxX,
+    minY,
+    maxY,
+    width: maxX - minX,
+    height: maxY - minY,
+  }
+}
+
+function getPointCenter(points: Array<{ x: number; y: number }>) {
+  return {
+    x: points.reduce((sum, point) => sum + point.x, 0) / Math.max(points.length, 1),
+    y: points.reduce((sum, point) => sum + point.y, 0) / Math.max(points.length, 1),
+  }
+}
+
+function midpoint(a: { x: number; y: number }, b: { x: number; y: number }) {
+  return {
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+  }
+}
+
 export function getSolarRoofFocusCrop({
   insights,
   model,

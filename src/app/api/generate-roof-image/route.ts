@@ -6,6 +6,7 @@ import {
   buildSolarLayoutDebug,
   buildSolarModel,
   buildSolarPanelLayerSvg,
+  buildStylizedSolarDesignPlateSvg,
   collectVisualReferences,
   fetchAndUploadSolarDataLayerAssets,
   fetchSolarInsights,
@@ -14,7 +15,7 @@ import {
   selectStaticMapCenter,
   uploadLeadAsset,
 } from '@/lib/openclaw-google'
-import { buildSolarRgbProposalRender } from '@/lib/proposal-image-compose'
+import { buildSolarRgbProposalRender, buildStylizedSolarDesignPlateRender } from '@/lib/proposal-image-compose'
 import {
   buildRenderQualityFlags,
   getPresentationRotationDegrees,
@@ -206,7 +207,7 @@ export async function POST(request: NextRequest) {
       contentType: 'image/svg+xml',
     })
 
-    const renderPreviewBuffer = await buildSolarRgbProposalRender({
+    const solarRgbCompositeBuffer = await buildSolarRgbProposalRender({
       roofImageUrl: roofImageSourceUrl,
       panelLayerSvg,
       outputWidth: renderSize.width,
@@ -215,6 +216,30 @@ export async function POST(request: NextRequest) {
       maskImageUrl,
       rotationDegrees: presentationRotationDegrees,
     })
+    const solarRgbCompositeUrl = await uploadLeadAsset({
+      supabase,
+      bucket,
+      slug,
+      fileName: 'solar-rgb-panel-composite.webp',
+      body: solarRgbCompositeBuffer,
+      contentType: 'image/webp',
+    })
+    const designPlateSvg = buildStylizedSolarDesignPlateSvg({
+      insights: solarInsights,
+      model: solarModel,
+      width: renderSize.width,
+      height: renderSize.height,
+      address: targetAddress,
+    })
+    const designPlateSvgUrl = await uploadLeadAsset({
+      supabase,
+      bucket,
+      slug,
+      fileName: 'solar-design-plate.svg',
+      body: designPlateSvg,
+      contentType: 'image/svg+xml',
+    })
+    const renderPreviewBuffer = await buildStylizedSolarDesignPlateRender(designPlateSvg)
     const renderPreviewUrl = await uploadLeadAsset({
       supabase,
       bucket,
@@ -242,7 +267,7 @@ export async function POST(request: NextRequest) {
         federal_itc: solarModel.federalItc,
         payback_years: solarModel.estimatedPayback,
         satellite_url: roofImageUrl,
-        render_url: renderImageUrl,
+        render_url: designPlateSvgUrl,
         render_preview_url: renderPreviewUrl,
         solar_quality: solarModel.quality,
         pipeline_stage: 'solar_fetched',
@@ -274,8 +299,11 @@ export async function POST(request: NextRequest) {
         mask_source: maskImageUrl ? 'google_solar_mask' : 'none',
         render_quality: renderQualityFlags.length ? 'needs_review' : 'awaiting_review',
         render_quality_flags: renderQualityFlags,
-        // renderPreviewUrl has matte black Solar API panels composited onto Solar RGB imagery.
-        // This is the customer-facing proposal image; video generation is not required.
+        technicalRenderUrl: renderImageUrl,
+        solarRgbCompositeRenderUrl: solarRgbCompositeUrl,
+        solarDesignPlateSvgUrl: designPlateSvgUrl,
+        cleanedPreviewImageUrl: renderPreviewUrl,
+        // renderPreviewUrl is the stylized Solar API design plate. The RGB overlay stays in receipts for diagnostics.
         solarPanelRenderUrl: renderPreviewUrl,
         roof_focus_crop: focusCrop,
       })
@@ -283,8 +311,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       roof_image_url: roofImageUrl,
-      render_image_url: renderImageUrl,
+      render_image_url: designPlateSvgUrl,
       render_preview_url: renderPreviewUrl,
+      technical_render_url: renderImageUrl,
+      solar_rgb_composite_render_url: solarRgbCompositeUrl,
+      solar_design_plate_svg_url: designPlateSvgUrl,
       mapTilesImageUrl: visualReferences.mapTilesImageUrl,
       aerialViewReferenceUrl: visualReferences.aerialViewReferenceUrl,
       streetViewReferenceUrls: visualReferences.streetViewReferenceUrls,

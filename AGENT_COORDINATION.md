@@ -138,3 +138,36 @@
 * **Lint/Build**:
   - `npm run build` passed.
   - `npm run lint` failed only on existing/out-of-scope lint errors listed above.
+
+## Agent: Codex (Stylized Solar Design Plate)
+* **Timestamp**: 2026-05-24 2:50 PM EDT
+* **Files touched**:
+  - `src/app/api/generate-roof-image/route.ts`
+  - `src/lib/openclaw-google.ts`
+  - `src/lib/proposal-image-compose.ts`
+  - `src/lib/proposal-workflow-publish.ts`
+  - `src/lib/proposal-workflow-render.ts`
+  - `AGENT_COORDINATION.md`
+* **What changed**:
+  - Added a deterministic stylized Solar API design plate generator as the practical Option 4 path.
+  - The new render uses Google Solar panel centers and roof segment data to draw an axonometric technical plate with matte dark roof planes and black graphite panels only.
+  - Wired the in-app proposal workflow so new proposals use the stylized design plate as `render_preview_url`, while the old Solar RGB + panel composite is still uploaded and kept in receipts for diagnostics.
+  - Mirrored the same behavior in `/api/generate-roof-image`, returning the design plate as the public preview and exposing the technical SVG/composite URLs separately.
+* **Intentionally avoided**:
+  - Public landing page and marketing files.
+  - Database schema changes.
+  - Environment variable changes.
+  - Veo, Gemini, Aurora, EagleView, or new third-party API integration.
+  - Full Three.js/browser rendering in the backend workflow; this pass uses server-side SVG/WebP for reliability.
+* **Risks**:
+  - The design plate is an illustrative technical visual, not a permit-grade Aurora-style model.
+  - The output depends on Google Solar panel and roof segment quality. Bad Solar API targeting still needs operator review.
+  - `AGENTS.md` had an automatic memory timestamp change in the worktree before this note; it was not part of the feature work.
+  - `npm run lint` still fails on pre-existing/out-of-scope lint errors in `AddressAutocomplete.tsx`, `CtaForm.tsx`, `PixelCard.tsx`, and `textarea.tsx`.
+* **Preview instructions**:
+  - Run `npm run dev`.
+  - Generate a new roof/proposal via the existing admin workflow or `/api/generate-roof-image`.
+  - Open the resulting `render_preview_url` or proposal page to inspect the stylized design plate.
+* **Lint/Build**:
+  - `npm run build` passed.
+  - `npm run lint` failed only on existing/out-of-scope lint errors listed above.

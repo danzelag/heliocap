@@ -83,6 +83,12 @@ export async function buildSolarRgbProposalRender({
   return rotated.webp({ quality: 95, effort: 6 }).toBuffer()
 }
 
+export async function buildStylizedSolarDesignPlateRender(svg: string) {
+  return sharp(Buffer.from(svg), { limitInputPixels: false })
+    .webp({ quality: 95, effort: 6 })
+    .toBuffer()
+}
+
 async function fetchImageBuffer(url: string) {
   const response = await fetch(url, { cache: 'no-store' })
   if (!response.ok) {

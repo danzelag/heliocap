@@ -2,6 +2,7 @@ import {
   buildSolarLayoutDebug,
   buildSolarModel,
   buildSolarPanelLayerSvg,
+  buildStylizedSolarDesignPlateSvg,
   collectVisualReferences,
   fetchAndUploadSolarDataLayerAssets,
   fetchSolarInsights,
@@ -21,7 +22,7 @@ import {
   selectProposalRenderSize,
   setWorkflowProgress,
 } from '@/lib/proposal-workflow-shared'
-import { buildSolarRgbProposalRender } from '@/lib/proposal-image-compose'
+import { buildSolarRgbProposalRender, buildStylizedSolarDesignPlateRender } from '@/lib/proposal-image-compose'
 
 export async function generateRoofAssets(
   supabase: AdminSupabase,
@@ -156,7 +157,7 @@ export async function generateRoofAssets(
     contentType: 'image/svg+xml',
   })
 
-  const renderPreviewBuffer = await buildSolarRgbProposalRender({
+  const solarRgbCompositeBuffer = await buildSolarRgbProposalRender({
     roofImageUrl: roofImageSourceUrl,
     panelLayerSvg,
     outputWidth: renderSize.width,
@@ -165,6 +166,30 @@ export async function generateRoofAssets(
     maskImageUrl,
     rotationDegrees: presentationRotationDegrees,
   })
+  const solarRgbCompositeUrl = await uploadLeadAsset({
+    supabase,
+    bucket: 'leads',
+    slug: job.slug,
+    fileName: 'solar-rgb-panel-composite.webp',
+    body: solarRgbCompositeBuffer,
+    contentType: 'image/webp',
+  })
+  const designPlateSvg = buildStylizedSolarDesignPlateSvg({
+    insights: solarInsights,
+    model: solarModel,
+    width: renderSize.width,
+    height: renderSize.height,
+    address: job.address,
+  })
+  const designPlateSvgUrl = await uploadLeadAsset({
+    supabase,
+    bucket: 'leads',
+    slug: job.slug,
+    fileName: 'solar-design-plate.svg',
+    body: designPlateSvg,
+    contentType: 'image/svg+xml',
+  })
+  const renderPreviewBuffer = await buildStylizedSolarDesignPlateRender(designPlateSvg)
   const renderPreviewUrl = await uploadLeadAsset({
     supabase,
     bucket: 'leads',
@@ -190,7 +215,10 @@ export async function generateRoofAssets(
       solar_layout_debug: solarLayoutDebug,
       solar_data_layers: solarDataLayerAssets,
       technicalRenderUrl: renderImageUrl,
+      solarRgbCompositeRenderUrl: solarRgbCompositeUrl,
+      solarDesignPlateSvgUrl: designPlateSvgUrl,
       solarPanelRenderUrl: renderPreviewUrl,
+      cleanedPreviewImageUrl: renderPreviewUrl,
       roof_focus_crop: focusCrop,
       render_aspect: renderSize.aspect,
       render_size: renderSize,
@@ -213,7 +241,7 @@ export async function generateRoofAssets(
         federal_itc: solarModel.federalItc,
         payback_years: solarModel.estimatedPayback,
         satellite_url: solarRgbLayer.previewUrl,
-        render_url: renderImageUrl,
+        render_url: designPlateSvgUrl,
         render_preview_url: renderPreviewUrl,
         solar_quality: solarModel.quality,
         pipeline_stage: 'solar_fetched',
@@ -225,7 +253,7 @@ export async function generateRoofAssets(
     roofImageUrl,
     roofImageSourceUrl,
     maskImageUrl,
-    renderImageUrl,
+    renderImageUrl: designPlateSvgUrl,
     renderPreviewUrl,
     panelLayerSvg,
     focusCrop,
@@ -250,35 +278,16 @@ export async function generateProposalPreview(
     buildStatus: 'image_generating',
   })
 
-  const finalRenderBuffer = await buildSolarRgbProposalRender({
-    roofImageUrl: roofAssets.roofImageSourceUrl,
-    panelLayerSvg: roofAssets.panelLayerSvg,
-    outputWidth: roofAssets.renderSize.width,
-    outputHeight: roofAssets.renderSize.height,
-    focusCrop: roofAssets.focusCrop,
-    maskImageUrl: roofAssets.maskImageUrl,
-    rotationDegrees: roofAssets.presentationRotationDegrees,
-  })
-
-  const renderPreviewUrl = await uploadLeadAsset({
-    supabase,
-    bucket: 'leads',
-    slug: job.slug,
-    fileName: 'deterministic_solar_reference.webp',
-    body: finalRenderBuffer,
-    contentType: 'image/webp',
-  })
-
   await setWorkflowProgress(supabase, job, {
-    step: 'Deterministic proposal image ready',
+    step: 'Stylized solar design plate ready',
     progressPercent: 84,
     buildStatus: 'image_generated',
     receipt: {
       blackPanelReferenceImageUrl: roofAssets.renderPreviewUrl,
-      cleanedPreviewImageUrl: renderPreviewUrl,
-      render_source: 'deterministic_solar_rgb_plus_solar_api_panels',
+      cleanedPreviewImageUrl: roofAssets.renderPreviewUrl,
+      render_source: 'stylized_solar_design_plate',
     },
   })
 
-  return { renderPreviewUrl, source: 'deterministic_solar_rgb_plus_solar_api_panels' as const }
+  return { renderPreviewUrl: roofAssets.renderPreviewUrl, source: 'stylized_solar_design_plate' as const }
 }

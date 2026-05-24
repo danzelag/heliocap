@@ -22,7 +22,11 @@ export async function publishLead({
   prospect: ProspectLookup | null
   roofAssets: RoofAssets
   renderPreviewUrl: string
-  renderSource: 'black_panel_reference' | 'clean_base_plus_solar_api_panels' | 'deterministic_solar_rgb_plus_solar_api_panels'
+  renderSource:
+    | 'black_panel_reference'
+    | 'clean_base_plus_solar_api_panels'
+    | 'deterministic_solar_rgb_plus_solar_api_panels'
+    | 'stylized_solar_design_plate'
 }) {
   await setWorkflowProgress(supabase, job, {
     step: 'Publishing still proposal',
