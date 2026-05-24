@@ -1,5 +1,6 @@
-import { ArrowRight, Building2, Download, Sparkles } from 'lucide-react'
+import { ArrowRight, Download, Sparkles } from 'lucide-react'
 import type { ProposalViewModel } from './types'
+import { RoofVisual } from './RoofVisual'
 
 function formatCAD(n: number) {
   return new Intl.NumberFormat('en-CA', {
@@ -57,10 +58,7 @@ export function Hero({ proposal }: { proposal: ProposalViewModel }) {
                   className="h-full w-full object-contain"
                 />
               ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-[color:var(--card)] px-6 text-center text-[color:var(--text-muted)]">
-                  <Building2 className="h-10 w-10" strokeWidth={1.5} />
-                  <p className="max-w-sm text-sm">Roof imagery is being prepared for this proposal.</p>
-                </div>
+                <RoofVisual systemSizeKw={proposal.systemSize} />
               )}
             </div>
           </div>
