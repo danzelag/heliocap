@@ -139,6 +139,43 @@
   - `npm run build` passed.
   - `npm run lint` failed only on existing/out-of-scope lint errors listed above.
 
+## Agent: Codex (Reset to Premium Energy Landing Page)
+* **Timestamp**: 2026-05-24 10:05 PM EDT
+* **Files touched**:
+  - `src/app/page.tsx`
+  - `src/app/layout.tsx`
+  - `src/app/globals.css`
+  - Deleted `src/app/admin/**`
+  - Deleted `src/app/api/**`
+  - Deleted `src/app/proposal/**`
+  - Deleted `src/components/**`
+  - Deleted `src/lib/**`
+  - Deleted `src/services/**`
+  - Deleted `src/middleware.ts`
+  - `AGENT_COORDINATION.md`
+* **What changed**:
+  - Fetched and read the Claude Design handoff for `Energy Landing Page.html`, including its README, chat transcript, HTML, CSS, and calculator logic.
+  - Replaced the old HelioCap app surface with a single premium Canadian energy landing page at `/`.
+  - Implemented the Rolex/Porsche/AP-inspired white/warm-cream editorial design direction with serif display type, restrained teal accent, full-screen dark hero, partner strip, metrics, calculator, product sections, rebates table, contact form, and footer.
+  - Ported the Canadian savings calculator into React state with province rates, heating type, residential/commercial mode, EV/parking inputs, CAD formatting, rebates, payback, and CO2 estimates.
+  - Removed the exposed admin, proposal, generator, VEO/Gemini/Solar API, middleware, component, service, and workflow code paths from `src`.
+* **Intentionally avoided**:
+  - `.env*` files and Vercel project/configuration.
+  - `package.json`, dependency pruning, and lockfile churn.
+  - Git push/deployment commands.
+  - The untracked `/Users/danzelgaminde/solar-imagery-research.md` file.
+* **Risks**:
+  - The contact form is currently preview-only and shows a local success state; it is not wired to Supabase, email, or a CRM because the old backend/API surface was intentionally removed.
+  - Product/hero imagery uses premium placeholders from the design direction; real product photography still needs to be supplied.
+  - Dependencies are still the old project dependency set and can be pruned in a follow-up cleanup.
+* **Preview instructions**:
+  - Run `npm run dev`.
+  - Open `http://localhost:3000`.
+  - Use the calculator and contact form directly on the page.
+* **Lint/Build**:
+  - `npm run build` passed.
+  - `npm run lint` passed.
+
 ## Agent: Codex (Stylized Solar Design Plate)
 * **Timestamp**: 2026-05-24 2:50 PM EDT
 * **Files touched**:
