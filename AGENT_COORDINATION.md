@@ -270,3 +270,27 @@
 * **Lint/Build**:
   - `npm run build` passed.
   - `npm run lint` passed.
+
+## Agent: Codex (Deployed Hero Video Bridge)
+* **Timestamp**: 2026-05-25 12:01 AM EDT
+* **Files touched**:
+  - `package.json`
+  - `src/app/api/hero-video/route.ts`
+  - `scripts/generate-hero-video-via-vercel.mjs`
+  - `AGENT_COORDINATION.md`
+* **What changed**:
+  - Added a protected server route at `/api/hero-video` so the deployed Vercel app can use its runtime `GOOGLE_CLOUD_*` env values to submit, poll, and download a Veo hero render.
+  - Protected the route with a request token derived from the configured `GOOGLE_CLOUD_PRIVATE_KEY`, so the endpoint is not publicly callable without the matching service-account material.
+  - Added `npm run generate:hero-video:vercel`, a local orchestration script that calls the deployed route, waits for completion, and saves the finished MP4 into `public/hero/house-solar-hero.mp4`.
+* **Intentionally avoided**:
+  - Exposing raw env values or adding an unauthenticated expensive generation endpoint.
+  - Editing the public page design beyond what was needed for the existing hero media slot.
+* **Risks**:
+  - This bridge assumes the deployed Vercel project really has working `GOOGLE_CLOUD_*` values, even though `vercel env pull` returned blanks locally.
+  - The route can submit real paid Veo jobs, so the private-key-derived token must stay secret.
+* **Preview instructions**:
+  - After deployment, run `npm run generate:hero-video:vercel`.
+  - The script will call the production `/api/hero-video` route and save the downloaded MP4 into `public/hero/house-solar-hero.mp4`.
+* **Lint/Build**:
+  - `npm run build` passed.
+  - `npm run lint` passed.

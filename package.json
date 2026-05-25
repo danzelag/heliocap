@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "generate:hero-video": "node scripts/generate-hero-video.mjs"
+    "generate:hero-video": "node scripts/generate-hero-video.mjs",
+    "generate:hero-video:vercel": "node scripts/generate-hero-video-via-vercel.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
