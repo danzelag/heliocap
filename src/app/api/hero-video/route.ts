@@ -1,4 +1,3 @@
-import { createHash } from 'crypto'
 import { readFile } from 'fs/promises'
 import { join } from 'path'
 import { NextRequest, NextResponse } from 'next/server'
@@ -86,11 +85,9 @@ function isAuthorized(request: NextRequest) {
   const token = request.headers.get('x-hero-auth')?.trim()
   if (!token) return false
 
-  const privateKey = process.env.GOOGLE_CLOUD_PRIVATE_KEY
-  if (!privateKey) return false
-
-  const expected = createHash('sha256').update(privateKey).digest('hex')
-  return token === expected
+  const sharedSecret = process.env.HERO_VIDEO_SHARED_SECRET?.trim()
+  if (!sharedSecret) return false
+  return token === sharedSecret
 }
 
 function extractVideoRefs(raw: Awaited<ReturnType<typeof fetchVertexVeoStatus>>) {

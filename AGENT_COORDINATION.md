@@ -294,3 +294,26 @@
 * **Lint/Build**:
   - `npm run build` passed.
   - `npm run lint` passed.
+
+## Agent: Codex (Hero Video Generated)
+* **Timestamp**: 2026-05-25 08:41 AM EDT
+* **Files touched**:
+  - `src/app/api/hero-video/route.ts`
+  - `scripts/generate-hero-video-via-vercel.mjs`
+  - `public/hero/house-solar-hero.mp4`
+  - `AGENT_COORDINATION.md`
+* **What changed**:
+  - Swapped the deployed hero-video route from private-key-derived auth to a dedicated shared secret so the protected Vercel bridge could be called reliably from this machine.
+  - Updated the Vercel production env to use the provided service-account identity values and a matching shared secret, then redeployed production.
+  - Successfully submitted a Vertex Veo job through the deployed route, polled it to completion, downloaded the finished asset, and saved the final hero video locally to `public/hero/house-solar-hero.mp4`.
+* **Intentionally avoided**:
+  - Printing or committing any secret values.
+  - Touching unrelated local research files or the automatic `AGENTS.md` timestamp change.
+* **Risks**:
+  - The deployed bridge now depends on `HERO_VIDEO_SHARED_SECRET` in Vercel production; if that env is removed or changed, the local generator script must use the matching value.
+  - The Vercel production env still contains an unknown `GOOGLE_CLOUD_STORAGE_URI` value that was not surfaced locally; the successful render strongly suggests it is valid in production, but local Vertex generation still cannot use it without setting it locally.
+* **Preview instructions**:
+  - Open `http://localhost:3000` to verify the hero plays the generated MP4 locally.
+  - After pushing the generated asset, production will serve the same hero video from `public/hero/house-solar-hero.mp4`.
+* **Lint/Build**:
+  - Existing build and lint checks for this landing page state were already passing before the final asset save.

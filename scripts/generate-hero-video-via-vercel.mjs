@@ -1,21 +1,25 @@
-import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { promisify } from 'node:util'
 
-const SERVICE_ACCOUNT_PATH = '/Users/danzelgaminde/Downloads/heliocap-d8c7671440da.json'
-const PRODUCTION_URL = 'https://heliocap.vercel.app/api/hero-video'
+const execFileAsync = promisify(execFile)
+const DEPLOYMENT_URL =
+  process.env.HERO_VIDEO_DEPLOYMENT_URL ||
+  'https://heliocap.vercel.app'
 const OUTPUT_VIDEO = 'public/hero/house-solar-hero.mp4'
 
 async function main() {
-  if (!existsSync(SERVICE_ACCOUNT_PATH)) {
-    throw new Error(`Missing service account JSON at ${SERVICE_ACCOUNT_PATH}`)
-  }
-
-  const serviceAccount = JSON.parse(readFileSync(SERVICE_ACCOUNT_PATH, 'utf8'))
-  const token = createHash('sha256').update(serviceAccount.private_key).digest('hex')
+  const token = process.env.HERO_VIDEO_SHARED_SECRET?.trim()
+  if (!token) throw new Error('HERO_VIDEO_SHARED_SECRET is required')
 
   mkdirSync('public/hero', { recursive: true })
 
-  const submit = await postJson(token, { action: 'submit' })
+  const submit = JSON.parse(
+    await vercelCurlJson(token, {
+      action: 'submit',
+    }),
+  )
+
   const operationName = submit.operationName
   if (!operationName || typeof operationName !== 'string') {
     throw new Error(`Submit returned no operationName: ${JSON.stringify(submit)}`)
@@ -25,7 +29,12 @@ async function main() {
 
   for (let attempt = 1; attempt <= 90; attempt += 1) {
     await sleep(10_000)
-    const status = await postJson(token, { action: 'status', operationName })
+    const status = JSON.parse(
+      await vercelCurlJson(token, {
+        action: 'status',
+        operationName,
+      }),
+    )
     console.log(`Status ${attempt}: done=${status.done === true} failed=${status.failed === true}`)
 
     if (status.failed) {
@@ -34,21 +43,11 @@ async function main() {
 
     if (status.done !== true) continue
 
-    const downloadRes = await fetch(PRODUCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-hero-auth': token,
-      },
-      body: JSON.stringify({ action: 'download', operationName }),
+    const buffer = await vercelCurlBinary(token, {
+      action: 'download',
+      operationName,
     })
 
-    if (!downloadRes.ok) {
-      const text = await downloadRes.text()
-      throw new Error(`Download failed: ${downloadRes.status} ${text.slice(0, 800)}`)
-    }
-
-    const buffer = Buffer.from(await downloadRes.arrayBuffer())
     writeFileSync(OUTPUT_VIDEO, buffer)
     console.log(`Saved ${OUTPUT_VIDEO} (${buffer.length} bytes)`)
     return
@@ -57,22 +56,66 @@ async function main() {
   throw new Error('Timed out waiting for deployed Veo generation')
 }
 
-async function postJson(token, body) {
-  const res = await fetch(PRODUCTION_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-hero-auth': token,
-    },
-    body: JSON.stringify(body),
-  })
+async function vercelCurlJson(token, body) {
+  const { stdout, stderr } = await execFileAsync(
+    'npx',
+    [
+      'vercel',
+      'curl',
+      '/api/hero-video',
+      '--deployment',
+      DEPLOYMENT_URL,
+      '--',
+      '--silent',
+      '--show-error',
+      '--request',
+      'POST',
+      '--header',
+      `x-hero-auth: ${token}`,
+      '--header',
+      'Content-Type: application/json',
+      '--data',
+      JSON.stringify(body),
+    ],
+    { maxBuffer: 20 * 1024 * 1024, encoding: 'utf8' },
+  )
 
-  const text = await res.text()
-  if (!res.ok) {
-    throw new Error(`${res.status} ${text.slice(0, 1200)}`)
+  if (stderr?.trim()) {
+    console.error(stderr.trim())
   }
 
-  return JSON.parse(text)
+  return stdout.trim()
+}
+
+async function vercelCurlBinary(token, body) {
+  const { stdout, stderr } = await execFileAsync(
+    'npx',
+    [
+      'vercel',
+      'curl',
+      '/api/hero-video',
+      '--deployment',
+      DEPLOYMENT_URL,
+      '--',
+      '--silent',
+      '--show-error',
+      '--request',
+      'POST',
+      '--header',
+      `x-hero-auth: ${token}`,
+      '--header',
+      'Content-Type: application/json',
+      '--data',
+      JSON.stringify(body),
+    ],
+    { maxBuffer: 200 * 1024 * 1024, encoding: 'buffer' },
+  )
+
+  if (stderr?.length) {
+    console.error(stderr.toString('utf8').trim())
+  }
+
+  return stdout
 }
 
 function sleep(ms) {
