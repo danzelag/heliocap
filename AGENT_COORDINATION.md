@@ -176,6 +176,34 @@
   - `npm run build` passed.
   - `npm run lint` passed.
 
+## Agent: Codex (Hero Media Wiring & Veo Key Diagnosis)
+* **Timestamp**: 2026-05-24 11:31 PM EDT
+* **Files touched**:
+  - `src/app/page.tsx`
+  - `src/app/globals.css`
+  - `public/hero/house-solar-hero-poster.webp`
+  - `AGENT_COORDINATION.md`
+* **What changed**:
+  - Replaced the landing page hero placeholder treatment with the actual residential house image as the live poster/fallback asset.
+  - Wired the hero to support a real background video at `/hero/house-solar-hero.mp4`, fading it in automatically once the file exists and can play, while keeping the poster visible if the video is absent or fails.
+  - Tested Gemini/Veo image-to-video generation against the current local Gemini key and a second pasted key to diagnose the rendering blocker before touching more UI.
+* **Intentionally avoided**:
+  - Any admin, proposal, API route, Supabase, or Vercel deployment changes.
+  - Adding a fake or unrelated hero video just to fill the slot.
+  - Overwriting the existing `.env.local` or committing temporary pulled env files.
+* **Risks**:
+  - No hero video was generated in this pass because the available keys are blocked in two different ways:
+    - current local `GEMINI_API_KEY`: `429 RESOURCE_EXHAUSTED` / depleted prepay credits for Veo generation
+    - pasted alternate key: `403 API_KEY_SERVICE_BLOCKED` for `generativelanguage.googleapis.com` long-running prediction
+  - The hero video slot is ready, but the final MP4 still needs a working Gemini/Veo-enabled key before `/hero/house-solar-hero.mp4` can be produced and dropped in.
+* **Preview instructions**:
+  - Run `npm run dev`.
+  - Open `http://localhost:3000`.
+  - The hero now shows the real house poster immediately; if `public/hero/house-solar-hero.mp4` is later added, it will autoplay and replace the still automatically.
+* **Lint/Build**:
+  - `npm run build` passed.
+  - `npm run lint` passed with one warning in `src/app/page.tsx` for using a raw `<img>` in the hero poster layer.
+
 ## Agent: Codex (Stylized Solar Design Plate)
 * **Timestamp**: 2026-05-24 2:50 PM EDT
 * **Files touched**:
@@ -208,3 +236,37 @@
 * **Lint/Build**:
   - `npm run build` passed.
   - `npm run lint` failed only on existing/out-of-scope lint errors listed above.
+
+## Agent: Codex (Landing Intake Autocomplete & Vertex Hero Video Path)
+* **Timestamp**: 2026-05-24 11:41 PM EDT
+* **Files touched**:
+  - `package.json`
+  - `src/app/page.tsx`
+  - `src/app/globals.css`
+  - `src/lib/google-cloud-auth.ts`
+  - `src/lib/vertex-veo.ts`
+  - `scripts/generate-hero-video.mjs`
+  - `public/hero/house-solar-hero-poster.webp`
+  - `AGENT_COORDINATION.md`
+* **What changed**:
+  - Added Google Places autocomplete to the landing-page contact form's property address field, using `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`.
+  - The address picker is restricted to Canadian addresses and updates the contact-form province select from the selected place's province component when available.
+  - Kept the address input usable as a normal text field if Places is unavailable or the browser key is missing.
+  - Replaced the raw hero poster image with `next/image` and kept the `/hero/house-solar-hero.mp4` background video slot ready.
+  - Restored a minimal Vertex Veo helper path and added `npm run generate:hero-video` to generate the 16:9 hero MP4 from the local house reference image once real `GOOGLE_CLOUD_*` service-account env values are available locally.
+* **Intentionally avoided**:
+  - Vercel deployment and GitHub push.
+  - Hardcoding Google API keys or service-account secrets into source.
+  - Reintroducing the deleted admin/proposal generator app surface.
+  - Touching the untracked `solar-imagery-research.md` file.
+* **Risks**:
+  - `npx vercel env ls` shows the expected Vertex env names exist on the Vercel project, but `vercel env pull` returned blank values for all five `GOOGLE_CLOUD_*` variables. The generator cannot submit to Vertex until those values are populated locally.
+  - `npm run generate:hero-video` currently stops at `GOOGLE_CLOUD_PROJECT_ID is not configured`, which confirms the missing local Vertex env values are the remaining blocker.
+  - The contact form is still preview-only; autocomplete improves intake quality, but submissions are not yet wired to Supabase/email/CRM.
+* **Preview instructions**:
+  - Dev server is running at `http://localhost:3000`.
+  - Open the contact section and type a Canadian address into "Property address" to test Places autocomplete.
+  - After real Vertex env values are added locally, run `npm run generate:hero-video`; the output will be saved to `public/hero/house-solar-hero.mp4` and the hero will autoplay it automatically.
+* **Lint/Build**:
+  - `npm run build` passed.
+  - `npm run lint` passed.

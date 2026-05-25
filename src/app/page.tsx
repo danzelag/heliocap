@@ -1,10 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
+import Image from 'next/image'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 
 type Mode = 'residential' | 'commercial'
 type Heating = 'gas' | 'electric' | 'oil' | 'propane' | 'none'
 type ProvinceCode = keyof typeof PROVINCES
+type AddressLookupStatus = 'idle' | 'ready' | 'unavailable'
 
 const PROVINCES = {
   AB: { name: 'Alberta', rate: 16.5, solarYield: 1250, co2: 0.56, hp: 1500, hpName: 'SHARP Program', ev: 0 },
@@ -44,9 +46,60 @@ const FED = {
 }
 
 const provinceRows = Object.entries(PROVINCES) as Array<[ProvinceCode, (typeof PROVINCES)[ProvinceCode]]>
+const NEXT_PUBLIC_GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
+let googlePlacesLoader: Promise<typeof google | null> | null = null
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('en-CA', { maximumFractionDigits: 0 }).format(value)
+}
+
+function normalizeProvinceName(value: string) {
+  return value.trim().toLowerCase().replace(/\./g, '')
+}
+
+function provinceCodeFromPlace(place: google.maps.places.PlaceResult): ProvinceCode | null {
+  const components = place.address_components ?? []
+
+  for (const component of components) {
+    if (!component.types.includes('administrative_area_level_1')) continue
+
+    const shortName = component.short_name?.trim().toUpperCase() as ProvinceCode | undefined
+    if (shortName && shortName in PROVINCES) return shortName
+
+    const longName = normalizeProvinceName(component.long_name ?? '')
+    const match = provinceRows.find(([, row]) => normalizeProvinceName(row.name) === longName)
+    if (match) return match[0]
+  }
+
+  return null
+}
+
+async function loadGooglePlacesScript(): Promise<typeof google | null> {
+  if (typeof window === 'undefined') return null
+  if (window.google?.maps?.places) return window.google
+  if (!NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) return null
+  if (googlePlacesLoader) return googlePlacesLoader
+
+  googlePlacesLoader = new Promise((resolve) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[data-google-places-loader="true"]')
+    if (existing) {
+      existing.addEventListener('load', () => resolve(window.google ?? null), { once: true })
+      existing.addEventListener('error', () => resolve(null), { once: true })
+      return
+    }
+
+    const script = document.createElement('script')
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&loading=async`
+    script.async = true
+    script.defer = true
+    script.dataset.googlePlacesLoader = 'true'
+    script.onload = () => resolve(window.google ?? null)
+    script.onerror = () => resolve(null)
+    document.head.appendChild(script)
+  })
+
+  return googlePlacesLoader
 }
 
 function calculateEnergy({
@@ -133,6 +186,7 @@ function PhotoSlot({ label, detail, tone = 'light' }: { label: string; detail: s
 
 export default function Home() {
   const [scrolled, setScrolled] = useState(false)
+  const [heroVideoReady, setHeroVideoReady] = useState(false)
   const [mode, setMode] = useState<Mode>('residential')
   const [province, setProvince] = useState<ProvinceCode>('ON')
   const [monthlyBill, setMonthlyBill] = useState(220)
@@ -141,12 +195,37 @@ export default function Home() {
   const [parking, setParking] = useState(false)
   const [insurance, setInsurance] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [contactAddress, setContactAddress] = useState('')
+  const [contactProvince, setContactProvince] = useState<ProvinceCode>('ON')
+  const [addressLookupStatus, setAddressLookupStatus] = useState<AddressLookupStatus>('idle')
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40)
     onScroll()
     window.addEventListener('scroll', onScroll)
     return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
+    const sections = Array.from(document.querySelectorAll<HTMLElement>('.reveal'))
+    if (!sections.length) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible')
+          }
+        }
+      },
+      {
+        threshold: 0.24,
+        rootMargin: '0px 0px -12% 0px',
+      },
+    )
+
+    sections.forEach((section) => observer.observe(section))
+    return () => observer.disconnect()
   }, [])
 
   const result = useMemo(() => calculateEnergy({ mode, province, monthlyBill, heating, ev, parking }), [mode, province, monthlyBill, heating, ev, parking])
@@ -166,7 +245,7 @@ export default function Home() {
   }
 
   return (
-    <main>
+    <main className="snap-shell">
       <nav className={`nav on-dark ${scrolled ? 'scrolled' : ''}`} id="main-nav">
         <a className="brand" href="#hero">[BRAND]<sup>TM</sup></a>
         <div className="nav-links">
@@ -179,13 +258,37 @@ export default function Home() {
         <a href="#contact" className="btn btn-white nav-cta">Book assessment</a>
       </nav>
 
-      <section className="hero" id="hero">
+      <section className="hero snap-panel" id="hero">
         <div className="hero-bg">
-          <PhotoSlot label="Hero image placeholder" detail="Add a premium Canadian home or clean-energy photo." tone="dark" />
+          <div className="hero-media-shell">
+            <Image
+              className={`hero-poster ${heroVideoReady ? 'is-muted' : ''}`}
+              src="/hero/house-solar-hero-poster.webp"
+              alt=""
+              aria-hidden="true"
+              fill
+              priority
+              sizes="100vw"
+            />
+            <video
+              className={`hero-video ${heroVideoReady ? 'is-ready' : ''}`}
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="metadata"
+              poster="/hero/house-solar-hero-poster.webp"
+              onCanPlay={() => setHeroVideoReady(true)}
+              onLoadedData={() => setHeroVideoReady(true)}
+              onError={() => setHeroVideoReady(false)}
+            >
+              <source src="/hero/house-solar-hero.mp4" type="video/mp4" />
+            </video>
+          </div>
         </div>
         <div className="hero-overlay" />
         <div className="hero-content container">
-          <div className="hero-overline">Firefly Solar · Smarco Building Solutions · Maxperr Energy</div>
+          <div className="hero-overline">Solar · Heat Pumps · EV Charging</div>
           <h1>The energy upgrade<br /><em>Canada&apos;s homes</em><br />deserve.</h1>
           <p className="hero-sub">Solar panels, heat pumps, and EV charging from trusted Canadian specialists. One assessment. Every incentive reviewed.</p>
           <div className="hero-actions">
@@ -198,16 +301,16 @@ export default function Home() {
 
       <div className="partner-strip">
         <div className="partner-strip-inner">
-          <span className="label-mono eyebrow">Our partners</span>
+          <span className="label-mono eyebrow">Capabilities</span>
           <div className="partner-names">
-            <span className="partner-name">Firefly Solar</span>
-            <span className="partner-name">Smarco Building Solutions</span>
-            <span className="partner-name">Maxperr Energy</span>
+            <span className="partner-name">Solar system design</span>
+            <span className="partner-name">Cold-climate heat pumps</span>
+            <span className="partner-name">Home and fleet charging</span>
           </div>
         </div>
       </div>
 
-      <section className="metrics">
+      <section className="metrics reveal">
         <div className="metrics-inner container">
           {[
             ['Max federal rebates', '$55,600', 'CAD', 'Federal + select provincial programs stacked'],
@@ -224,7 +327,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="section-pad" id="calculator">
+      <section className="section-pad snap-panel reveal" id="calculator">
         <div className="container">
           <div className="section-intro">
             <div>
@@ -339,7 +442,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="section-pad bg-warm" id="how">
+      <section className="section-pad bg-warm snap-panel reveal" id="how">
         <div className="container">
           <div className="eyebrow">Our process</div>
           <h2 className="h-section">From assessment<br /><em>to savings</em></h2>
@@ -362,10 +465,10 @@ export default function Home() {
 
       <ProductSection
         id="solar"
-        partner="Firefly Solar"
+        partner="Solar Systems"
         title={<>Panels that pay<br /><em>for themselves.</em></>}
         copy="High-efficiency solar panels suited for Canadian sun angles, winter conditions, and long-term energy savings."
-        visualTag="Firefly · Solar"
+        visualTag="Premium Solar"
         visualDetail="Solar rooftop or panel product image"
         specs={[
           ['Panel efficiency', '23.4', '%'],
@@ -376,10 +479,10 @@ export default function Home() {
       />
       <ProductSection
         id="heatpump"
-        partner="Smarco Building Solutions"
+        partner="Heat Pumps"
         title={<>Engineered for<br /><em>Canadian winters.</em></>}
         copy="Cold-climate heat pumps designed to reduce heating costs and emissions through harsh Canadian shoulder seasons and winter weather."
-        visualTag="Smarco · Cold Climate"
+        visualTag="Cold Climate Series"
         visualDetail="Heat pump unit or install image"
         flip
         specs={[
@@ -391,10 +494,10 @@ export default function Home() {
       />
       <ProductSection
         id="ev"
-        partner="Maxperr Energy"
+        partner="EV Charging"
         title={<>EV charging for<br /><em>homes and fleets.</em></>}
         copy="Level 2 residential chargers and commercial charging plans for properties preparing for electric vehicles."
-        visualTag="Maxperr · EV Charging"
+        visualTag="Intelligent Charging"
         visualDetail="EV charger or parking station image"
         specs={[
           ['Output range', '7.2-50', 'kW'],
@@ -404,7 +507,7 @@ export default function Home() {
         ]}
       />
 
-      <section className="section-pad bg-warm" id="rebates">
+      <section className="section-pad bg-warm snap-panel reveal" id="rebates">
         <div className="container">
           <div className="section-intro">
             <div>
@@ -427,22 +530,25 @@ export default function Home() {
               </div>
             ))}
           </div>
-          <div className="prov-table">
-            <div className="prov-table-head"><span>Province</span><span>Rate</span><span>HP rebate</span><span>Program</span></div>
-            {provinceRows.map(([code, row]) => (
-              <div className="prov-row" key={code}>
-                <div className="pn">{row.name}</div>
-                <div className="pr">{row.rate.toFixed(1)}c</div>
-                <div className="ph">${formatNumber(row.hp)}</div>
-                <div className="pp">{row.hpName}</div>
-              </div>
-            ))}
+          <div className="incentive-band">
+            <div className="incentive-band-card">
+              <span className="incentive-band-label">Province-aware calculator</span>
+              <p>Real power-rate inputs by province keep the savings range grounded in the market you&apos;re actually in.</p>
+            </div>
+            <div className="incentive-band-card">
+              <span className="incentive-band-label">Federal-first strategy</span>
+              <p>We highlight the biggest national programs first, then layer local rebate opportunities where they meaningfully improve payback.</p>
+            </div>
+            <div className="incentive-band-card">
+              <span className="incentive-band-label">Reviewed before quoting</span>
+              <p>Final eligibility always gets checked against your property, utility, and install plan before numbers turn into a proposal.</p>
+            </div>
           </div>
           <p className="rebate-note">Rebate amounts are directional and may change by province, utility, income, equipment, and installer eligibility.</p>
         </div>
       </section>
 
-      <section className="section-pad" id="contact">
+      <section className="section-pad snap-panel reveal" id="contact">
         <div className="container">
           <div className="contact-split">
             <div className="contact-left">
@@ -450,7 +556,7 @@ export default function Home() {
               <h2 className="h-section">Let&apos;s build your<br /><em>energy plan.</em></h2>
               <p className="h-sub">Tell us about your property and we&apos;ll review your savings potential and incentive eligibility. No pressure.</p>
               <div className="contact-details">
-                <div className="contact-detail-row"><span className="cdl">Partners</span><span>Firefly Solar · Smarco · Maxperr</span></div>
+                <div className="contact-detail-row"><span className="cdl">Scope</span><span>Solar, heat pumps, and EV charging</span></div>
                 <div className="contact-detail-row"><span className="cdl">Coverage</span><span>All 10 Canadian provinces</span></div>
                 <div className="contact-detail-row"><span className="cdl">Response</span><span>Within 1 business day</span></div>
                 <div className="contact-detail-row"><span className="cdl">Assessment</span><span>Free, no commitment required</span></div>
@@ -465,11 +571,23 @@ export default function Home() {
                 <Field id="email" label="Email address" placeholder="jane@example.ca" type="email" />
                 <Field id="phone" label="Phone number" placeholder="+1 (416) 555-0100" type="tel" />
               </div>
+              <div className="form-row single">
+                <AddressAutocompleteField
+                  value={contactAddress}
+                  onChange={setContactAddress}
+                  onProvinceChange={setContactProvince}
+                  onStatusChange={setAddressLookupStatus}
+                />
+              </div>
               <div className="form-row">
                 <div className="form-field">
                   <label htmlFor="form-province">Province</label>
                   <div className="sel-wrap">
-                    <select id="form-province" defaultValue="ON">
+                    <select
+                      id="form-province"
+                      value={contactProvince}
+                      onChange={(event) => setContactProvince(event.target.value as ProvinceCode)}
+                    >
                       {provinceRows.map(([code, row]) => <option key={code} value={code}>{row.name}</option>)}
                     </select>
                   </div>
@@ -488,7 +606,11 @@ export default function Home() {
                 <span className="consent-body"><strong>Yes,</strong> it&apos;s okay to see if I qualify for a free home insurance quote while reviewing my energy upgrade.</span>
               </label>
               <div className="form-footer">
-                <p className="fine-print">By submitting, you agree to be contacted about your assessment. No spam.</p>
+                <p className="fine-print">
+                  {addressLookupStatus === 'ready'
+                    ? 'Address autocomplete is on. Pick a suggested address to speed up the assessment.'
+                    : 'By submitting, you agree to be contacted about your assessment. No spam.'}
+                </p>
                 <button className="btn btn-black" type="submit">{submitted ? 'Sent' : 'Submit request'} <span className="arrow">-&gt;</span></button>
               </div>
               {submitted && <div id="form-success">Received. This preview form is ready to wire into your preferred CRM or lead endpoint.</div>}
@@ -497,7 +619,7 @@ export default function Home() {
         </div>
       </section>
 
-      <footer>
+      <footer className="snap-panel reveal">
         <div className="footer-inner">
           <div className="footer-top">
             <div>
@@ -505,7 +627,7 @@ export default function Home() {
               <p className="footer-tagline">Premium clean-energy upgrades for Canadian homes and businesses.</p>
             </div>
             <FooterColumn title="Products" links={['Solar', 'Heat Pumps', 'EV Charging']} />
-            <FooterColumn title="Partners" links={['Firefly Solar', 'Smarco', 'Maxperr Energy']} />
+            <FooterColumn title="Services" links={['Energy planning', 'Savings review', 'Assessment booking']} />
             <FooterColumn title="Contact" links={['Book assessment', 'Incentives', 'Calculator']} />
           </div>
           <div className="footer-bot"><span>© 2026 [BRAND]. All rights reserved.</span><span>Canada · CAD estimates</span></div>
@@ -561,7 +683,7 @@ function ProductSection({
   )
 
   return (
-    <section className="product-section" id={id}>
+    <section className="product-section snap-panel reveal" id={id}>
       <div className="container">
         <div className={`product-grid ${flip ? 'flip' : ''}`}>
           {flip ? <>{visual}{body}</> : <>{body}{visual}</>}
@@ -576,6 +698,76 @@ function Field({ id, label, placeholder, type = 'text' }: { id: string; label: s
     <div className="form-field">
       <label htmlFor={id}>{label}</label>
       <input id={id} type={type} placeholder={placeholder} required />
+    </div>
+  )
+}
+
+function AddressAutocompleteField({
+  value,
+  onChange,
+  onProvinceChange,
+  onStatusChange,
+}: {
+  value: string
+  onChange: (value: string) => void
+  onProvinceChange: (value: ProvinceCode) => void
+  onStatusChange: (value: AddressLookupStatus) => void
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    let listener: google.maps.MapsEventListener | null = null
+
+    async function init() {
+      const googleApi = await loadGooglePlacesScript()
+      if (cancelled || !googleApi?.maps?.places || !inputRef.current) {
+        onStatusChange('unavailable')
+        return
+      }
+
+      const autocomplete = new googleApi.maps.places.Autocomplete(inputRef.current, {
+        componentRestrictions: { country: 'ca' },
+        fields: ['formatted_address', 'address_components'],
+        types: ['address'],
+      })
+
+      listener = autocomplete.addListener('place_changed', () => {
+        const place = autocomplete.getPlace()
+        const formattedAddress = place.formatted_address?.trim() || inputRef.current?.value.trim() || ''
+        onChange(formattedAddress)
+
+        const provinceCode = provinceCodeFromPlace(place)
+        if (provinceCode) onProvinceChange(provinceCode)
+      })
+
+      onStatusChange('ready')
+    }
+
+    init()
+
+    return () => {
+      cancelled = true
+      listener?.remove()
+    }
+  }, [onChange, onProvinceChange, onStatusChange])
+
+  return (
+    <div className="form-field">
+      <label htmlFor="address">Property address</label>
+      <div className="address-field">
+        <input
+          ref={inputRef}
+          id="address"
+          type="text"
+          value={value}
+          placeholder="Start typing your address"
+          autoComplete="street-address"
+          onChange={(event) => onChange(event.target.value)}
+          required
+        />
+        <span className="address-badge">Places</span>
+      </div>
     </div>
   )
 }
