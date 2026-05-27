@@ -10,10 +10,16 @@ import {
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-const HERO_PROMPT = `Use the uploaded reference photo as the exact home and exact scene. Create a slow cinematic fly-over slowly rotating to the left with golden hour lighting, starting from the same front exterior view and gently gliding upward and slightly across the house with smooth premium camera motion. Keep the architecture, rooflines, windows, driveway, trees, and overall property exactly consistent with the reference image. As the camera moves, matte black solar panels slowly and elegantly appear on the roof in believable positions, as if being precisely rendered into place. The panels should feel integrated, high-end, and realistic. Photorealistic luxury commercial style, calm and refined, warm evening sky, subtle atmosphere, no people, no cars, no text, no logos, no watermarks, no extra buildings, no house redesign, no added structures, no blue panels.`
+const HERO_PROMPT = `Use the uploaded reference photo as the fixed source of truth. Create a slow cinematic drone fly-over with warm golden-hour or blue-hour atmosphere, gentle upward drift, and subtle premium camera motion. Keep the exact house, rooflines, windows, driveway, neighboring homes, trees, and perspective consistent with the source image. Matte black solar panels should slowly render in only on the main home's real roof planes, appearing precise and integrated as if they are being intelligently mapped into place. Do not place panels on trees, lawns, streets, fences, garages, neighboring homes, sidewalks, the sky, or floating surfaces. Do not redesign the house, do not change the roof geometry, and do not add text, logos, signs, or watermarks. Photorealistic, refined, calm, high-end, and believable.`
 
 type HeroVideoRequest =
-  | { action: 'submit' }
+  | {
+      action: 'submit'
+      prompt?: string
+      imageBase64?: string
+      imageMimeType?: string
+      durationSeconds?: number
+    }
   | { action: 'status'; operationName: string }
   | { action: 'download'; operationName: string }
 
@@ -27,11 +33,15 @@ export async function POST(request: NextRequest) {
     const action = body.action
 
     if (action === 'submit') {
-      const imageBuffer = await readFile(join(process.cwd(), 'public/hero/house-solar-hero-poster.webp'))
+      const imageBuffer =
+        typeof body.imageBase64 === 'string' && body.imageBase64.trim()
+          ? Buffer.from(body.imageBase64, 'base64')
+          : await readFile(join(process.cwd(), 'public/hero/house-solar-hero-poster.webp'))
       const operationName = await submitVertexVeoRender({
-        prompt: HERO_PROMPT,
+        prompt: typeof body.prompt === 'string' && body.prompt.trim() ? body.prompt.trim() : HERO_PROMPT,
         imageBuffer,
-        durationSeconds: 8,
+        durationSeconds:
+          typeof body.durationSeconds === 'number' && body.durationSeconds > 0 ? body.durationSeconds : 8,
       })
 
       return NextResponse.json({ operationName })

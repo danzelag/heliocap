@@ -317,3 +317,31 @@
   - After pushing the generated asset, production will serve the same hero video from `public/hero/house-solar-hero.mp4`.
 * **Lint/Build**:
   - Existing build and lint checks for this landing page state were already passing before the final asset save.
+
+## Agent: Codex (Batch Veo Loop Pipeline)
+* **Timestamp**: 2026-05-26 10:58 AM EDT
+* **Files touched**:
+  - `package.json`
+  - `src/app/api/hero-video/route.ts`
+  - `scripts/generate-veo-loop-via-vercel.mjs` (NEW)
+  - `scripts/hero-video-loop.config.example.json` (NEW)
+  - `AGENT_COORDINATION.md`
+* **What changed**:
+  - Generalized the deployed `/api/hero-video` route so it can accept a custom prompt, custom reference image bytes, and custom duration instead of only using the single built-in poster image.
+  - Added a new batch generator script that can submit multiple house-reference images to the deployed Veo route, save each finished clip locally, and stitch them into one seamless looping MP4 with crossfades.
+  - Added an example JSON config showing how to pass three house-image paths plus optional per-image crop percentages for trimming visible MLS/watermark bands before generation.
+  - Installed `ffmpeg-static` so stitching the generated clips into a loop is self-contained on this machine and no longer depends on a separate system ffmpeg install.
+* **Intentionally avoided**:
+  - Touching the landing page layout or changing the live hero behavior yet.
+  - Committing any API keys, shared secrets, or service-account credentials.
+  - Guessing at final source-image file paths for the two chat-only house references that are not yet present on disk.
+* **Risks**:
+  - The current Vertex Veo path is still limited by the model to 1080p output; “highest available” on this path is 1080p, not 4K.
+  - If the final source photos themselves contain visible watermarks, Veo may preserve or reinterpret them; the new crop config helps, but truly clean output is best with unwatermarked source files.
+  - The batch pipeline is ready, but it still needs the actual local file paths for the remaining house references before the full three-clip job can run.
+* **Preview instructions**:
+  - Use `npm run generate:hero-loop:vercel -- scripts/hero-video-loop.config.example.json` after replacing the example image paths with real local files and exporting `HERO_VIDEO_SHARED_SECRET`.
+  - The script will save individual clips in `public/hero/generated-clips/` and the stitched loop to `public/hero/house-solar-hero.mp4` by default.
+* **Lint/Build**:
+  - `npm run build` passed.
+  - `node --check scripts/generate-veo-loop-via-vercel.mjs` passed.
