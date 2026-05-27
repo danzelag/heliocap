@@ -345,3 +345,31 @@
 * **Lint/Build**:
   - `npm run build` passed.
   - `node --check scripts/generate-veo-loop-via-vercel.mjs` passed.
+
+## Agent: Codex (Three-Clip Hero Loop Generated)
+* **Timestamp**: 2026-05-27 02:02 PM EDT
+* **Files touched**:
+  - `scripts/generate-veo-loop-via-vercel.mjs`
+  - `public/hero/generated-clips/01-twilight-neighborhood-house.mp4` (NEW)
+  - `public/hero/generated-clips/02-suburban-front-house.mp4` (NEW)
+  - `public/hero/generated-clips/03-estate-aerial-house.mp4` (NEW)
+  - `public/hero/house-solar-hero.mp4`
+  - `AGENT_COORDINATION.md`
+* **What changed**:
+  - Fixed the batch Veo loop generator so it can submit custom reference images directly over HTTP instead of hitting CLI argument-length limits.
+  - Reduced the uploaded reference payload size to avoid Vercel `413 FUNCTION_PAYLOAD_TOO_LARGE` while still preserving enough detail for Veo generation.
+  - Generated three separate Veo house clips from the supplied references with prompts constrained to matte black panels only, slow render-in on the main roof planes, and no trees/neighbors/lawns/sky placements.
+  - Stitched the three generated clips into one final looping hero asset and replaced `public/hero/house-solar-hero.mp4` with the new multi-house sequence.
+* **Intentionally avoided**:
+  - Committing the local machine-specific JSON config that contains absolute `/Users/...` paths.
+  - Touching the landing page markup or switching the hero away from its existing single-file playback approach.
+  - Claiming true 4K output; this run produced 720p Veo clips stitched into a 1080p container.
+* **Risks**:
+  - Final source photos with embedded brokerage/watermark text can still influence the model; the twilight image was cropped before submission to reduce that risk, but cleaner source photos will always be better.
+  - Individual Veo outputs came back at `1280x720`; the stitched hero file is `1920x1080` but is not native 4K.
+* **Preview instructions**:
+  - Open `http://localhost:3000` and reload the page; the hero should now play the stitched three-house loop from `public/hero/house-solar-hero.mp4`.
+  - Individual source clips are available in `public/hero/generated-clips/` for review.
+* **Lint/Build**:
+  - `node --check scripts/generate-veo-loop-via-vercel.mjs` passed after the transport fix.
+  - `npm run build` had already passed before the generation run; no app code affecting the page shell changed after that build.

@@ -1,12 +1,8 @@
-import { execFile } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join, resolve } from 'node:path'
-import { promisify } from 'node:util'
 import ffmpegPath from 'ffmpeg-static'
 import sharp from 'sharp'
-
-const execFileAsync = promisify(execFile)
 const DEFAULT_DEPLOYMENT_URL = process.env.HERO_VIDEO_DEPLOYMENT_URL || 'https://heliocap.vercel.app'
 const DEFAULT_OUTPUT = 'public/hero/house-solar-hero.mp4'
 const DEFAULT_DURATION_SECONDS = 8
@@ -86,12 +82,12 @@ async function buildReferencePng(sourcePath, cropConfig) {
   return sharp(sourcePath)
     .rotate()
     .extract(crop)
-    .resize(TARGET_WIDTH, TARGET_HEIGHT, {
+    .resize(1600, 900, {
       fit: 'cover',
       position: 'center',
       kernel: sharp.kernel.lanczos3,
     })
-    .png({ compressionLevel: 6, adaptiveFiltering: false })
+    .jpeg({ quality: 84, mozjpeg: true })
     .toBuffer()
 }
 
@@ -213,6 +209,9 @@ async function stitchLoop({ clipPaths, outputVideo, durationSeconds, transitionS
   ]
 
   try {
+    const { execFile } = await import('node:child_process')
+    const { promisify } = await import('node:util')
+    const execFileAsync = promisify(execFile)
     const { stderr } = await execFileAsync(ffmpegPath, args, {
       cwd: workDir,
       maxBuffer: 200 * 1024 * 1024,
@@ -228,59 +227,39 @@ async function stitchLoop({ clipPaths, outputVideo, durationSeconds, transitionS
 }
 
 async function vercelCurlJson(deploymentUrl, sharedSecret, body) {
-  const { stdout, stderr } = await execFileAsync(
-    'npx',
-    [
-      'vercel',
-      'curl',
-      '/api/hero-video',
-      '--deployment',
-      deploymentUrl,
-      '--',
-      '--silent',
-      '--show-error',
-      '--request',
-      'POST',
-      '--header',
-      `x-hero-auth: ${sharedSecret}`,
-      '--header',
-      'Content-Type: application/json',
-      '--data',
-      JSON.stringify(body),
-    ],
-    { maxBuffer: 20 * 1024 * 1024, encoding: 'utf8' },
-  )
+  const response = await fetch(new URL('/api/hero-video', deploymentUrl), {
+    method: 'POST',
+    headers: {
+      'x-hero-auth': sharedSecret,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
 
-  if (stderr?.trim()) console.error(stderr.trim())
-  return stdout.trim()
+  const text = await response.text()
+  if (!response.ok) {
+    throw new Error(`Hero video route failed: ${response.status} ${text.slice(0, 1000)}`)
+  }
+
+  return text.trim()
 }
 
 async function vercelCurlBinary(deploymentUrl, sharedSecret, body) {
-  const { stdout, stderr } = await execFileAsync(
-    'npx',
-    [
-      'vercel',
-      'curl',
-      '/api/hero-video',
-      '--deployment',
-      deploymentUrl,
-      '--',
-      '--silent',
-      '--show-error',
-      '--request',
-      'POST',
-      '--header',
-      `x-hero-auth: ${sharedSecret}`,
-      '--header',
-      'Content-Type: application/json',
-      '--data',
-      JSON.stringify(body),
-    ],
-    { maxBuffer: 200 * 1024 * 1024, encoding: 'buffer' },
-  )
+  const response = await fetch(new URL('/api/hero-video', deploymentUrl), {
+    method: 'POST',
+    headers: {
+      'x-hero-auth': sharedSecret,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
 
-  if (stderr?.length) console.error(stderr.toString('utf8').trim())
-  return stdout
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Hero video download failed: ${response.status} ${text.slice(0, 1000)}`)
+  }
+
+  return Buffer.from(await response.arrayBuffer())
 }
 
 function slugify(value) {
