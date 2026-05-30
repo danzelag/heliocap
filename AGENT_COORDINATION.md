@@ -176,6 +176,32 @@
   - `npm run build` passed.
   - `npm run lint` passed.
 
+## Agent: Codex (Landing Section Fit & Graph Split)
+* **Timestamp**: 2026-05-30 09:41 AM EDT
+* **Files touched**:
+  - `src/app/page.tsx`
+  - `src/app/globals.css`
+  - `AGENT_COORDINATION.md`
+* **What changed**:
+  - Removed the entire capabilities/stat metrics block directly under the hero.
+  - Moved the energy-price graph out of the calculator into its own larger full-screen `#costs` section.
+  - Adjusted landing sections to use `100svh`-based panels so each major chapter captures the screen more cleanly.
+  - Reworked the solar, heat pump, and EV visual containers into transparent blue/teal gradient placeholders while preserving the alternating left/right copy order.
+  - Tightened responsive product-section behavior so narrow widths no longer compress the visual and text columns awkwardly.
+* **Intentionally avoided**:
+  - Touching the hero video files, generation scripts, API routes, env vars, Vercel settings, or generated MP4 assets.
+  - Editing unrelated local files, including `AGENTS.md`, `scripts/hero-video-loop.local.json`, and `solar-imagery-research.md`.
+  - Introducing orange accents; the update stays in the existing blue/teal accent family.
+* **Risks**:
+  - Product visual areas are still placeholders until real Solar / Heat Pump / EV imagery is supplied.
+  - Browser visual QA was limited to a local HTTP smoke check; final spacing should still be judged in Chrome at desktop and mobile widths.
+* **Preview instructions**:
+  - Dev server is running at `http://localhost:3000`.
+  - Open `http://localhost:3000`, scroll from the hero into the calculator, then the larger `#costs` graph section and the three product sections.
+* **Lint/Build**:
+  - `npm run lint` passed.
+  - `npm run build` passed.
+
 ## Agent: Codex (Hero Media Wiring & Veo Key Diagnosis)
 * **Timestamp**: 2026-05-24 11:31 PM EDT
 * **Files touched**:

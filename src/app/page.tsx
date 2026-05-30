@@ -243,6 +243,7 @@ export default function Home() {
           <a href="#solar">Solar</a>
           <a href="#heatpump">Heat Pumps</a>
           <a href="#ev">EV Charging</a>
+          <a href="#costs">Costs</a>
           <a href="#rebates">Incentives</a>
           <a href="#contact">Contact</a>
         </div>
@@ -291,34 +292,6 @@ export default function Home() {
           </div>
         </div>
         <div className="hero-scroll"><div className="scroll-line" /><span>Scroll</span></div>
-      </section>
-
-      <div className="partner-strip">
-        <div className="partner-strip-inner">
-          <span className="label-mono eyebrow">Capabilities</span>
-          <div className="partner-names">
-            <span className="partner-name">Solar system design</span>
-            <span className="partner-name">Cold-climate heat pumps</span>
-            <span className="partner-name">Home EV charging</span>
-          </div>
-        </div>
-      </div>
-
-      <section className="metrics reveal">
-        <div className="metrics-inner container">
-          {[
-            ['Max federal rebates', '$55,600', 'CAD', 'Federal + select provincial programs stacked'],
-            ['Typical payback period', '8-12', 'yrs', 'After applicable incentives'],
-            ['CO2 avoided per year', '4.5', 'tonnes', 'Avg Canadian home, gas heating replaced'],
-            ['Provinces served', '10', 'provinces', 'Coast-to-coast partner network'],
-          ].map(([label, value, unit, note]) => (
-            <div className="metric" key={label}>
-              <div className="m-label">{label}</div>
-              <div className="m-value">{value}<span className="m-unit">{unit}</span></div>
-              <div className="m-note">{note}</div>
-            </div>
-          ))}
-        </div>
       </section>
 
       <section className="section-pad snap-panel reveal" id="calculator">
@@ -402,7 +375,6 @@ export default function Home() {
                 <div className="rs-cell"><div className="rs-l">Payback</div><div className="rs-v">{result.payback || '-'}<span className="rs-u">yrs</span></div></div>
                 <div className="rs-cell"><div className="rs-l">CO2 / yr</div><div className="rs-v">{result.totalCO2 || '-'}<span className="rs-u">t</span></div></div>
               </div>
-              <EnergyPriceChart monthlyBill={monthlyBill} solarSavings={result.solarSavings} />
               <div className="rebate-list">
                 {rebates.map((row) => (
                   <div className="rebate-row" key={row.name}>
@@ -421,6 +393,17 @@ export default function Home() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="chart-section snap-panel reveal" id="costs">
+        <div className="container chart-section-inner">
+          <div className="chart-copy">
+            <div className="eyebrow">Energy price curve</div>
+            <h2 className="h-section">See the cost<br /><em>you are avoiding.</em></h2>
+            <p className="h-sub">Hover the graph to compare projected utility costs with an estimated solar payment over time.</p>
+          </div>
+          <EnergyPriceChart monthlyBill={monthlyBill} solarSavings={result.solarSavings} large />
         </div>
       </section>
 
@@ -483,7 +466,7 @@ export default function Home() {
         visualDetail="EV charger or parking station image"
         specs={[
           ['Output range', '7.2-50', 'kW'],
-          ['ZEVIP rebate', '$5,000', '/port'],
+          ['Home charger rebate', '$600', 'CAD'],
           ['Solar sync', 'Smart', 'schedule'],
           ['Warranty', '5', 'yrs'],
         ]}
@@ -675,15 +658,17 @@ function ProductSection({
   )
 }
 
-function EnergyPriceChart({ monthlyBill, solarSavings }: { monthlyBill: number; solarSavings: number }) {
+function EnergyPriceChart({ monthlyBill, solarSavings, large = false }: { monthlyBill: number; solarSavings: number; large?: boolean }) {
   const [hoverYear, setHoverYear] = useState(10)
   const years = useMemo(() => Array.from({ length: 26 }, (_, year) => year), [])
   const monthlySolar = Math.max(25, Math.round(monthlyBill - solarSavings / 12))
   const utilityValues = years.map((year) => Math.round(monthlyBill * Math.pow(1.037, year)))
   const maxValue = Math.max(450, Math.ceil((Math.max(...utilityValues) + 40) / 50) * 50)
-  const width = 720
-  const height = 300
-  const pad = { top: 24, right: 20, bottom: 40, left: 54 }
+  const width = large ? 960 : 720
+  const height = large ? 420 : 300
+  const pad = large
+    ? { top: 34, right: 34, bottom: 58, left: 70 }
+    : { top: 24, right: 20, bottom: 40, left: 54 }
   const innerWidth = width - pad.left - pad.right
   const innerHeight = height - pad.top - pad.bottom
   const selectedYear = Math.min(25, Math.max(0, hoverYear))
@@ -704,7 +689,7 @@ function EnergyPriceChart({ monthlyBill, solarSavings }: { monthlyBill: number; 
   }
 
   return (
-    <div className="energy-chart" onPointerLeave={() => setHoverYear(10)}>
+    <div className={`energy-chart ${large ? 'large' : ''}`} onPointerLeave={() => setHoverYear(10)}>
       <div className="energy-chart-head">
         <div>
           <span>25-year energy comparison</span>
