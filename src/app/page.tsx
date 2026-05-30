@@ -3,7 +3,6 @@
 import Image from 'next/image'
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 
-type Mode = 'residential' | 'commercial'
 type Heating = 'gas' | 'electric' | 'oil' | 'propane' | 'none'
 type ProvinceCode = keyof typeof PROVINCES
 type AddressLookupStatus = 'idle' | 'ready' | 'unavailable'
@@ -42,7 +41,6 @@ const FED = {
   hpGeneral: 5000,
   hpOilHomes: 10000,
   evResidential: 600,
-  evCommercialPort: 5000,
 }
 
 const provinceRows = Object.entries(PROVINCES) as Array<[ProvinceCode, (typeof PROVINCES)[ProvinceCode]]>
@@ -103,19 +101,15 @@ async function loadGooglePlacesScript(): Promise<typeof google | null> {
 }
 
 function calculateEnergy({
-  mode,
   province,
   monthlyBill,
   heating,
   ev,
-  parking,
 }: {
-  mode: Mode
   province: ProvinceCode
   monthlyBill: number
   heating: Heating
   ev: boolean
-  parking: boolean
 }) {
   const p = PROVINCES[province]
   const scale = Math.max(0.4, Math.min(3, monthlyBill / 200))
@@ -135,16 +129,11 @@ function calculateEnergy({
   let evCost = 0
   let fedEv = 0
   let provEv = 0
-  if (mode === 'residential' && ev) {
+  if (ev) {
     evSavings = Math.round(180 * 12 * Math.min(scale, 1.5))
     evCost = 1800
     fedEv = Math.min(Math.round(evCost * 0.5), FED.evResidential)
     provEv = p.ev
-  }
-  if (mode === 'commercial' && parking) {
-    evSavings = 15300
-    evCost = 22000
-    fedEv = Math.min(Math.round(evCost * 0.5), FED.evCommercialPort * 2)
   }
 
   const totalAnnualSavings = solarSavings + hpSavings + evSavings
@@ -175,7 +164,6 @@ function calculateEnergy({
 function PhotoSlot({ label, detail, tone = 'light' }: { label: string; detail: string; tone?: 'light' | 'dark' }) {
   return (
     <div className={`photo-slot ${tone}`}>
-      <div className="photo-orb" />
       <div>
         <span>{label}</span>
         <p>{detail}</p>
@@ -186,13 +174,12 @@ function PhotoSlot({ label, detail, tone = 'light' }: { label: string; detail: s
 
 export default function Home() {
   const [scrolled, setScrolled] = useState(false)
+  const [scrollProgress, setScrollProgress] = useState(0)
   const [heroVideoReady, setHeroVideoReady] = useState(false)
-  const [mode, setMode] = useState<Mode>('residential')
   const [province, setProvince] = useState<ProvinceCode>('ON')
   const [monthlyBill, setMonthlyBill] = useState(220)
   const [heating, setHeating] = useState<Heating>('gas')
   const [ev, setEv] = useState(false)
-  const [parking, setParking] = useState(false)
   const [insurance, setInsurance] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [contactAddress, setContactAddress] = useState('')
@@ -200,7 +187,11 @@ export default function Home() {
   const [addressLookupStatus, setAddressLookupStatus] = useState<AddressLookupStatus>('idle')
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40)
+    const onScroll = () => {
+      setScrolled(window.scrollY > 40)
+      const scrollable = document.documentElement.scrollHeight - window.innerHeight
+      setScrollProgress(scrollable > 0 ? Math.min(1, Math.max(0, window.scrollY / scrollable)) : 0)
+    }
     onScroll()
     window.addEventListener('scroll', onScroll)
     return () => window.removeEventListener('scroll', onScroll)
@@ -228,13 +219,13 @@ export default function Home() {
     return () => observer.disconnect()
   }, [])
 
-  const result = useMemo(() => calculateEnergy({ mode, province, monthlyBill, heating, ev, parking }), [mode, province, monthlyBill, heating, ev, parking])
+  const result = useMemo(() => calculateEnergy({ province, monthlyBill, heating, ev }), [province, monthlyBill, heating, ev])
   const rate = PROVINCES[province]
   const sliderFill = `${((monthlyBill - 50) / (1000 - 50)) * 100}%`
   const rebates = [
     result.fedSolar > 0 ? { name: 'Greener Homes Loan', amount: result.fedSolar, tag: 'federal' } : null,
     result.fedHp > 0 ? { name: heating === 'oil' ? 'Oil-to-Heat-Pump Grant' : 'Greener Homes HP Rebate', amount: result.fedHp, tag: 'federal' } : null,
-    result.fedEv > 0 ? { name: mode === 'commercial' ? 'ZEVIP Commercial Charging' : 'iMHZEV Charger Rebate', amount: result.fedEv, tag: 'federal' } : null,
+    result.fedEv > 0 ? { name: 'iMHZEV Charger Rebate', amount: result.fedEv, tag: 'federal' } : null,
     result.provHp > 0 ? { name: result.hpName, amount: result.provHp, tag: 'provincial' } : null,
     result.provEv > 0 ? { name: 'Provincial EV incentive', amount: result.provEv, tag: 'provincial' } : null,
   ].filter((row): row is { name: string; amount: number; tag: string } => Boolean(row))
@@ -256,6 +247,9 @@ export default function Home() {
           <a href="#contact">Contact</a>
         </div>
         <a href="#contact" className="btn btn-white nav-cta">Book assessment</a>
+        <div className="nav-progress" aria-hidden="true">
+          <span style={{ transform: `scaleX(${scrollProgress})` }} />
+        </div>
       </nav>
 
       <section className="hero snap-panel" id="hero">
@@ -305,7 +299,7 @@ export default function Home() {
           <div className="partner-names">
             <span className="partner-name">Solar system design</span>
             <span className="partner-name">Cold-climate heat pumps</span>
-            <span className="partner-name">Home and fleet charging</span>
+            <span className="partner-name">Home EV charging</span>
           </div>
         </div>
       </div>
@@ -343,11 +337,8 @@ export default function Home() {
           <div className="calc-wrap">
             <div className="calc-inputs">
               <div className="calc-inputs-head">
-                <h3>Your property</h3>
-                <div className="mode-toggle">
-                  <button className={mode === 'residential' ? 'active' : ''} onClick={() => setMode('residential')} type="button">Residential</button>
-                  <button className={mode === 'commercial' ? 'active' : ''} onClick={() => setMode('commercial')} type="button">Commercial</button>
-                </div>
+                <h3>Your home</h3>
+                <span className="calc-badge">Residential</span>
               </div>
 
               <div className="input-group">
@@ -388,23 +379,13 @@ export default function Home() {
                 </div>
               </div>
 
-              {mode === 'residential' ? (
-                <div className="input-group">
-                  <div className="field-label"><span className="fl">Do you drive an EV?</span></div>
-                  <div className="chip-row">
-                    <button className={`chip ${ev ? 'active' : ''}`} type="button" onClick={() => setEv(true)}>Yes - I have an EV</button>
-                    <button className={`chip ${!ev ? 'active' : ''}`} type="button" onClick={() => setEv(false)}>Not yet</button>
-                  </div>
+              <div className="input-group">
+                <div className="field-label"><span className="fl">Do you drive an EV?</span></div>
+                <div className="chip-row">
+                  <button className={`chip ${ev ? 'active' : ''}`} type="button" onClick={() => setEv(true)}>Yes - I have an EV</button>
+                  <button className={`chip ${!ev ? 'active' : ''}`} type="button" onClick={() => setEv(false)}>Not yet</button>
                 </div>
-              ) : (
-                <div className="input-group">
-                  <div className="field-label"><span className="fl">Public parking lot on property?</span></div>
-                  <div className="chip-row">
-                    <button className={`chip ${parking ? 'active' : ''}`} type="button" onClick={() => setParking(true)}>Yes</button>
-                    <button className={`chip ${!parking ? 'active' : ''}`} type="button" onClick={() => setParking(false)}>No</button>
-                  </div>
-                </div>
-              )}
+              </div>
 
               <p className="calc-disclaimer">Estimates are directional and based on provincial averages. Actual savings vary by property, equipment, financing, and eligibility.</p>
             </div>
@@ -421,6 +402,7 @@ export default function Home() {
                 <div className="rs-cell"><div className="rs-l">Payback</div><div className="rs-v">{result.payback || '-'}<span className="rs-u">yrs</span></div></div>
                 <div className="rs-cell"><div className="rs-l">CO2 / yr</div><div className="rs-v">{result.totalCO2 || '-'}<span className="rs-u">t</span></div></div>
               </div>
+              <EnergyPriceChart monthlyBill={monthlyBill} solarSavings={result.solarSavings} />
               <div className="rebate-list">
                 {rebates.map((row) => (
                   <div className="rebate-row" key={row.name}>
@@ -495,8 +477,8 @@ export default function Home() {
       <ProductSection
         id="ev"
         partner="EV Charging"
-        title={<>EV charging for<br /><em>homes and fleets.</em></>}
-        copy="Level 2 residential chargers and commercial charging plans for properties preparing for electric vehicles."
+        title={<>EV charging for<br /><em>home routines.</em></>}
+        copy="Level 2 residential chargers for homes preparing for electric vehicles and smarter overnight energy use."
         visualTag="Intelligent Charging"
         visualDetail="EV charger or parking station image"
         specs={[
@@ -520,7 +502,7 @@ export default function Home() {
             {[
               ['Federal', 'Canada Greener Homes Loan', 'Interest-free financing for eligible clean-energy upgrades.', 'Up to', '$40,000', 'CAD'],
               ['Federal', 'Oil-to-Heat-Pump Affordability', 'Income-tested support for eligible oil-heated homes switching to heat pumps.', 'Up to', '$10,000', 'CAD'],
-              ['Federal · Commercial', 'ZEVIP EV Charging', 'Support for eligible public and commercial charging infrastructure.', 'Up to', '$5,000', '/port'],
+              ['Federal', 'iMHZEV Charger Rebate', 'Support for eligible home charging equipment.', 'Up to', '$600', 'CAD'],
             ].map(([scope, title, copy, pre, amount, unit]) => (
               <div className="incentive-card featured" key={title}>
                 <div className="ic-scope">{scope}</div>
@@ -556,7 +538,7 @@ export default function Home() {
               <h2 className="h-section">Let&apos;s build your<br /><em>energy plan.</em></h2>
               <p className="h-sub">Tell us about your property and we&apos;ll review your savings potential and incentive eligibility. No pressure.</p>
               <div className="contact-details">
-                <div className="contact-detail-row"><span className="cdl">Scope</span><span>Solar, heat pumps, and EV charging</span></div>
+                <div className="contact-detail-row"><span className="cdl">Scope</span><span>Solar, heat pumps, and EV charging for homes</span></div>
                 <div className="contact-detail-row"><span className="cdl">Coverage</span><span>All 10 Canadian provinces</span></div>
                 <div className="contact-detail-row"><span className="cdl">Response</span><span>Within 1 business day</span></div>
                 <div className="contact-detail-row"><span className="cdl">Assessment</span><span>Free, no commitment required</span></div>
@@ -592,7 +574,7 @@ export default function Home() {
                     </select>
                   </div>
                 </div>
-                <Field id="property" label="Property type" placeholder="Home or commercial" />
+                <Field id="property" label="Property type" placeholder="Detached, semi, townhouse..." />
               </div>
               <div className="form-row single">
                 <div className="form-field">
@@ -624,7 +606,7 @@ export default function Home() {
           <div className="footer-top">
             <div>
               <div className="brand">[BRAND]<sup>TM</sup></div>
-              <p className="footer-tagline">Premium clean-energy upgrades for Canadian homes and businesses.</p>
+              <p className="footer-tagline">Premium clean-energy upgrades for Canadian homes.</p>
             </div>
             <FooterColumn title="Products" links={['Solar', 'Heat Pumps', 'EV Charging']} />
             <FooterColumn title="Services" links={['Energy planning', 'Savings review', 'Assessment booking']} />
@@ -690,6 +672,83 @@ function ProductSection({
         </div>
       </div>
     </section>
+  )
+}
+
+function EnergyPriceChart({ monthlyBill, solarSavings }: { monthlyBill: number; solarSavings: number }) {
+  const [hoverYear, setHoverYear] = useState(10)
+  const years = useMemo(() => Array.from({ length: 26 }, (_, year) => year), [])
+  const monthlySolar = Math.max(25, Math.round(monthlyBill - solarSavings / 12))
+  const utilityValues = years.map((year) => Math.round(monthlyBill * Math.pow(1.037, year)))
+  const maxValue = Math.max(450, Math.ceil((Math.max(...utilityValues) + 40) / 50) * 50)
+  const width = 720
+  const height = 300
+  const pad = { top: 24, right: 20, bottom: 40, left: 54 }
+  const innerWidth = width - pad.left - pad.right
+  const innerHeight = height - pad.top - pad.bottom
+  const selectedYear = Math.min(25, Math.max(0, hoverYear))
+  const selectedUtility = utilityValues[selectedYear]
+  const selectedX = pad.left + (selectedYear / 25) * innerWidth
+  const selectedY = valueToY(selectedUtility)
+  const solarY = valueToY(monthlySolar)
+  const utilityLine = years.map((year) => `${pad.left + (year / 25) * innerWidth},${valueToY(utilityValues[year])}`).join(' ')
+  const utilityArea = `${pad.left},${valueToY(utilityValues[0])} ${utilityLine} ${pad.left + innerWidth},${pad.top + innerHeight} ${pad.left},${pad.top + innerHeight}`
+
+  function valueToY(value: number) {
+    return pad.top + innerHeight - (value / maxValue) * innerHeight
+  }
+
+  function setYearFromPointer(clientX: number, rect: DOMRect) {
+    const x = Math.min(innerWidth, Math.max(0, clientX - rect.left - pad.left))
+    setHoverYear(Math.round((x / innerWidth) * 25))
+  }
+
+  return (
+    <div className="energy-chart" onPointerLeave={() => setHoverYear(10)}>
+      <div className="energy-chart-head">
+        <div>
+          <span>25-year energy comparison</span>
+          <strong>${formatNumber(selectedUtility - monthlySolar)}</strong>
+        </div>
+        <div>
+          <span>Year {selectedYear}</span>
+          <strong>${formatNumber(selectedUtility)} vs ${formatNumber(monthlySolar)}</strong>
+        </div>
+      </div>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="Monthly utility cost compared with estimated monthly solar payment over 25 years"
+        onPointerMove={(event) => setYearFromPointer(event.clientX, event.currentTarget.getBoundingClientRect())}
+      >
+        <defs>
+          <linearGradient id="utilityFill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="rgba(64, 156, 172, 0.58)" />
+            <stop offset="100%" stopColor="rgba(64, 156, 172, 0.03)" />
+          </linearGradient>
+        </defs>
+        {[0, 100, 200, 300, 400].filter((value) => value <= maxValue).map((value) => (
+          <g key={value} className="chart-grid">
+            <line x1={pad.left} x2={pad.left + innerWidth} y1={valueToY(value)} y2={valueToY(value)} />
+            <text x={pad.left - 10} y={valueToY(value) + 4}>${value}</text>
+          </g>
+        ))}
+        <polygon className="utility-area" points={utilityArea} />
+        <polyline className="utility-line" points={utilityLine} />
+        <line className="solar-line" x1={pad.left} x2={pad.left + innerWidth} y1={solarY} y2={solarY} />
+        <path className="chart-future-dim" d={`M ${selectedX} ${pad.top} H ${pad.left + innerWidth} V ${pad.top + innerHeight} H ${selectedX} Z`} />
+        <line className="hover-line" x1={selectedX} x2={selectedX} y1={pad.top} y2={pad.top + innerHeight} />
+        <circle className="utility-dot" cx={selectedX} cy={selectedY} r="5" />
+        <circle className="solar-dot" cx={selectedX} cy={solarY} r="4" />
+        {[0, 5, 10, 15, 20, 25].map((year) => (
+          <text className="chart-year" key={year} x={pad.left + (year / 25) * innerWidth} y={height - 12}>{year}</text>
+        ))}
+      </svg>
+      <div className="energy-chart-legend">
+        <span><i className="solar-key" />Estimated solar payment</span>
+        <span><i className="utility-key" />Projected utility bill</span>
+      </div>
+    </div>
   )
 }
 

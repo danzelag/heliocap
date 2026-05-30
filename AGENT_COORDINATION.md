@@ -373,3 +373,30 @@
 * **Lint/Build**:
   - `node --check scripts/generate-veo-loop-via-vercel.mjs` passed after the transport fix.
   - `npm run build` had already passed before the generation run; no app code affecting the page shell changed after that build.
+
+## Agent: Codex (Residential Landing Polish)
+* **Timestamp**: 2026-05-29 07:13 PM EDT
+* **Files touched**:
+  - `src/app/page.tsx`
+  - `src/app/globals.css`
+  - `AGENT_COORDINATION.md`
+* **What changed**:
+  - Added a small scroll-progress bar under the fixed header using the existing blue/teal accent palette.
+  - Removed the commercial calculator mode and commercial-facing copy so the landing page now reads as residential-first.
+  - Added an interactive SVG energy-price comparison chart to the calculator with a hover year, vertical guide line, highlighted comparison values, and dimmed future chart area.
+  - Tightened calculator spacing and mobile ordering so the results/chart lead on small screens instead of the experience reading like a plain stacked form.
+  - Removed the old decorative placeholder orb treatment and kept the accent family away from orange.
+* **Intentionally avoided**:
+  - Touching the hero video generation pipeline, Vercel envs, API keys, or generated MP4 assets.
+  - Pushing to GitHub/Vercel; this pass is local until explicitly requested.
+  - Editing unrelated local files, including `AGENTS.md`, `scripts/hero-video-loop.local.json`, and `solar-imagery-research.md`.
+* **Risks**:
+  - The chart uses directional projection math rather than a utility-grade financial model; it is designed for visual comparison inside the landing page calculator.
+  - Mobile layout is improved with reordering and tighter sections, but final judgment still needs a live device/browser pass.
+* **Preview instructions**:
+  - Run `npm run dev`.
+  - Open `http://localhost:3000`.
+  - Scroll the page to see the header progress bar and use the calculator chart hover interaction.
+* **Lint/Build**:
+  - `npm run build` passed.
+  - `npm run lint` passed.

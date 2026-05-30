@@ -271,6 +271,26 @@ button {
   transition: background 0.3s, border-color 0.3s, color 0.3s, padding 0.3s;
 }
 
+.nav-progress {
+  position: absolute;
+  right: var(--gutter);
+  bottom: -1px;
+  left: var(--gutter);
+  height: 2px;
+  overflow: hidden;
+  background: rgba(15, 118, 110, 0.14);
+  transform-origin: left;
+}
+
+.nav-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(15, 118, 110, 0.42), var(--accent));
+  transform-origin: left;
+  transition: transform 120ms linear;
+}
+
 .nav.scrolled {
   padding-top: 16px;
   padding-bottom: 16px;
@@ -536,19 +556,6 @@ button {
   color: rgba(237, 233, 226, 0.72);
 }
 
-.photo-orb {
-  position: absolute;
-  top: 18%;
-  right: 12%;
-  width: 38vw;
-  max-width: 560px;
-  aspect-ratio: 1;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.22), transparent 58%);
-  opacity: 0.72;
-}
-
 .partner-strip {
   padding: 24px var(--gutter);
   border-bottom: 1px solid var(--border);
@@ -648,7 +655,7 @@ button {
 
 .calc-wrap {
   display: grid;
-  grid-template-columns: 1.05fr 1fr;
+  grid-template-columns: minmax(340px, 0.88fr) minmax(460px, 1.12fr);
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--r);
@@ -657,7 +664,7 @@ button {
 }
 
 .calc-inputs {
-  padding: 52px;
+  padding: clamp(30px, 3.4vw, 48px);
   border-right: 1px solid var(--border);
 }
 
@@ -677,8 +684,26 @@ button {
   font-weight: 400;
 }
 
+.calc-badge,
 .mode-toggle {
   display: inline-flex;
+}
+
+.calc-badge {
+  align-items: center;
+  height: 31px;
+  padding: 0 14px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: var(--accent-light);
+  color: var(--accent);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.mode-toggle {
   overflow: hidden;
   border: 1px solid var(--border-mid);
   border-radius: 999px;
@@ -703,7 +728,7 @@ button {
 }
 
 .input-group {
-  margin-bottom: 32px;
+  margin-bottom: 26px;
 }
 
 .field-label {
@@ -838,7 +863,7 @@ input[type="range"]::-webkit-slider-thumb {
 .calc-results {
   display: flex;
   flex-direction: column;
-  padding: 52px;
+  padding: clamp(30px, 3.4vw, 48px);
   background: var(--bg-dark);
   color: var(--text-on-dark);
 }
@@ -862,7 +887,7 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 .result-big {
-  margin-bottom: 36px;
+  margin-bottom: 24px;
 }
 
 .r-label {
@@ -877,7 +902,7 @@ input[type="range"]::-webkit-slider-thumb {
 .r-num {
   color: white;
   font-family: var(--font-display), serif;
-  font-size: clamp(64px, 7vw, 96px);
+  font-size: clamp(52px, 5.8vw, 78px);
   font-style: italic;
   font-variant-numeric: tabular-nums;
   font-weight: 400;
@@ -906,14 +931,14 @@ input[type="range"]::-webkit-slider-thumb {
   overflow: hidden;
   grid-template-columns: repeat(3, 1fr);
   gap: 1px;
-  margin-bottom: 28px;
+  margin-bottom: 22px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: var(--r);
   background: rgba(255, 255, 255, 0.07);
 }
 
 .rs-cell {
-  padding: 18px;
+  padding: 15px;
   background: rgba(255, 255, 255, 0.02);
 }
 
@@ -929,7 +954,7 @@ input[type="range"]::-webkit-slider-thumb {
 .rs-v {
   color: var(--text-on-dark);
   font-family: var(--font-display), serif;
-  font-size: 24px;
+  font-size: 22px;
   font-style: italic;
   font-weight: 400;
 }
@@ -945,7 +970,7 @@ input[type="range"]::-webkit-slider-thumb {
 .rebate-list {
   flex: 1;
   overflow: hidden;
-  margin-bottom: 28px;
+  margin-bottom: 22px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: var(--r);
 }
@@ -955,7 +980,7 @@ input[type="range"]::-webkit-slider-thumb {
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 12px;
-  padding: 13px 16px;
+  padding: 11px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 12px;
 }
@@ -1010,6 +1035,144 @@ input[type="range"]::-webkit-slider-thumb {
   gap: 12px;
   padding-top: 24px;
   border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.energy-chart {
+  margin-bottom: 22px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--r);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 38%),
+    rgba(255, 255, 255, 0.018);
+}
+
+.energy-chart-head {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  margin-bottom: 8px;
+}
+
+.energy-chart-head div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.energy-chart-head div:last-child {
+  text-align: right;
+}
+
+.energy-chart-head span {
+  color: rgba(237, 233, 226, 0.38);
+  font-family: var(--font-mono), monospace;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.energy-chart-head strong {
+  color: var(--text-on-dark);
+  font-family: var(--font-display), serif;
+  font-size: 24px;
+  font-style: italic;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.energy-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  min-height: 210px;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.chart-grid line {
+  stroke: rgba(237, 233, 226, 0.085);
+  stroke-width: 1;
+}
+
+.chart-grid text,
+.chart-year {
+  fill: rgba(237, 233, 226, 0.38);
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  text-anchor: end;
+}
+
+.chart-year {
+  text-anchor: middle;
+}
+
+.utility-area {
+  fill: url("#utilityFill");
+  opacity: 0.78;
+}
+
+.utility-line {
+  fill: none;
+  stroke: rgba(76, 166, 184, 0.94);
+  stroke-width: 2.5;
+}
+
+.solar-line {
+  stroke: rgba(237, 233, 226, 0.62);
+  stroke-width: 1.5;
+}
+
+.hover-line {
+  stroke: rgba(237, 233, 226, 0.72);
+  stroke-width: 1;
+}
+
+.utility-dot {
+  fill: var(--accent);
+  stroke: var(--bg-dark);
+  stroke-width: 2;
+}
+
+.solar-dot {
+  fill: var(--text-on-dark);
+  stroke: var(--bg-dark);
+  stroke-width: 2;
+}
+
+.chart-future-dim {
+  fill: rgba(0, 0, 0, 0.34);
+  pointer-events: none;
+}
+
+.energy-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+  padding-top: 10px;
+  color: rgba(237, 233, 226, 0.44);
+  font-size: 11px;
+}
+
+.energy-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.energy-chart-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.solar-key {
+  background: rgba(237, 233, 226, 0.72);
+}
+
+.utility-key {
+  background: var(--accent);
 }
 
 .results-cta .btn {
@@ -1254,7 +1417,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 .ic-scope {
   margin-bottom: 16px;
-  color: #5eead4;
+  color: rgba(76, 166, 184, 0.9);
   font-family: var(--font-mono), monospace;
   font-size: 10px;
   letter-spacing: 0.18em;
@@ -1550,6 +1713,7 @@ footer {
 
 @media (max-width: 1200px) {
   :root { --gutter: 40px; }
+  .section-pad { padding: 96px 0; }
   .product-body { padding: 64px 48px 64px 0; }
   .product-grid.flip .product-body { padding: 64px 0 64px 48px; }
 }
@@ -1565,6 +1729,10 @@ footer {
   .calc-inputs {
     border-right: 0;
     border-bottom: 1px solid var(--border);
+  }
+
+  .calc-results {
+    order: -1;
   }
 
   .product-body,
@@ -1609,25 +1777,80 @@ footer {
 
 @media (max-width: 640px) {
   :root { --gutter: 24px; }
-  .section-pad {
-    min-height: auto;
-    padding: 88px 0;
+
+  html {
+    scroll-snap-type: y proximity;
   }
+
+  .section-pad {
+    min-height: 100svh;
+    padding: 76px 0 44px;
+    align-items: start;
+  }
+
   .nav-links,
   .hero-scroll {
     display: none;
   }
 
+  .nav {
+    padding: 18px var(--gutter);
+  }
+
   .nav-cta {
     padding: 10px 14px;
+    font-size: 10px;
   }
 
   .hero {
-    min-height: 720px;
+    min-height: 100svh;
+    height: 100svh;
   }
 
   .hero h1 {
-    font-size: clamp(48px, 17vw, 76px);
+    max-width: 92vw;
+    margin-bottom: 24px;
+    font-size: clamp(44px, 15vw, 68px);
+  }
+
+  .hero-content {
+    padding-bottom: 44px;
+  }
+
+  .hero-overline {
+    margin-bottom: 20px;
+  }
+
+  .hero-sub {
+    max-width: 310px;
+    margin-bottom: 28px;
+    font-size: 15px;
+  }
+
+  .btn {
+    min-height: 46px;
+    padding: 13px 18px;
+    font-size: 11px;
+  }
+
+  .section-intro {
+    gap: 18px;
+    margin-bottom: 28px;
+  }
+
+  .h-section {
+    margin-top: 16px;
+    font-size: clamp(36px, 11vw, 52px);
+  }
+
+  .h-sub {
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  .calc-wrap {
+    display: flex;
+    flex-direction: column;
   }
 
   .form-row,
@@ -1660,6 +1883,102 @@ footer {
   .calc-results,
   .form-card {
     padding: 28px 24px;
+  }
+
+  .calc-inputs-head {
+    margin-bottom: 24px;
+    padding-bottom: 18px;
+  }
+
+  .input-group {
+    margin-bottom: 22px;
+  }
+
+  .chip-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .chip {
+    min-height: 40px;
+    padding: 8px 10px;
+    text-align: center;
+  }
+
+  .results-label {
+    margin-bottom: 20px;
+  }
+
+  .r-num {
+    font-size: clamp(50px, 15vw, 70px);
+  }
+
+  .energy-chart {
+    margin-right: -10px;
+    margin-left: -10px;
+    padding: 16px 10px 14px;
+  }
+
+  .energy-chart-head {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .energy-chart-head div:last-child {
+    text-align: left;
+  }
+
+  .energy-chart svg {
+    min-height: 185px;
+  }
+
+  .rebate-row {
+    font-size: 11px;
+  }
+
+  .steps-wrap {
+    margin-top: 36px;
+  }
+
+  .product-section {
+    min-height: 100svh;
+    align-items: start;
+    padding: 76px 0 44px;
+  }
+
+  .product-grid {
+    min-height: 0;
+  }
+
+  .product-body,
+  .product-grid.flip .product-body {
+    padding: 0 0 32px;
+  }
+
+  .product-body h2 {
+    font-size: clamp(36px, 11vw, 52px);
+  }
+
+  .product-body > p {
+    margin-bottom: 26px;
+  }
+
+  .product-visual .photo-slot {
+    min-height: 280px;
+  }
+
+  .incentive-cards,
+  .incentive-band {
+    gap: 14px;
+  }
+
+  .incentive-card,
+  .incentive-band-card {
+    padding: 24px;
+  }
+
+  .contact-split {
+    gap: 32px;
   }
 
   .form-footer,
