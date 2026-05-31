@@ -1,12 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { createSign } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
+import ffmpeg from 'ffmpeg-static'
 import sharp from 'sharp'
 
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
 const DEFAULT_DEPLOYMENT_URL = process.env.HERO_VIDEO_DEPLOYMENT_URL || 'https://heliocap.vercel.app'
 const DEFAULT_HOUSE_IMAGE = '/Users/danzelgaminde/Downloads/luxurious-suburban-home-stockcake.webp'
-const DEFAULT_EV_CHARGER_IMAGE = '/Users/danzelgaminde/Desktop/maxperr.webp'
 const OUTPUT_VIDEO = 'public/hero/home-energy-scrolly.mp4'
 const OUTPUT_POSTER = 'public/hero/home-energy-scrolly-poster.webp'
 const MODEL = process.env.VEO_MODEL || 'veo-3.1-generate-preview'
@@ -16,15 +17,17 @@ const DURATION_SECONDS = Number(process.env.VEO_DURATION_SECONDS || 8)
 const POSTER_ONLY = process.env.SCROLLY_POSTER_ONLY === '1'
 const DEFAULT_SERVICE_ACCOUNT_PATH = '/Users/danzelgaminde/Downloads/heliocap-6761c11f8917.json'
 
-const PROMPT = `Cinematic drone-style shot of a modern luxury Canadian suburban home at soft dusk. The uploaded reference is a visual reference board: use the house as the primary architectural source of truth, and use the blue wall-mounted EV charger only as the charger shape/material reference for Scene 3. Do not show a split-screen, reference board, poster, collage, picture-in-picture, labels, or product cutout in the final video. Keep the home and neighborhood realistic, premium, calm, and consistent. The camera moves in one continuous elegant motion designed as a scrolling website background.
+const PROMPT = `Use the uploaded reference photo as the exact exterior home style and starting scene. Create a cinematic drone-style shot of a modern luxury Canadian suburban home at soft dusk, grey siding, light stone facade, black trim, large driveway, warm architectural lighting, premium clean energy brand aesthetic. The camera feels like a smooth drone flying around the home in one continuous elegant motion.
 
-Scene 1: approach the front of the home and rise toward the roof. High-efficiency matte black / dark graphite solar panels elegantly render and assemble onto the main home's roof in a realistic premium product-visualization style. The panels must be dark charcoal black, not blue, not silver, not reflective bright blue. Subtle soft sunlight reflections move across the completed black solar array. Hold briefly.
+Scene 1: The drone approaches the front of the home and rises toward the roof. High-efficiency matte black solar panels elegantly render and assemble onto the roof in a realistic premium product-visualization style. The panels must be black/dark graphite only, not blue, not silver, and not reflective bright blue. Place panels only on believable roof planes, never on trees, lawns, walls, driveways, neighboring homes, floating surfaces, or the sky. Subtle sunlight reflections move across the panels. Hold briefly on the completed solar array for a website text overlay moment.
 
-Scene 2: glide toward the home and transition inside through a window or wall in a smooth architectural cutaway style. Show a clean interior wall vent and subtle animated airflow. Visualize warm air and cool air as soft translucent pale blue and warm white flowing ribbons, realistic and restrained, moving through the vent and across the room. Show a modern cold-climate heat pump system working efficiently. Hold briefly.
+Scene 2: The drone glides toward the home and transitions inside through a window or wall in a smooth architectural cutaway style. Show a clean interior wall vent and subtle animated airflow. Visualize warm air and cool air as soft translucent flowing ribbons, realistic and restrained, not cartoonish, moving through the vent and across the room. Show a modern heat pump system working efficiently in a cold-climate Canadian home. Hold briefly for a website text overlay moment.
 
-Scene 3: continue smoothly into the garage. Show a premium blue wall-mounted EV charger with a minimal rounded vertical body, black cable, black charging handle, and green vertical status light, mounted neatly on the garage wall beside a modern electric car. The charger face must be blank with no readable text, no letters, no icons, no EV logo, no labels, no brand marks. The charging cable moves smoothly and plugs into the car charging port, with a subtle glow indicating charging has started. Hold briefly.
+Scene 3: The drone continues smoothly into the garage. Show a premium blue wall-mounted EV charger with a black cable and handle, green vertical status light, mounted neatly on the garage wall. The charger face must be blank with no readable text, no letters, no icons, no EV logo, no labels, and no brand marks. A modern electric car is parked nearby. The charging cable/plug moves smoothly and plugs into the car charging port, with a subtle glow indicating charging has started. Hold briefly for a website text overlay moment.
 
-Visual style: luxury architectural cinematography, soft pale blue and white tones, clean premium renewable energy brand, realistic materials, subtle motion, no people, no hands, no text anywhere in the image, no letters, no numbers, no logos, no captions, no watermarks, no UI, no cartoon style, calm and expensive.`
+Visual style: luxury architectural cinematography, soft pale blue and white tones, clean premium renewable energy brand, realistic materials, subtle motion, no clutter, no people, no hands, no text inside the video, no logos, no watermarks, no UI, no cartoon style. The video must feel seamless, calm, expensive, and designed for a high-end website scrollytelling section.
+
+Negative guidance: no text, no captions, no logos, no brand marks, no people, no hands, no distorted house geometry, no unrealistic cartoon airflow, no harsh neon colors, no oversaturated colors, no shaky camera, no abrupt cuts, no messy garage, no cheap stock footage look, no futuristic sci-fi interface, no change in home style between scenes.`
 
 for (const file of ['.env.local', '.env.vercel.production.local', '.env.vertex.production.local', '.env.vertex.preview.local']) {
   loadEnvFile(file)
@@ -32,15 +35,12 @@ for (const file of ['.env.local', '.env.vercel.production.local', '.env.vertex.p
 
 async function main() {
   const houseImage = resolve(process.argv[2] || DEFAULT_HOUSE_IMAGE)
-  const chargerImage = resolve(process.argv[3] || DEFAULT_EV_CHARGER_IMAGE)
   if (!existsSync(houseImage)) throw new Error(`House image not found: ${houseImage}`)
-  if (!existsSync(chargerImage)) throw new Error(`EV charger image not found: ${chargerImage}`)
 
   mkdirSync(dirname(OUTPUT_VIDEO), { recursive: true })
 
   const houseBuffer = readFileSync(houseImage)
-  const chargerBuffer = readFileSync(chargerImage)
-  const imageBase64 = await buildReferencePng({ houseBuffer, chargerBuffer })
+  const imageBase64 = await buildReferencePng({ houseBuffer })
   const poster = await sharp(houseBuffer)
     .rotate()
     .resize(1600, 900, { fit: 'cover', position: 'center', kernel: sharp.kernel.lanczos3 })
@@ -69,10 +69,11 @@ async function main() {
       })
 
   writeFileSync(OUTPUT_VIDEO, videoBuffer)
+  cleanKnownEvChargerMarks(OUTPUT_VIDEO)
   console.log(`Saved ${OUTPUT_VIDEO} (${videoBuffer.length} bytes)`)
 }
 
-async function buildReferencePng({ houseBuffer, chargerBuffer }) {
+async function buildReferencePng({ houseBuffer }) {
   const house = await sharp(houseBuffer)
     .rotate()
     .resize(1920, 1080, { fit: 'cover', position: 'center', kernel: sharp.kernel.lanczos3 })
@@ -80,41 +81,54 @@ async function buildReferencePng({ houseBuffer, chargerBuffer }) {
     .png()
     .toBuffer()
 
-  const charger = await sharp(chargerBuffer)
-    .rotate()
-    .trim({ background: '#000000', threshold: 12 })
-    .resize(300, 560, {
-      fit: 'inside',
-      withoutEnlargement: true,
-      kernel: sharp.kernel.lanczos3,
-    })
-    .png()
-    .toBuffer()
+  return house.toString('base64')
+}
 
-  const chargerReference = await sharp({
-    create: {
-      width: 380,
-      height: 660,
-      channels: 4,
-      background: { r: 244, g: 248, b: 248, alpha: 0.92 },
-    },
-  })
-    .composite([{ input: charger, gravity: 'center' }])
-    .png()
-    .toBuffer()
+function cleanKnownEvChargerMarks(videoPath) {
+  if (!ffmpeg || process.env.SCROLLY_SKIP_EV_MARK_CLEANUP === '1') return
 
-  const pngBuffer = await sharp(house)
-    .composite([
-      {
-        input: chargerReference,
-        left: 1496,
-        top: 210,
-      },
-    ])
-    .png({ compressionLevel: 6, adaptiveFiltering: false })
-    .toBuffer()
+  const outputPath = `${videoPath}.tmp.mp4`
+  const filters = [
+    "delogo=x=485:y=98:w=60:h=55:show=0:enable='between(t,4.55,5.2)'",
+    "delogo=x=420:y=105:w=55:h=60:show=0:enable='between(t,5.1,6.0)'",
+    "delogo=x=340:y=105:w=70:h=60:show=0:enable='gte(t,5.9)'",
+    "delogo=x=485:y=345:w=70:h=65:show=0:enable='between(t,4.55,5.2)'",
+    "delogo=x=415:y=330:w=70:h=70:show=0:enable='between(t,5.1,6.0)'",
+    "delogo=x=325:y=330:w=90:h=80:show=0:enable='gte(t,5.9)'",
+  ].join(',')
 
-  return pngBuffer.toString('base64')
+  try {
+    execFileSync(
+      ffmpeg,
+      [
+        '-y',
+        '-i',
+        videoPath,
+        '-vf',
+        filters,
+        '-an',
+        '-c:v',
+        'libx264',
+        '-preset',
+        'medium',
+        '-crf',
+        '18',
+        '-movflags',
+        '+faststart',
+        outputPath,
+      ],
+      { stdio: 'ignore' },
+    )
+    renameSync(outputPath, videoPath)
+  } catch (error) {
+    try {
+      if (existsSync(outputPath)) unlinkSync(outputPath)
+    } catch {
+      // Ignore cleanup errors; the original video is still usable.
+    }
+
+    console.warn(`Skipped EV mark cleanup: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 async function renderViaVertexBridge({ imageBase64, durationSeconds }) {

@@ -683,7 +683,7 @@ function EnergyScrollytelling() {
             onLoadedData={() => setVideoReady(true)}
             onError={() => setVideoReady(false)}
           >
-            <source src="/hero/house-solar-hero.mp4" type="video/mp4" />
+            <source src="/hero/home-energy-scrolly.mp4" type="video/mp4" />
           </video>
         </div>
         <div className="energy-story-scrim" aria-hidden="true" />

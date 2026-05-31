@@ -460,3 +460,35 @@
 * **Lint/Build**:
   - `npm run build` passed.
   - `npm run lint` passed.
+
+## Agent: Codex (Dedicated Scrollytelling Video)
+* **Timestamp**: 2026-05-31 11:00 AM EDT
+* **Files touched**:
+  - `src/app/page.tsx`
+  - `scripts/generate-home-energy-scrolly-video.mjs`
+  - `public/hero/home-energy-scrolly.mp4`
+  - `public/hero/home-energy-scrolly-poster.webp`
+  - `AGENT_COORDINATION.md`
+* **What changed**:
+  - Kept the hero section pointed at `public/hero/house-solar-hero.mp4`.
+  - Rewired the pinned Solar / Heat Pump / EV scrollytelling section to use its own generated asset at `public/hero/home-energy-scrolly.mp4` instead of reusing the hero clip.
+  - Updated the scrollytelling Veo prompt to follow the three-scene concept: exterior solar panels rendering in, interior heat-pump airflow, then garage EV charging.
+  - Stopped using the previous collage/reference-board input and now submits only the house image as the visual reference for the scrolly video.
+  - Regenerated the scrollytelling MP4 through Vertex/Veo using the local Google Cloud service account and `GOOGLE_CLOUD_STORAGE_URI=gs://heliocap-veo-output`.
+  - Added a small ffmpeg cleanup pass in the generator to remove common tiny EV charger label/logo artifacts from the final garage hold.
+* **Intentionally avoided**:
+  - Changing the hero video, generated hero clips, calculator behavior, contact form, global palette, Vercel settings, or env var names.
+  - Touching unrelated local files, including `AGENTS.md`, `scripts/hero-video-loop.local.json`, and `solar-imagery-research.md`.
+  - Running Vercel CLI or touching deployment settings; deployment is left to the existing GitHub-to-Vercel flow.
+* **Risks**:
+  - Vertex image-to-video rejected 12 seconds and reported supported durations of `4`, `6`, and `8`; this generated asset uses the highest accepted duration, 8 seconds.
+  - The video now has the requested three beats, but the heat-pump and EV moments are still Veo-generated and should be judged visually in-browser before deploying.
+  - The EV mark cleanup is tuned to this specific generated garage hold; future radically different generations may need coordinates adjusted or cleanup disabled with `SCROLLY_SKIP_EV_MARK_CLEANUP=1`.
+* **Preview instructions**:
+  - Run `npm run dev`.
+  - Open `http://localhost:3000`.
+  - Keep the hero at the top unchanged, then scroll to the pinned Solar / Heat Pump / EV story and confirm it plays/scrubs the separate `home-energy-scrolly.mp4` sequence.
+  - After the GitHub push, Vercel should deploy the same change through the existing project integration.
+* **Lint/Build**:
+  - `npm run lint` passed.
+  - `npm run build` passed.
