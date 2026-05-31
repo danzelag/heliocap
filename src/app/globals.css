@@ -1344,6 +1344,188 @@ input[type="range"]::-webkit-slider-thumb {
   backdrop-filter: blur(8px);
 }
 
+.energy-story {
+  position: relative;
+  height: 360vh;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.energy-story-anchor {
+  position: absolute;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.energy-story-anchor.heatpump {
+  top: 120vh;
+}
+
+.energy-story-anchor.ev {
+  top: 240vh;
+}
+
+.energy-story-sticky {
+  position: sticky;
+  top: 0;
+  min-height: 700px;
+  height: 100svh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.energy-story-media {
+  position: absolute;
+  inset: 0 0 0 34%;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(15, 118, 110, 0.07), transparent 42%),
+    var(--bg-warm);
+}
+
+.energy-story-poster,
+.energy-story-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.energy-story-poster {
+  transform: scale(1.02);
+  filter: saturate(0.98) brightness(1.02);
+  transition:
+    opacity 550ms ease,
+    filter 550ms ease;
+}
+
+.energy-story-poster.is-muted {
+  opacity: 0.22;
+  filter: saturate(0.9) brightness(1.08);
+}
+
+.energy-story-video {
+  opacity: 0;
+  transform: scale(1.02);
+  transition: opacity 700ms ease;
+}
+
+.energy-story-video.is-ready {
+  opacity: 1;
+}
+
+.energy-story-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(90deg, var(--bg) 0%, rgba(255, 255, 255, 0.97) 28%, rgba(255, 255, 255, 0.82) 46%, rgba(255, 255, 255, 0.22) 72%, rgba(255, 255, 255, 0) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0) 34%);
+  pointer-events: none;
+}
+
+.energy-story-bottom-fade {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  height: 34%;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.82));
+  pointer-events: none;
+}
+
+.energy-story-inner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  height: 100%;
+  align-items: center;
+}
+
+.energy-story-desktop-panel {
+  width: min(560px, 42vw);
+}
+
+.energy-story-panel {
+  position: relative;
+  padding: clamp(10px, 2vw, 24px) 0;
+}
+
+.energy-story-label {
+  margin-bottom: 20px;
+  color: var(--accent);
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.energy-story-panel h2 {
+  margin-bottom: 24px;
+  font-family: var(--font-display), serif;
+  font-size: clamp(42px, 4.8vw, 70px);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.005em;
+  line-height: 1;
+}
+
+.energy-story-panel h2 em {
+  font-style: normal;
+}
+
+.energy-story-panel > p {
+  max-width: 480px;
+  margin-bottom: 38px;
+  color: var(--text-muted);
+  font-size: 17px;
+  font-weight: 300;
+  line-height: 1.65;
+}
+
+.energy-story-specs {
+  max-width: 520px;
+  margin-bottom: 38px;
+  background: rgba(228, 225, 219, 0.86);
+}
+
+.energy-story-specs .spec-cell {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+}
+
+.energy-story-actions {
+  align-items: center;
+}
+
+.energy-story-progress {
+  position: absolute;
+  right: var(--gutter);
+  bottom: 42px;
+  left: var(--gutter);
+  height: 1px;
+  overflow: hidden;
+  background: rgba(15, 118, 110, 0.12);
+}
+
+.energy-story-progress span {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  transition: transform 180ms linear;
+}
+
+.energy-story-mobile-stack {
+  display: none;
+}
+
 .incentive-cards {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -1698,6 +1880,8 @@ footer {
   .section-pad { padding: 84px 0; }
   .product-body { padding: 56px 44px 56px 0; }
   .product-grid.flip .product-body { padding: 56px 0 56px 44px; }
+  .energy-story-media { left: 30%; }
+  .energy-story-desktop-panel { width: min(540px, 46vw); }
 }
 
 @media (max-width: 1024px) {
@@ -1741,6 +1925,22 @@ footer {
   .product-visual,
   .product-grid.flip .product-visual {
     min-height: 520px;
+  }
+
+  .energy-story {
+    height: 330vh;
+  }
+
+  .energy-story-media { left: 22%; }
+
+  .energy-story-scrim {
+    background:
+      linear-gradient(90deg, var(--bg) 0%, rgba(255, 255, 255, 0.97) 34%, rgba(255, 255, 255, 0.76) 58%, rgba(255, 255, 255, 0.16) 86%, rgba(255, 255, 255, 0) 100%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 34%);
+  }
+
+  .energy-story-desktop-panel {
+    width: min(530px, 58vw);
   }
 
   .steps-wrap {
@@ -1986,6 +2186,84 @@ footer {
     min-height: 280px;
   }
 
+  .energy-story {
+    height: auto;
+    min-height: 0;
+  }
+
+  .energy-story-anchor {
+    display: none;
+  }
+
+  .energy-story-sticky {
+    position: relative;
+    min-height: 0;
+    height: auto;
+    overflow: visible;
+    padding: 76px 0 44px;
+  }
+
+  .energy-story-media {
+    position: relative;
+    inset: auto;
+    height: min(58vh, 480px);
+    min-height: 300px;
+    margin-bottom: 32px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .energy-story-scrim,
+  .energy-story-bottom-fade,
+  .energy-story-progress,
+  .energy-story-desktop-panel {
+    display: none;
+  }
+
+  .energy-story-inner {
+    display: block;
+    height: auto;
+  }
+
+  .energy-story-mobile-stack {
+    display: grid;
+    gap: 44px;
+  }
+
+  .energy-story-panel {
+    padding: 0 0 44px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .energy-story-panel:last-child {
+    padding-bottom: 0;
+    border-bottom: 0;
+  }
+
+  .energy-story-label {
+    margin-bottom: 16px;
+  }
+
+  .energy-story-panel h2 {
+    margin-bottom: 18px;
+    font-size: clamp(36px, 11vw, 52px);
+  }
+
+  .energy-story-panel > p {
+    margin-bottom: 26px;
+    font-size: 15px;
+    line-height: 1.55;
+  }
+
+  .energy-story-specs {
+    margin-bottom: 26px;
+  }
+
+  .energy-story-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .incentive-cards,
   .incentive-band {
     gap: 14px;
@@ -2010,5 +2288,16 @@ footer {
     align-items: flex-start;
     flex-direction: column;
     gap: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .energy-story-video {
+    display: none;
+  }
+
+  .energy-story-panel {
+    filter: none !important;
+    transform: none !important;
   }
 }

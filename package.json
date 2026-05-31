@@ -9,7 +9,8 @@
     "lint": "eslint",
     "generate:hero-video": "node scripts/generate-hero-video.mjs",
     "generate:hero-video:vercel": "node scripts/generate-hero-video-via-vercel.mjs",
-    "generate:hero-loop:vercel": "node scripts/generate-veo-loop-via-vercel.mjs"
+    "generate:hero-loop:vercel": "node scripts/generate-veo-loop-via-vercel.mjs",
+    "generate:energy-scrolly-video": "node scripts/generate-home-energy-scrolly-video.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

@@ -1,7 +1,8 @@
 'use client'
 
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import Image from 'next/image'
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 
 type Heating = 'gas' | 'electric' | 'oil' | 'propane' | 'none'
 type ProvinceCode = keyof typeof PROVINCES
@@ -45,6 +46,60 @@ const FED = {
 
 const provinceRows = Object.entries(PROVINCES) as Array<[ProvinceCode, (typeof PROVINCES)[ProvinceCode]]>
 const NEXT_PUBLIC_GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+
+const ENERGY_STORY_SECTIONS = [
+  {
+    key: 'solar',
+    label: 'SOLAR SYSTEMS',
+    headline: (
+      <>
+        Panels that pay<br />
+        <em>for themselves.</em>
+      </>
+    ),
+    body: 'High-efficiency solar panels suited for Canadian sun angles, winter conditions, and long-term energy savings.',
+    stats: [
+      ['Panel efficiency', '23.4', '%'],
+      ['Product warranty', '25', 'yrs'],
+      ['Peak yield (SK)', '1,330', 'kWh/kW'],
+      ['Typical install', '1-2', 'days'],
+    ],
+  },
+  {
+    key: 'heatpump',
+    label: 'HEAT PUMPS',
+    headline: (
+      <>
+        Engineered for<br />
+        <em>Canadian winters.</em>
+      </>
+    ),
+    body: 'Cold-climate heat pumps designed to reduce heating costs and emissions through harsh Canadian shoulder seasons and winter weather.',
+    stats: [
+      ['COP rating', '3.8', ''],
+      ['Min. operating temp', '-30', 'C'],
+      ['Max rebates', '$14,600', 'CAD'],
+      ['Installation', '1', 'day'],
+    ],
+  },
+  {
+    key: 'ev',
+    label: 'EV CHARGING',
+    headline: (
+      <>
+        EV charging for<br />
+        <em>home routines.</em>
+      </>
+    ),
+    body: 'Level 2 residential chargers for homes preparing for electric vehicles and smarter overnight energy use.',
+    stats: [
+      ['Output range', '7.2-50', 'kW'],
+      ['Home charger rebate', '$600', 'CAD'],
+      ['Solar sync', 'Smart', 'schedule'],
+      ['Warranty', '5', 'yrs'],
+    ],
+  },
+] as const
 
 let googlePlacesLoader: Promise<typeof google | null> | null = null
 
@@ -159,17 +214,6 @@ function calculateEnergy({
     provEv,
     hpName: p.hpName,
   }
-}
-
-function PhotoSlot({ label, detail, tone = 'light' }: { label: string; detail: string; tone?: 'light' | 'dark' }) {
-  return (
-    <div className={`photo-slot ${tone}`}>
-      <div>
-        <span>{label}</span>
-        <p>{detail}</p>
-      </div>
-    </div>
-  )
 }
 
 export default function Home() {
@@ -428,49 +472,7 @@ export default function Home() {
         </div>
       </section>
 
-      <ProductSection
-        id="solar"
-        partner="Solar Systems"
-        title={<>Panels that pay<br /><em>for themselves.</em></>}
-        copy="High-efficiency solar panels suited for Canadian sun angles, winter conditions, and long-term energy savings."
-        visualTag="Premium Solar"
-        visualDetail="Solar rooftop or panel product image"
-        specs={[
-          ['Panel efficiency', '23.4', '%'],
-          ['Product warranty', '25', 'yrs'],
-          ['Peak yield (SK)', '1,330', 'kWh/kW'],
-          ['Typical install', '1-2', 'days'],
-        ]}
-      />
-      <ProductSection
-        id="heatpump"
-        partner="Heat Pumps"
-        title={<>Engineered for<br /><em>Canadian winters.</em></>}
-        copy="Cold-climate heat pumps designed to reduce heating costs and emissions through harsh Canadian shoulder seasons and winter weather."
-        visualTag="Cold Climate Series"
-        visualDetail="Heat pump unit or install image"
-        flip
-        specs={[
-          ['COP rating', '3.8', ''],
-          ['Min. operating temp', '-30', 'C'],
-          ['Max rebates', '$14,600', 'CAD'],
-          ['Installation', '1', 'day'],
-        ]}
-      />
-      <ProductSection
-        id="ev"
-        partner="EV Charging"
-        title={<>EV charging for<br /><em>home routines.</em></>}
-        copy="Level 2 residential chargers for homes preparing for electric vehicles and smarter overnight energy use."
-        visualTag="Intelligent Charging"
-        visualDetail="EV charger or parking station image"
-        specs={[
-          ['Output range', '7.2-50', 'kW'],
-          ['Home charger rebate', '$600', 'CAD'],
-          ['Solar sync', 'Smart', 'schedule'],
-          ['Warranty', '5', 'yrs'],
-        ]}
-      />
+      <EnergyScrollytelling />
 
       <section className="section-pad bg-warm snap-panel reveal" id="rebates">
         <div className="container">
@@ -602,59 +604,159 @@ export default function Home() {
   )
 }
 
-function ProductSection({
-  id,
-  partner,
-  title,
-  copy,
-  specs,
-  visualTag,
-  visualDetail,
-  flip = false,
-}: {
-  id: string
-  partner: string
-  title: ReactNode
-  copy: string
-  specs: Array<[string, string, string]>
-  visualTag: string
-  visualDetail: string
-  flip?: boolean
-}) {
-  const body = (
-    <div className="product-body">
-      <div className="product-partner">{partner}</div>
-      <h2>{title}</h2>
-      <p>{copy}</p>
-      <div className="spec-grid">
-        {specs.map(([label, value, unit]) => (
-          <div className="spec-cell" key={label}>
-            <div className="sc-l">{label}</div>
-            <div className="sc-v">{value}{unit && <span className="sc-u">{unit}</span>}</div>
-          </div>
-        ))}
-      </div>
-      <div className="product-actions">
-        <a href="#calculator" className="btn btn-black">Calculate savings <span className="arrow">-&gt;</span></a>
-        <a href="#contact" className="btn btn-outline">Learn more</a>
-      </div>
-    </div>
-  )
-  const visual = (
-    <div className="product-visual">
-      <div className="product-visual-tag">{visualTag}</div>
-      <PhotoSlot label={partner} detail={visualDetail} />
-    </div>
-  )
+function EnergyScrollytelling() {
+  const sectionRef = useRef<HTMLElement | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const videoDurationRef = useRef(0)
+  const progressFrame = useRef<number | null>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const [sectionProgress, setSectionProgress] = useState(0)
+  const [videoReady, setVideoReady] = useState(false)
+  const prefersReducedMotion = useReducedMotion()
+
+  useEffect(() => {
+    const updateProgress = () => {
+      progressFrame.current = null
+      const section = sectionRef.current
+      if (!section) return
+
+      const scrollRange = Math.max(1, section.offsetHeight - window.innerHeight)
+      const nextProgress = Math.min(1, Math.max(0, -section.getBoundingClientRect().top / scrollRange))
+      const nextIndex = nextProgress < 0.34 ? 0 : nextProgress < 0.67 ? 1 : 2
+
+      setSectionProgress(nextProgress)
+      setActiveIndex((current) => (current === nextIndex ? current : nextIndex))
+
+      const video = videoRef.current
+      const duration = videoDurationRef.current
+      if (!prefersReducedMotion && video && duration > 0 && Number.isFinite(duration)) {
+        const targetTime = Math.min(duration - 0.08, Math.max(0, nextProgress * duration))
+        if (Math.abs(video.currentTime - targetTime) > 0.08) {
+          video.currentTime = targetTime
+        }
+      }
+    }
+
+    const scheduleProgress = () => {
+      if (progressFrame.current !== null) return
+      progressFrame.current = window.requestAnimationFrame(updateProgress)
+    }
+
+    updateProgress()
+    window.addEventListener('scroll', scheduleProgress, { passive: true })
+    window.addEventListener('resize', scheduleProgress)
+
+    return () => {
+      window.removeEventListener('scroll', scheduleProgress)
+      window.removeEventListener('resize', scheduleProgress)
+      if (progressFrame.current !== null) window.cancelAnimationFrame(progressFrame.current)
+    }
+  }, [prefersReducedMotion])
+
+  const activeSection = ENERGY_STORY_SECTIONS[activeIndex]
 
   return (
-    <section className="product-section snap-panel reveal" id={id}>
-      <div className="container">
-        <div className={`product-grid ${flip ? 'flip' : ''}`}>
-          {flip ? <>{visual}{body}</> : <>{body}{visual}</>}
+    <section className="energy-story snap-panel" id="solar" ref={sectionRef} aria-label="Home energy systems">
+      <span className="energy-story-anchor heatpump" id="heatpump" aria-hidden="true" />
+      <span className="energy-story-anchor ev" id="ev" aria-hidden="true" />
+      <div className="energy-story-sticky">
+        <div className="energy-story-media" aria-hidden="true">
+          <Image
+            className={`energy-story-poster ${videoReady ? 'is-muted' : ''}`}
+            src="/hero/home-energy-scrolly-poster.webp"
+            alt=""
+            fill
+            sizes="(max-width: 640px) 100vw, 68vw"
+          />
+          <video
+            ref={videoRef}
+            className={`energy-story-video ${videoReady && !prefersReducedMotion ? 'is-ready' : ''}`}
+            muted
+            playsInline
+            preload="auto"
+            poster="/hero/home-energy-scrolly-poster.webp"
+            onCanPlay={() => setVideoReady(true)}
+            onLoadedMetadata={(event) => {
+              videoDurationRef.current = event.currentTarget.duration || 0
+              setVideoReady(true)
+            }}
+            onLoadedData={() => setVideoReady(true)}
+            onError={() => setVideoReady(false)}
+          >
+            <source src="/hero/house-solar-hero.mp4" type="video/mp4" />
+          </video>
+        </div>
+        <div className="energy-story-scrim" aria-hidden="true" />
+        <div className="energy-story-bottom-fade" aria-hidden="true" />
+
+        <div className="container energy-story-inner">
+          <div className="energy-story-desktop-panel">
+            <AnimatePresence initial={false}>
+              <EnergyStoryPanel key={activeSection.key} section={activeSection} />
+            </AnimatePresence>
+          </div>
+
+          <div className="energy-story-mobile-stack">
+            {ENERGY_STORY_SECTIONS.map((section) => (
+              <EnergyStoryPanel key={section.key} section={section} staticPanel />
+            ))}
+          </div>
+
+          <div className="energy-story-progress" aria-hidden="true">
+            <span style={{ transform: `scaleX(${sectionProgress})` }} />
+          </div>
         </div>
       </div>
     </section>
+  )
+}
+
+function EnergyStoryPanel({
+  section,
+  staticPanel = false,
+}: {
+  section: (typeof ENERGY_STORY_SECTIONS)[number]
+  staticPanel?: boolean
+}) {
+  const content = (
+    <>
+      <div className="energy-story-label">{section.label}</div>
+      <h2>{section.headline}</h2>
+      <p>{section.body}</p>
+      <div className="spec-grid energy-story-specs">
+        {section.stats.map(([label, value, unit]) => (
+          <div className="spec-cell" key={label}>
+            <div className="sc-l">{label}</div>
+            <div className="sc-v">
+              {value}
+              {unit && <span className="sc-u">{unit}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="product-actions energy-story-actions">
+        <a href="#calculator" className="btn btn-black">
+          Calculate savings <span className="arrow">-&gt;</span>
+        </a>
+        <a href="#contact" className="btn btn-outline">Learn more</a>
+      </div>
+    </>
+  )
+
+  if (staticPanel) {
+    return <div className="energy-story-panel">{content}</div>
+  }
+
+  return (
+    <motion.div
+      className="energy-story-panel"
+      initial={{ opacity: 0, y: 24, filter: 'blur(8px)' }}
+      animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+      exit={{ opacity: 0, y: -18, filter: 'blur(8px)' }}
+      transition={{ duration: 0.55, ease: [0.2, 1, 0.2, 1] }}
+    >
+      {content}
+    </motion.div>
   )
 }
 

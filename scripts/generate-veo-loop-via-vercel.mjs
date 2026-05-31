@@ -1,8 +1,13 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { basename, dirname, extname, join, resolve } from 'node:path'
 import ffmpegPath from 'ffmpeg-static'
 import sharp from 'sharp'
+
+for (const file of ['.env.local', '.env.vercel.production.local', '.env.vertex.production.local', '.env.vertex.preview.local']) {
+  loadEnvFile(file)
+}
+
 const DEFAULT_DEPLOYMENT_URL = process.env.HERO_VIDEO_DEPLOYMENT_URL || 'https://heliocap.vercel.app'
 const DEFAULT_OUTPUT = 'public/hero/house-solar-hero.mp4'
 const DEFAULT_DURATION_SECONDS = 8
@@ -267,6 +272,32 @@ function slugify(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+}
+
+function loadEnvFile(file) {
+  if (!existsSync(file)) return
+
+  for (const rawLine of readFileSync(file, 'utf8').split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#')) continue
+
+    const splitAt = line.indexOf('=')
+    if (splitAt === -1) continue
+
+    const key = line.slice(0, splitAt).trim()
+    const value = line.slice(splitAt + 1).trim()
+    if (!key || process.env[key] !== undefined) continue
+
+    process.env[key] = unquoteEnv(value)
+  }
+}
+
+function unquoteEnv(value) {
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    return value.slice(1, -1)
+  }
+
+  return value
 }
 
 function sleep(ms) {

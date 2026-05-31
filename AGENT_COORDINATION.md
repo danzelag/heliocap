@@ -176,6 +176,40 @@
   - `npm run build` passed.
   - `npm run lint` passed.
 
+## Agent: Codex (Energy Scrollytelling Section)
+* **Timestamp**: 2026-05-30 11:23 AM EDT
+* **Files touched**:
+  - `src/app/page.tsx`
+  - `src/app/globals.css`
+  - `scripts/generate-home-energy-scrolly-video.mjs` (NEW)
+  - `public/hero/home-energy-scrolly-poster.webp` (NEW)
+  - `public/hero/home-energy-scrolly.mp4` (NEW, generated but not currently used by the page)
+  - `package.json`
+  - `AGENT_COORDINATION.md`
+* **What changed**:
+  - Added a pinned `EnergyScrollytelling` landing section that replaces the separate Solar / Heat Pump / EV visual blocks with one scroll-linked editorial story.
+  - The section uses sticky media, scroll progress, Framer Motion panel transitions, mobile fallback stacking, reduced-motion handling, and the existing serif/teal/black luxury visual language.
+  - Added a generator script for the scrollytelling video and pointed its defaults at `Downloads/luxurious-suburban-home-stockcake.webp` for the house and `Desktop/maxperr.webp` for the EV charger reference.
+  - Regenerated the scrollytelling poster from the new house image so the section has the correct visible fallback even before the final MP4 exists.
+  - Added scroll-progress video scrubbing so the panel states can line up with Solar, Heat Pump, and EV moments once the final video is generated.
+  - Generated `public/hero/home-energy-scrolly.mp4` through the Google Cloud service account path, then removed it from the live source list because the AC/EV generated moments did not meet the visual quality bar.
+* **Intentionally avoided**:
+  - Changing the global brand palette, nav styling, calculator behavior, contact form wiring, or Vercel settings.
+  - Pushing/deploying this local pass.
+  - Editing unrelated local files, including `AGENTS.md`, `scripts/hero-video-loop.local.json`, and `solar-imagery-research.md`.
+* **Risks**:
+  - The first generated `home-energy-scrolly.mp4` exists locally, but its heat-pump and EV scenes look too artificial/cheap for the page, so the live page intentionally falls back to the regenerated poster plus the existing house-solar hero MP4.
+  - Direct Gemini/Veo still returns `429 RESOURCE_EXHAUSTED`; successful generation used the local Google Cloud service-account JSON path instead.
+  - Use `GOOGLE_CLOUD_STORAGE_URI=gs://heliocap-veo-output` for future Vertex/Veo runs that need explicit GCS output storage.
+* **Preview instructions**:
+  - Run `npm run dev`.
+  - Open `http://localhost:3000`.
+  - Scroll past the process section to the Solar / Heat Pump / EV scrollytelling section.
+  - To regenerate only the poster without burning video credits, run: `env SCROLLY_POSTER_ONLY=1 npm run generate:energy-scrolly-video -- /Users/danzelgaminde/Downloads/luxurious-suburban-home-stockcake.webp /Users/danzelgaminde/Desktop/maxperr.webp`.
+* **Lint/Build**:
+  - `npm run lint` passed.
+  - `npm run build` passed.
+
 ## Agent: Codex (Landing Section Fit & Graph Split)
 * **Timestamp**: 2026-05-30 09:41 AM EDT
 * **Files touched**:
