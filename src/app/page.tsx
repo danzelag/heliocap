@@ -111,12 +111,13 @@ const ENERGY_VIDEO_SOURCES = ENERGY_STORY_SECTIONS.map((section) => section.vide
 const ENERGY_VIDEO_COMPLETE_AT = 0.72
 const ENERGY_PANEL_APPEAR_AT = 0.66
 const ENERGY_DEFAULT_VIDEO_DURATION = 8
-const ENERGY_VIDEO_ADVANCE_SECONDS_PER_SECOND = 1.18
-const ENERGY_TEXT_PROGRESS_PER_SECOND = 0.22
-const ENERGY_SCROLL_PIXELS_PER_SECOND = 360
-const ENERGY_SCROLL_PIXELS_PER_SECOND_MOBILE = 300
-const ENERGY_SCROLL_STEP = 220
-const ENERGY_SCROLL_MAX_QUEUE = 520
+const ENERGY_VIDEO_ADVANCE_SECONDS_PER_SECOND = 1.38
+const ENERGY_TEXT_PROGRESS_PER_SECOND = 0.28
+const ENERGY_SCROLL_PIXELS_PER_SECOND = 520
+const ENERGY_SCROLL_PIXELS_PER_SECOND_MOBILE = 430
+const ENERGY_REBATE_SNAP_SPEED_BOOST = 1.35
+const ENERGY_SCROLL_STEP = 300
+const ENERGY_SCROLL_MAX_QUEUE = 760
 
 let googlePlacesLoader: Promise<typeof google | null> | null = null
 
@@ -673,6 +674,7 @@ function useEnergyStoryScrollControl(storyRef: RefObject<HTMLElement | null>, di
   const scrollAnimationRef = useRef<number | null>(null)
   const lastScrollAnimationTimeRef = useRef<number | null>(null)
   const lastTouchYRef = useRef<number | null>(null)
+  const landingScrollRef = useRef(false)
 
   useEffect(() => {
     if (disabled) return
@@ -692,6 +694,11 @@ function useEnergyStoryScrollControl(storyRef: RefObject<HTMLElement | null>, di
 
       const rect = story.getBoundingClientRect()
       return rect.top <= 2 && rect.bottom >= window.innerHeight - 2
+    }
+
+    const getRebatesLandingTop = () => {
+      const rebates = document.getElementById('rebates')
+      return rebates ? Math.max(0, rebates.offsetTop) : null
     }
 
     const scrollToFrame = (top: number) => {
@@ -716,9 +723,10 @@ function useEnergyStoryScrollControl(storyRef: RefObject<HTMLElement | null>, di
 
       const current = window.scrollY
       const speed =
-        window.matchMedia('(max-width: 640px)').matches
+        (window.matchMedia('(max-width: 640px)').matches
           ? ENERGY_SCROLL_PIXELS_PER_SECOND_MOBILE
-          : ENERGY_SCROLL_PIXELS_PER_SECOND
+          : ENERGY_SCROLL_PIXELS_PER_SECOND) *
+        (landingScrollRef.current ? ENERGY_REBATE_SNAP_SPEED_BOOST : 1)
       const maxStep = speed * elapsedSeconds
       const distance = target - current
       const next =
@@ -735,35 +743,69 @@ function useEnergyStoryScrollControl(storyRef: RefObject<HTMLElement | null>, di
 
       scrollAnimationRef.current = null
       lastScrollAnimationTimeRef.current = null
+      landingScrollRef.current = false
+    }
+
+    const startScrollAnimation = () => {
+      if (scrollAnimationRef.current === null) {
+        scrollAnimationRef.current = window.requestAnimationFrame(animateScroll)
+      }
+    }
+
+    const queueRebatesLanding = (landingTop: number) => {
+      landingScrollRef.current = true
+      targetScrollRef.current = landingTop
+      startScrollAnimation()
+      return true
     }
 
     const queueControlledScroll = (direction: number, multiplier = 1) => {
       const bounds = getBounds()
-      if (!bounds || direction === 0 || !isStoryPinned()) return false
+      if (!bounds || direction === 0) return false
 
       const current = window.scrollY
       const atStart = current <= bounds.start + 1
       const atEnd = current >= bounds.end - 1
+      const landingTop = getRebatesLandingTop()
+
+      if (direction > 0 && landingTop !== null && current >= bounds.end - 2 && current < landingTop - 1) {
+        return queueRebatesLanding(landingTop)
+      }
+
+      if (!isStoryPinned()) return false
+
+      const storedTarget = targetScrollRef.current
+      const targetInsideStory =
+        storedTarget !== null && storedTarget >= bounds.start && storedTarget <= bounds.end
+      const baseTarget = targetInsideStory ? storedTarget : current
+      const targetAtEnd = targetInsideStory && storedTarget >= bounds.end - 1
+
+      if (direction > 0 && landingTop !== null && (atEnd || targetAtEnd)) {
+        return queueRebatesLanding(landingTop)
+      }
+
       if ((direction < 0 && atStart) || (direction > 0 && atEnd)) return false
 
-      const baseTarget = targetScrollRef.current ?? current
       const queuedTarget = baseTarget + direction * ENERGY_SCROLL_STEP * multiplier
       const maxForward = current + ENERGY_SCROLL_MAX_QUEUE
       const maxBackward = current - ENERGY_SCROLL_MAX_QUEUE
+      landingScrollRef.current = false
       targetScrollRef.current = Math.min(
         bounds.end,
         Math.max(bounds.start, Math.min(maxForward, Math.max(maxBackward, queuedTarget))),
       )
 
-      if (scrollAnimationRef.current === null) {
-        scrollAnimationRef.current = window.requestAnimationFrame(animateScroll)
-      }
+      startScrollAnimation()
 
       return true
     }
 
     const onWheel = (event: WheelEvent) => {
       if (event.ctrlKey || event.metaKey) return
+      if (landingScrollRef.current) {
+        event.preventDefault()
+        return
+      }
 
       const direction = Math.sign(event.deltaY)
       if (!queueControlledScroll(direction)) return
@@ -783,6 +825,10 @@ function useEnergyStoryScrollControl(storyRef: RefObject<HTMLElement | null>, di
       const delta = lastY - currentY
       lastTouchYRef.current = currentY
       if (Math.abs(delta) < 4) return
+      if (landingScrollRef.current) {
+        event.preventDefault()
+        return
+      }
 
       if (!queueControlledScroll(Math.sign(delta), 0.72)) return
       event.preventDefault()
@@ -801,6 +847,11 @@ function useEnergyStoryScrollControl(storyRef: RefObject<HTMLElement | null>, di
       const downKeys = new Set(['ArrowDown', 'PageDown', ' ', 'Spacebar'])
       const upKeys = new Set(['ArrowUp', 'PageUp'])
       const direction = downKeys.has(event.key) ? 1 : upKeys.has(event.key) ? -1 : 0
+      if (landingScrollRef.current && direction !== 0) {
+        event.preventDefault()
+        return
+      }
+
       if (!queueControlledScroll(direction, event.key.includes('Page') ? 2 : 1)) return
 
       event.preventDefault()
