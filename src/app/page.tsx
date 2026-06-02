@@ -108,7 +108,8 @@ const ENERGY_STORY_SECTIONS = [
 ] as const
 
 const ENERGY_VIDEO_SOURCES = ENERGY_STORY_SECTIONS.map((section) => section.videoSrc)
-const ENERGY_PANEL_APPEAR_AT = 0.72
+const ENERGY_VIDEO_COMPLETE_AT = 0.72
+const ENERGY_PANEL_APPEAR_AT = 0.66
 const ENERGY_DEFAULT_VIDEO_DURATION = 8
 const ENERGY_VIDEO_ADVANCE_SECONDS_PER_SECOND = 1.18
 const ENERGY_TEXT_PROGRESS_PER_SECOND = 0.22
@@ -839,7 +840,7 @@ function EnergyStoryScene({ section }: { section: (typeof ENERGY_STORY_SECTIONS)
       const duration = videoDurationRef.current || video?.duration || 0
       if (!video || duration <= 0 || !Number.isFinite(duration)) return
 
-      const videoProgress = Math.min(1, Math.max(0, progress / ENERGY_PANEL_APPEAR_AT))
+      const videoProgress = Math.min(1, Math.max(0, progress / ENERGY_VIDEO_COMPLETE_AT))
       const targetTime = Math.min(duration - 0.08, Math.max(0, videoProgress * duration))
       if (Math.abs(video.currentTime - targetTime) > 0.035) {
         video.currentTime = targetTime
@@ -857,7 +858,7 @@ function EnergyStoryScene({ section }: { section: (typeof ENERGY_STORY_SECTIONS)
       const videoDuration =
         videoDurationRef.current || videoRef.current?.duration || ENERGY_DEFAULT_VIDEO_DURATION
       const videoProgressPerSecond =
-        (ENERGY_VIDEO_ADVANCE_SECONDS_PER_SECOND / Math.max(1, videoDuration)) * ENERGY_PANEL_APPEAR_AT
+        (ENERGY_VIDEO_ADVANCE_SECONDS_PER_SECOND / Math.max(1, videoDuration)) * ENERGY_VIDEO_COMPLETE_AT
       const progressPerSecond =
         currentProgress >= ENERGY_PANEL_APPEAR_AT && targetProgress >= ENERGY_PANEL_APPEAR_AT
           ? ENERGY_TEXT_PROGRESS_PER_SECOND
@@ -940,7 +941,7 @@ function EnergyStoryScene({ section }: { section: (typeof ENERGY_STORY_SECTIONS)
               const video = event.currentTarget
               const duration = video.duration || 0
               videoDurationRef.current = duration
-              const videoProgress = Math.min(1, Math.max(0, animatedProgressRef.current / ENERGY_PANEL_APPEAR_AT))
+              const videoProgress = Math.min(1, Math.max(0, animatedProgressRef.current / ENERGY_VIDEO_COMPLETE_AT))
               video.currentTime =
                 duration > 0 && Number.isFinite(duration)
                   ? Math.min(duration - 0.08, Math.max(0.001, videoProgress * duration))
