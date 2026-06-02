@@ -25,7 +25,7 @@ const ENERGY_CLIPS = [
     outputPoster: 'public/hero/energy-solar-poster.webp',
     imagePath: '/Users/danzelgaminde/Downloads/roof image.jpg',
     prompt:
-      'Use the uploaded roof image as the exact starting frame and fixed source of truth. Create a premium, realistic 8-second cinematic roof shot where matte black solar panels slowly appear across the roof plane in a clean left-to-right installation reveal, matching the calm pacing and roof-focused product-visualization feeling of a high-end solar reveal video. Keep the roof geometry, shingles, lighting, house edges, and camera perspective stable. The camera may drift very subtly like a stabilized drone, but there must be no hard cuts, no scene changes, no text, no logos, no people, and no installers. Panels should appear physically attached to believable roof planes only, not floating, not on trees, walls, sky, driveway, or neighboring surfaces. Make the panels dark graphite/black, premium, aligned in neat rows, with subtle realistic reflections at the final hold. Photorealistic architectural marketing footage, polished, calm, expensive.',
+      'Use the uploaded roof image as the exact first frame and fixed source of truth. Create a premium, realistic 8-second roof-level solar reveal like a high-end product visualization: the roof begins empty, then matte black solar panels magically but subtly materialize row by row from the left side of the frame toward the right. The reveal should be slow and satisfying: faint alignment guides or soft edge highlights appear, panels fade/slide into place flush with the shingles, then settle into realistic physical modules. By the final two seconds, every believable usable roof plane is full of neatly aligned dark graphite solar panels: the broad front roof slope, the large left roof slope, and the right/back visible roof slope where panels can realistically fit. Leave gutters, valleys, ridge lines, windows, dormers, walls, trees, driveway, sky, and garden areas untouched. Keep the camera perspective, house geometry, roof texture, and lighting stable, with only a very subtle stabilized drone drift. No hard cuts, no scene changes, no text, no logos, no installers, no people, no floating panels. End on a clean hold frame where the roof looks packed with premium black panels, calm expensive architectural website footage.',
   },
   {
     key: 'heatpump',
@@ -44,7 +44,7 @@ const ENERGY_CLIPS = [
       '/Users/danzelgaminde/Downloads/large-618-electrifyhomeintroduceshomestationaconnectedhomechargingsolutiontosimplifyelectricvehicleownership.jpg',
     ],
     prompt:
-      'Use the first uploaded reference image as the exact EV charger product model. The charger must match that model: vertical rounded capsule body, soft metallic blue front face, dark grey side body, black circular display near the top, single green vertical status light on the front, black cable, black charging handle, cable hanging from the bottom. Do not use the charger design from the second image. Use the second uploaded reference image only for the garage/car composition and the idea of a car entering a garage. Create an 8-second realistic residential garage video: a modern electric car slowly drives into a clean upscale garage, stops near the wall-mounted blue capsule charger, and the black charging cable plugs into the car charging port. Remove the person completely. No people, no hands, no text, no logos, no brand marks, no UI, no duplicate chargers, no white wall-box charger, no flat rectangular charger, no oversized charger, no warped cable. Keep the camera stable with a subtle cinematic dolly. Subtle green charging status glow at the end, realistic lighting, premium home-energy website footage.',
+      'Use the first uploaded reference image as the exact EV charger product model. The charger must match that model: vertical rounded capsule body, soft metallic blue front face, dark grey side body, black circular display near the top, single green vertical status light on the front, black cable, black charging handle, cable hanging from the bottom. Do not use the charger design from the second image. Use the second uploaded reference image only as a loose reference for a clean upscale residential garage and a parked electric car near a wall charger. Create an 8-second photorealistic close-up video with the car already parked and completely still. No driving, no reversing, no drifting, no tire movement, no steering, no weird maneuver. Start on a tight premium shot of the car charging-port area with the wall-mounted blue capsule charger visible nearby. The car plug cover opens smoothly. Then the black charging plug from the blue capsule charger moves into the open charging port and connects cleanly. End with the plug fully seated and the charger status light glowing green. Remove the person completely. No people, no hands, no arms, no text, no logos, no brand marks, no UI, no duplicate chargers, no white wall-box charger, no flat rectangular charger, no oversized charger, no warped cable. Stable cinematic camera, subtle dolly only, realistic lighting, premium home-energy website footage.',
   },
 ]
 
@@ -169,6 +169,7 @@ async function renderEnergyClips() {
 
     writeFileSync(clip.outputVideo, videoBuffer)
     stripAudio(clip.outputVideo)
+    optimizeClipForScroll(clip.outputVideo)
     console.log(`Saved ${clip.outputVideo} (${videoBuffer.length} bytes)`)
   }
 }
@@ -257,6 +258,50 @@ function stripAudio(videoPath) {
     }
 
     console.warn(`Skipped audio cleanup: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+function optimizeClipForScroll(videoPath) {
+  if (!ffmpeg) return
+
+  const outputPath = `${videoPath}.scroll.mp4`
+  try {
+    execFileSync(
+      ffmpeg,
+      [
+        '-y',
+        '-i',
+        videoPath,
+        '-an',
+        '-c:v',
+        'libx264',
+        '-preset',
+        'slow',
+        '-crf',
+        '21',
+        '-pix_fmt',
+        'yuv420p',
+        '-g',
+        '12',
+        '-keyint_min',
+        '12',
+        '-sc_threshold',
+        '0',
+        '-movflags',
+        '+faststart',
+        outputPath,
+      ],
+      { stdio: 'ignore' },
+    )
+    renameSync(outputPath, videoPath)
+  } catch (error) {
+    try {
+      if (existsSync(outputPath)) unlinkSync(outputPath)
+    } catch {
+      // Keep the generated video if optimization fails.
+    }
+
+    console.warn(`Skipped scroll optimization: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 

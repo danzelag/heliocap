@@ -107,6 +107,10 @@ const ENERGY_STORY_SECTIONS = [
   },
 ] as const
 
+const ENERGY_VIDEO_SOURCES = ENERGY_STORY_SECTIONS.map((section) => section.videoSrc)
+const ENERGY_PANEL_APPEAR_AT = 0.72
+const ENERGY_PANEL_HIDE_AT = 0.985
+
 let googlePlacesLoader: Promise<typeof google | null> | null = null
 
 function formatNumber(value: number) {
@@ -245,6 +249,36 @@ export default function Home() {
     onScroll()
     window.addEventListener('scroll', onScroll)
     return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
+    const preloadLinks = ENERGY_VIDEO_SOURCES.map((src) => {
+      const link = document.createElement('link')
+      link.rel = 'preload'
+      link.as = 'video'
+      link.href = src
+      link.type = 'video/mp4'
+      document.head.appendChild(link)
+      return link
+    })
+
+    const preloadVideos = ENERGY_VIDEO_SOURCES.map((src) => {
+      const video = document.createElement('video')
+      video.preload = 'auto'
+      video.muted = true
+      video.playsInline = true
+      video.src = src
+      video.load()
+      return video
+    })
+
+    return () => {
+      preloadLinks.forEach((link) => link.remove())
+      preloadVideos.forEach((video) => {
+        video.removeAttribute('src')
+        video.load()
+      })
+    }
   }, [])
 
   useEffect(() => {
@@ -645,9 +679,9 @@ function EnergyStoryScene({ section }: { section: (typeof ENERGY_STORY_SECTIONS)
       const video = videoRef.current
       const duration = videoDurationRef.current || video?.duration || 0
       if (!prefersReducedMotion && video && duration > 0 && Number.isFinite(duration)) {
-        const videoProgress = Math.min(1, Math.max(0, nextProgress / 0.62))
+        const videoProgress = Math.min(1, Math.max(0, nextProgress / ENERGY_PANEL_APPEAR_AT))
         const targetTime = Math.min(duration - 0.08, Math.max(0, videoProgress * duration))
-        if (Math.abs(video.currentTime - targetTime) > 0.08) {
+        if (Math.abs(video.currentTime - targetTime) > 0.045) {
           video.currentTime = targetTime
         }
       }
@@ -669,30 +703,24 @@ function EnergyStoryScene({ section }: { section: (typeof ENERGY_STORY_SECTIONS)
     }
   }, [prefersReducedMotion])
 
-  const showPanel = prefersReducedMotion || (sectionProgress >= 0.62 && sectionProgress < 0.98)
+  const showPanel =
+    prefersReducedMotion || (sectionProgress >= ENERGY_PANEL_APPEAR_AT && sectionProgress < ENERGY_PANEL_HIDE_AT)
   const sceneId = section.key === 'solar' ? 'solar' : section.key
 
   return (
     <section className={`energy-story-scene snap-panel ${section.key}`} id={sceneId} ref={sectionRef}>
       <div className="energy-story-sticky">
         <div className="energy-story-media" aria-hidden="true">
-          <Image
-            className={`energy-story-poster ${videoReady ? 'is-muted' : ''}`}
-            src={section.posterSrc}
-            alt=""
-            fill
-            sizes="100vw"
-          />
           <video
             ref={videoRef}
-            className={`energy-story-video ${videoReady && !prefersReducedMotion ? 'is-ready' : ''}`}
+            className={`energy-story-video ${videoReady ? 'is-ready' : ''}`}
             muted
             playsInline
             preload="auto"
-            poster={section.posterSrc}
             onCanPlay={() => setVideoReady(true)}
             onLoadedMetadata={(event) => {
               videoDurationRef.current = event.currentTarget.duration || 0
+              event.currentTarget.currentTime = 0.001
               setVideoReady(true)
             }}
             onLoadedData={() => setVideoReady(true)}
