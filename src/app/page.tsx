@@ -802,9 +802,9 @@ function EnergyPriceChart({ monthlyBill, solarSavings, large = false }: { monthl
   const utilityValues = years.map((year) => Math.round(monthlyBill * Math.pow(1.037, year)))
   const maxValue = Math.max(450, Math.ceil((Math.max(...utilityValues) + 40) / 50) * 50)
   const width = large ? 960 : 720
-  const height = large ? 420 : 300
+  const height = large ? 340 : 300
   const pad = large
-    ? { top: 34, right: 34, bottom: 58, left: 70 }
+    ? { top: 28, right: 28, bottom: 48, left: 64 }
     : { top: 24, right: 20, bottom: 40, left: 54 }
   const innerWidth = width - pad.left - pad.right
   const innerHeight = height - pad.top - pad.bottom
