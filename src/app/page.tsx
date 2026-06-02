@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import Image from 'next/image'
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type RefObject } from 'react'
 
 type Heating = 'gas' | 'electric' | 'oil' | 'propane' | 'none'
 type ProvinceCode = keyof typeof PROVINCES
@@ -109,10 +109,13 @@ const ENERGY_STORY_SECTIONS = [
 
 const ENERGY_VIDEO_SOURCES = ENERGY_STORY_SECTIONS.map((section) => section.videoSrc)
 const ENERGY_PANEL_APPEAR_AT = 0.72
-const ENERGY_PANEL_HIDE_AT = 0.985
 const ENERGY_DEFAULT_VIDEO_DURATION = 8
-const ENERGY_VIDEO_ADVANCE_SECONDS_PER_SECOND = 0.95
-const ENERGY_TEXT_PROGRESS_PER_SECOND = 0.16
+const ENERGY_VIDEO_ADVANCE_SECONDS_PER_SECOND = 1.18
+const ENERGY_TEXT_PROGRESS_PER_SECOND = 0.22
+const ENERGY_SCROLL_PIXELS_PER_SECOND = 360
+const ENERGY_SCROLL_PIXELS_PER_SECOND_MOBILE = 300
+const ENERGY_SCROLL_STEP = 220
+const ENERGY_SCROLL_MAX_QUEUE = 520
 
 let googlePlacesLoader: Promise<typeof google | null> | null = null
 
@@ -650,13 +653,171 @@ export default function Home() {
 }
 
 function EnergyScrollytelling() {
+  const storyRef = useRef<HTMLElement | null>(null)
+  const prefersReducedMotion = useReducedMotion()
+
+  useEnergyStoryScrollControl(storyRef, Boolean(prefersReducedMotion))
+
   return (
-    <section className="energy-story" aria-label="Home energy systems">
+    <section className="energy-story" aria-label="Home energy systems" ref={storyRef}>
       {ENERGY_STORY_SECTIONS.map((section) => (
         <EnergyStoryScene key={section.key} section={section} />
       ))}
     </section>
   )
+}
+
+function useEnergyStoryScrollControl(storyRef: RefObject<HTMLElement | null>, disabled: boolean) {
+  const targetScrollRef = useRef<number | null>(null)
+  const scrollAnimationRef = useRef<number | null>(null)
+  const lastScrollAnimationTimeRef = useRef<number | null>(null)
+  const lastTouchYRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (disabled) return
+
+    const getBounds = () => {
+      const story = storyRef.current
+      if (!story) return null
+
+      const start = story.offsetTop
+      const end = Math.max(start, start + story.offsetHeight - window.innerHeight)
+      return { start, end }
+    }
+
+    const isStoryPinned = () => {
+      const story = storyRef.current
+      if (!story) return false
+
+      const rect = story.getBoundingClientRect()
+      return rect.top <= 2 && rect.bottom >= window.innerHeight - 2
+    }
+
+    const scrollToFrame = (top: number) => {
+      const root = document.documentElement
+      const previousScrollBehavior = root.style.scrollBehavior
+      root.style.scrollBehavior = 'auto'
+      window.scrollTo(0, top)
+      root.style.scrollBehavior = previousScrollBehavior
+    }
+
+    const animateScroll = (timestamp: number) => {
+      const target = targetScrollRef.current
+      if (target === null) {
+        scrollAnimationRef.current = null
+        lastScrollAnimationTimeRef.current = null
+        return
+      }
+
+      const lastTime = lastScrollAnimationTimeRef.current ?? timestamp
+      const elapsedSeconds = Math.min(0.05, Math.max(0, (timestamp - lastTime) / 1000))
+      lastScrollAnimationTimeRef.current = timestamp
+
+      const current = window.scrollY
+      const speed =
+        window.matchMedia('(max-width: 640px)').matches
+          ? ENERGY_SCROLL_PIXELS_PER_SECOND_MOBILE
+          : ENERGY_SCROLL_PIXELS_PER_SECOND
+      const maxStep = speed * elapsedSeconds
+      const distance = target - current
+      const next =
+        Math.abs(distance) <= maxStep
+          ? target
+          : current + Math.sign(distance) * maxStep
+
+      scrollToFrame(next)
+
+      if (Math.abs(target - next) > 0.5) {
+        scrollAnimationRef.current = window.requestAnimationFrame(animateScroll)
+        return
+      }
+
+      scrollAnimationRef.current = null
+      lastScrollAnimationTimeRef.current = null
+    }
+
+    const queueControlledScroll = (direction: number, multiplier = 1) => {
+      const bounds = getBounds()
+      if (!bounds || direction === 0 || !isStoryPinned()) return false
+
+      const current = window.scrollY
+      const atStart = current <= bounds.start + 1
+      const atEnd = current >= bounds.end - 1
+      if ((direction < 0 && atStart) || (direction > 0 && atEnd)) return false
+
+      const baseTarget = targetScrollRef.current ?? current
+      const queuedTarget = baseTarget + direction * ENERGY_SCROLL_STEP * multiplier
+      const maxForward = current + ENERGY_SCROLL_MAX_QUEUE
+      const maxBackward = current - ENERGY_SCROLL_MAX_QUEUE
+      targetScrollRef.current = Math.min(
+        bounds.end,
+        Math.max(bounds.start, Math.min(maxForward, Math.max(maxBackward, queuedTarget))),
+      )
+
+      if (scrollAnimationRef.current === null) {
+        scrollAnimationRef.current = window.requestAnimationFrame(animateScroll)
+      }
+
+      return true
+    }
+
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey) return
+
+      const direction = Math.sign(event.deltaY)
+      if (!queueControlledScroll(direction)) return
+
+      event.preventDefault()
+    }
+
+    const onTouchStart = (event: TouchEvent) => {
+      lastTouchYRef.current = event.touches[0]?.clientY ?? null
+    }
+
+    const onTouchMove = (event: TouchEvent) => {
+      const currentY = event.touches[0]?.clientY
+      const lastY = lastTouchYRef.current
+      if (currentY === undefined || lastY === null) return
+
+      const delta = lastY - currentY
+      lastTouchYRef.current = currentY
+      if (Math.abs(delta) < 4) return
+
+      if (!queueControlledScroll(Math.sign(delta), 0.72)) return
+      event.preventDefault()
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const active = document.activeElement
+      if (
+        active instanceof HTMLInputElement ||
+        active instanceof HTMLTextAreaElement ||
+        active instanceof HTMLSelectElement
+      ) {
+        return
+      }
+
+      const downKeys = new Set(['ArrowDown', 'PageDown', ' ', 'Spacebar'])
+      const upKeys = new Set(['ArrowUp', 'PageUp'])
+      const direction = downKeys.has(event.key) ? 1 : upKeys.has(event.key) ? -1 : 0
+      if (!queueControlledScroll(direction, event.key.includes('Page') ? 2 : 1)) return
+
+      event.preventDefault()
+    }
+
+    window.addEventListener('wheel', onWheel, { passive: false })
+    window.addEventListener('touchstart', onTouchStart, { passive: true })
+    window.addEventListener('touchmove', onTouchMove, { passive: false })
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      window.removeEventListener('wheel', onWheel)
+      window.removeEventListener('touchstart', onTouchStart)
+      window.removeEventListener('touchmove', onTouchMove)
+      window.removeEventListener('keydown', onKeyDown)
+      if (scrollAnimationRef.current !== null) window.cancelAnimationFrame(scrollAnimationRef.current)
+    }
+  }, [disabled, storyRef])
 }
 
 function EnergyStoryScene({ section }: { section: (typeof ENERGY_STORY_SECTIONS)[number] }) {
@@ -761,8 +922,7 @@ function EnergyStoryScene({ section }: { section: (typeof ENERGY_STORY_SECTIONS)
     }
   }, [prefersReducedMotion])
 
-  const showPanel =
-    prefersReducedMotion || (sectionProgress >= ENERGY_PANEL_APPEAR_AT && sectionProgress < ENERGY_PANEL_HIDE_AT)
+  const showPanel = prefersReducedMotion || sectionProgress >= ENERGY_PANEL_APPEAR_AT
   const sceneId = section.key === 'solar' ? 'solar' : section.key
 
   return (

@@ -16,7 +16,7 @@
   --max: 1440px;
   --gutter: 64px;
   --r: 2px;
-  --energy-story-scroll-range: 3200px;
+  --energy-story-scroll-range: 4200px;
 }
 
 *,
@@ -31,7 +31,7 @@ html {
   background: var(--bg);
   color: var(--text);
   scroll-behavior: smooth;
-  scroll-snap-type: y mandatory;
+  scroll-snap-type: y proximity;
 }
 
 body {
@@ -1445,6 +1445,7 @@ footer {
   border-top: 0;
   background: #050707;
   color: var(--text-on-dark);
+  overscroll-behavior: contain;
 }
 
 .energy-story-scene {
@@ -2048,11 +2049,11 @@ footer {
 @media (max-width: 640px) {
   :root {
     --gutter: 24px;
-    --energy-story-scroll-range: 2600px;
+    --energy-story-scroll-range: 3400px;
   }
 
   html {
-    scroll-snap-type: y mandatory;
+    scroll-snap-type: y proximity;
   }
 
   .section-pad {
