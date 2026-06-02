@@ -31,7 +31,7 @@ html {
   background: var(--bg);
   color: var(--text);
   scroll-behavior: smooth;
-  scroll-snap-type: y proximity;
+  scroll-snap-type: none;
 }
 
 body {
@@ -2053,7 +2053,7 @@ footer {
   }
 
   html {
-    scroll-snap-type: y proximity;
+    scroll-snap-type: none;
   }
 
   .section-pad {
