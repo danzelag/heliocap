@@ -110,6 +110,9 @@ const ENERGY_STORY_SECTIONS = [
 const ENERGY_VIDEO_SOURCES = ENERGY_STORY_SECTIONS.map((section) => section.videoSrc)
 const ENERGY_PANEL_APPEAR_AT = 0.72
 const ENERGY_PANEL_HIDE_AT = 0.985
+const ENERGY_DEFAULT_VIDEO_DURATION = 8
+const ENERGY_VIDEO_ADVANCE_SECONDS_PER_SECOND = 0.95
+const ENERGY_TEXT_PROGRESS_PER_SECOND = 0.16
 
 let googlePlacesLoader: Promise<typeof google | null> | null = null
 
@@ -660,46 +663,101 @@ function EnergyStoryScene({ section }: { section: (typeof ENERGY_STORY_SECTIONS)
   const sectionRef = useRef<HTMLElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const videoDurationRef = useRef(0)
-  const progressFrame = useRef<number | null>(null)
+  const scrollFrame = useRef<number | null>(null)
+  const animationFrame = useRef<number | null>(null)
+  const targetProgressRef = useRef(0)
+  const animatedProgressRef = useRef(0)
+  const lastAnimationTimeRef = useRef<number | null>(null)
   const [sectionProgress, setSectionProgress] = useState(0)
   const [videoReady, setVideoReady] = useState(false)
   const prefersReducedMotion = useReducedMotion()
 
   useEffect(() => {
-    const updateProgress = () => {
-      progressFrame.current = null
+    const setVideoProgress = (progress: number) => {
+      const video = videoRef.current
+      const duration = videoDurationRef.current || video?.duration || 0
+      if (!video || duration <= 0 || !Number.isFinite(duration)) return
+
+      const videoProgress = Math.min(1, Math.max(0, progress / ENERGY_PANEL_APPEAR_AT))
+      const targetTime = Math.min(duration - 0.08, Math.max(0, videoProgress * duration))
+      if (Math.abs(video.currentTime - targetTime) > 0.035) {
+        video.currentTime = targetTime
+      }
+    }
+
+    const animateProgress = (timestamp: number) => {
+      const lastTime = lastAnimationTimeRef.current ?? timestamp
+      const elapsedSeconds = Math.min(0.05, Math.max(0, (timestamp - lastTime) / 1000))
+      lastAnimationTimeRef.current = timestamp
+
+      const currentProgress = animatedProgressRef.current
+      const targetProgress = targetProgressRef.current
+      const progressDelta = targetProgress - currentProgress
+      const videoDuration =
+        videoDurationRef.current || videoRef.current?.duration || ENERGY_DEFAULT_VIDEO_DURATION
+      const videoProgressPerSecond =
+        (ENERGY_VIDEO_ADVANCE_SECONDS_PER_SECOND / Math.max(1, videoDuration)) * ENERGY_PANEL_APPEAR_AT
+      const progressPerSecond =
+        currentProgress >= ENERGY_PANEL_APPEAR_AT && targetProgress >= ENERGY_PANEL_APPEAR_AT
+          ? ENERGY_TEXT_PROGRESS_PER_SECOND
+          : videoProgressPerSecond
+      const maxStep = progressPerSecond * elapsedSeconds
+      const nextProgress =
+        Math.abs(progressDelta) <= maxStep
+          ? targetProgress
+          : currentProgress + Math.sign(progressDelta) * maxStep
+
+      animatedProgressRef.current = nextProgress
+      setSectionProgress(nextProgress)
+      setVideoProgress(nextProgress)
+
+      if (Math.abs(targetProgress - nextProgress) > 0.001) {
+        animationFrame.current = window.requestAnimationFrame(animateProgress)
+        return
+      }
+
+      animationFrame.current = null
+      lastAnimationTimeRef.current = null
+    }
+
+    const scheduleAnimation = () => {
+      if (animationFrame.current !== null) return
+      animationFrame.current = window.requestAnimationFrame(animateProgress)
+    }
+
+    const updateTargetProgress = () => {
+      scrollFrame.current = null
       const section = sectionRef.current
       if (!section) return
 
       const scrollRange = Math.max(1, section.offsetHeight - window.innerHeight)
       const nextProgress = Math.min(1, Math.max(0, -section.getBoundingClientRect().top / scrollRange))
 
-      setSectionProgress(nextProgress)
+      targetProgressRef.current = nextProgress
 
-      const video = videoRef.current
-      const duration = videoDurationRef.current || video?.duration || 0
-      if (!prefersReducedMotion && video && duration > 0 && Number.isFinite(duration)) {
-        const videoProgress = Math.min(1, Math.max(0, nextProgress / ENERGY_PANEL_APPEAR_AT))
-        const targetTime = Math.min(duration - 0.08, Math.max(0, videoProgress * duration))
-        if (Math.abs(video.currentTime - targetTime) > 0.045) {
-          video.currentTime = targetTime
-        }
+      if (prefersReducedMotion) {
+        animatedProgressRef.current = nextProgress
+        setSectionProgress(nextProgress)
+        return
       }
+
+      scheduleAnimation()
     }
 
-    const scheduleProgress = () => {
-      if (progressFrame.current !== null) return
-      progressFrame.current = window.requestAnimationFrame(updateProgress)
+    const scheduleTargetProgress = () => {
+      if (scrollFrame.current !== null) return
+      scrollFrame.current = window.requestAnimationFrame(updateTargetProgress)
     }
 
-    updateProgress()
-    window.addEventListener('scroll', scheduleProgress, { passive: true })
-    window.addEventListener('resize', scheduleProgress)
+    updateTargetProgress()
+    window.addEventListener('scroll', scheduleTargetProgress, { passive: true })
+    window.addEventListener('resize', scheduleTargetProgress)
 
     return () => {
-      window.removeEventListener('scroll', scheduleProgress)
-      window.removeEventListener('resize', scheduleProgress)
-      if (progressFrame.current !== null) window.cancelAnimationFrame(progressFrame.current)
+      window.removeEventListener('scroll', scheduleTargetProgress)
+      window.removeEventListener('resize', scheduleTargetProgress)
+      if (scrollFrame.current !== null) window.cancelAnimationFrame(scrollFrame.current)
+      if (animationFrame.current !== null) window.cancelAnimationFrame(animationFrame.current)
     }
   }, [prefersReducedMotion])
 
@@ -719,8 +777,14 @@ function EnergyStoryScene({ section }: { section: (typeof ENERGY_STORY_SECTIONS)
             preload="auto"
             onCanPlay={() => setVideoReady(true)}
             onLoadedMetadata={(event) => {
-              videoDurationRef.current = event.currentTarget.duration || 0
-              event.currentTarget.currentTime = 0.001
+              const video = event.currentTarget
+              const duration = video.duration || 0
+              videoDurationRef.current = duration
+              const videoProgress = Math.min(1, Math.max(0, animatedProgressRef.current / ENERGY_PANEL_APPEAR_AT))
+              video.currentTime =
+                duration > 0 && Number.isFinite(duration)
+                  ? Math.min(duration - 0.08, Math.max(0.001, videoProgress * duration))
+                  : 0.001
               setVideoReady(true)
             }}
             onLoadedData={() => setVideoReady(true)}
