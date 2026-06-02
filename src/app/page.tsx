@@ -64,6 +64,8 @@ const ENERGY_STORY_SECTIONS = [
       ['Peak yield (SK)', '1,330', 'kWh/kW'],
       ['Typical install', '1-2', 'days'],
     ],
+    videoSrc: '/hero/energy-solar.mp4',
+    posterSrc: '/hero/energy-solar-poster.webp',
   },
   {
     key: 'heatpump',
@@ -81,6 +83,8 @@ const ENERGY_STORY_SECTIONS = [
       ['Max rebates', '$14,600', 'CAD'],
       ['Installation', '1', 'day'],
     ],
+    videoSrc: '/hero/energy-heat-pump.mp4',
+    posterSrc: '/hero/energy-heat-pump-poster.webp',
   },
   {
     key: 'ev',
@@ -98,6 +102,8 @@ const ENERGY_STORY_SECTIONS = [
       ['Solar sync', 'Smart', 'schedule'],
       ['Warranty', '5', 'yrs'],
     ],
+    videoSrc: '/hero/energy-ev-charger.mp4',
+    posterSrc: '/hero/energy-ev-charger-poster.webp',
   },
 ] as const
 
@@ -440,14 +446,16 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="chart-section snap-panel reveal" id="costs">
-        <div className="container chart-section-inner">
-          <div className="chart-copy">
-            <div className="eyebrow">Energy price curve</div>
-            <h2 className="h-section">See the cost<br /><em>you are avoiding.</em></h2>
-            <p className="h-sub">Hover the graph to compare projected utility costs with an estimated solar payment over time.</p>
+      <section className="chart-pin snap-panel reveal" id="costs">
+        <div className="chart-section">
+          <div className="container chart-section-inner">
+            <div className="chart-copy">
+              <div className="eyebrow">Energy price curve</div>
+              <h2 className="h-section">See the cost<br /><em>you are avoiding.</em></h2>
+              <p className="h-sub">Hover the graph to compare projected utility costs with an estimated solar payment over time.</p>
+            </div>
+            <EnergyPriceChart monthlyBill={monthlyBill} solarSavings={result.solarSavings} large />
           </div>
-          <EnergyPriceChart monthlyBill={monthlyBill} solarSavings={result.solarSavings} large />
         </div>
       </section>
 
@@ -605,11 +613,20 @@ export default function Home() {
 }
 
 function EnergyScrollytelling() {
+  return (
+    <section className="energy-story" aria-label="Home energy systems">
+      {ENERGY_STORY_SECTIONS.map((section) => (
+        <EnergyStoryScene key={section.key} section={section} />
+      ))}
+    </section>
+  )
+}
+
+function EnergyStoryScene({ section }: { section: (typeof ENERGY_STORY_SECTIONS)[number] }) {
   const sectionRef = useRef<HTMLElement | null>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const videoDurationRef = useRef(0)
   const progressFrame = useRef<number | null>(null)
-  const [activeIndex, setActiveIndex] = useState(0)
   const [sectionProgress, setSectionProgress] = useState(0)
   const [videoReady, setVideoReady] = useState(false)
   const prefersReducedMotion = useReducedMotion()
@@ -622,15 +639,14 @@ function EnergyScrollytelling() {
 
       const scrollRange = Math.max(1, section.offsetHeight - window.innerHeight)
       const nextProgress = Math.min(1, Math.max(0, -section.getBoundingClientRect().top / scrollRange))
-      const nextIndex = nextProgress < 0.34 ? 0 : nextProgress < 0.67 ? 1 : 2
 
       setSectionProgress(nextProgress)
-      setActiveIndex((current) => (current === nextIndex ? current : nextIndex))
 
       const video = videoRef.current
-      const duration = videoDurationRef.current
+      const duration = videoDurationRef.current || video?.duration || 0
       if (!prefersReducedMotion && video && duration > 0 && Number.isFinite(duration)) {
-        const targetTime = Math.min(duration - 0.08, Math.max(0, nextProgress * duration))
+        const videoProgress = Math.min(1, Math.max(0, nextProgress / 0.62))
+        const targetTime = Math.min(duration - 0.08, Math.max(0, videoProgress * duration))
         if (Math.abs(video.currentTime - targetTime) > 0.08) {
           video.currentTime = targetTime
         }
@@ -653,20 +669,19 @@ function EnergyScrollytelling() {
     }
   }, [prefersReducedMotion])
 
-  const activeSection = ENERGY_STORY_SECTIONS[activeIndex]
+  const showPanel = prefersReducedMotion || (sectionProgress >= 0.62 && sectionProgress < 0.98)
+  const sceneId = section.key === 'solar' ? 'solar' : section.key
 
   return (
-    <section className="energy-story snap-panel" id="solar" ref={sectionRef} aria-label="Home energy systems">
-      <span className="energy-story-anchor heatpump" id="heatpump" aria-hidden="true" />
-      <span className="energy-story-anchor ev" id="ev" aria-hidden="true" />
+    <section className={`energy-story-scene snap-panel ${section.key}`} id={sceneId} ref={sectionRef}>
       <div className="energy-story-sticky">
         <div className="energy-story-media" aria-hidden="true">
           <Image
             className={`energy-story-poster ${videoReady ? 'is-muted' : ''}`}
-            src="/hero/home-energy-scrolly-poster.webp"
+            src={section.posterSrc}
             alt=""
             fill
-            sizes="(max-width: 640px) 100vw, 68vw"
+            sizes="100vw"
           />
           <video
             ref={videoRef}
@@ -674,7 +689,7 @@ function EnergyScrollytelling() {
             muted
             playsInline
             preload="auto"
-            poster="/hero/home-energy-scrolly-poster.webp"
+            poster={section.posterSrc}
             onCanPlay={() => setVideoReady(true)}
             onLoadedMetadata={(event) => {
               videoDurationRef.current = event.currentTarget.duration || 0
@@ -683,23 +698,15 @@ function EnergyScrollytelling() {
             onLoadedData={() => setVideoReady(true)}
             onError={() => setVideoReady(false)}
           >
-            <source src="/hero/home-energy-scrolly.mp4" type="video/mp4" />
+            <source src={section.videoSrc} type="video/mp4" />
           </video>
         </div>
-        <div className="energy-story-scrim" aria-hidden="true" />
-        <div className="energy-story-bottom-fade" aria-hidden="true" />
 
-        <div className="container energy-story-inner">
-          <div className="energy-story-desktop-panel">
+        <div className={`container energy-story-inner ${showPanel ? 'is-visible' : ''}`}>
+          <div className="energy-story-panel-wrap">
             <AnimatePresence initial={false}>
-              <EnergyStoryPanel key={activeSection.key} section={activeSection} />
+              {showPanel && <EnergyStoryPanel key={section.key} section={section} />}
             </AnimatePresence>
-          </div>
-
-          <div className="energy-story-mobile-stack">
-            {ENERGY_STORY_SECTIONS.map((section) => (
-              <EnergyStoryPanel key={section.key} section={section} staticPanel />
-            ))}
           </div>
 
           <div className="energy-story-progress" aria-hidden="true">
@@ -735,10 +742,10 @@ function EnergyStoryPanel({
         ))}
       </div>
       <div className="product-actions energy-story-actions">
-        <a href="#calculator" className="btn btn-black">
+        <a href="#calculator" className="btn btn-white">
           Calculate savings <span className="arrow">-&gt;</span>
         </a>
-        <a href="#contact" className="btn btn-outline">Learn more</a>
+        <a href="#contact" className="btn btn-outline-white">Learn more</a>
       </div>
     </>
   )

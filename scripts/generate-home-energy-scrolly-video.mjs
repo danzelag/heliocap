@@ -15,25 +15,61 @@ const VERTEX_MODEL_RESOURCE = process.env.VERTEX_VEO_MODEL || 'publishers/google
 const RESOLUTION = process.env.VEO_RESOLUTION || '1080p'
 const DURATION_SECONDS = Number(process.env.VEO_DURATION_SECONDS || 8)
 const POSTER_ONLY = process.env.SCROLLY_POSTER_ONLY === '1'
+const GENERATE_CLIPS = process.env.SCROLLY_CLIPS === '1'
+const GENERATE_CLIP_KEY = process.env.SCROLLY_CLIP?.trim()
 const DEFAULT_SERVICE_ACCOUNT_PATH = '/Users/danzelgaminde/Downloads/heliocap-6761c11f8917.json'
+const ENERGY_CLIPS = [
+  {
+    key: 'solar',
+    outputVideo: 'public/hero/energy-solar.mp4',
+    outputPoster: 'public/hero/energy-solar-poster.webp',
+    imagePath: '/Users/danzelgaminde/Downloads/roof image.jpg',
+    prompt:
+      'Use the uploaded roof image as the exact starting frame and fixed source of truth. Create a premium, realistic 8-second cinematic roof shot where matte black solar panels slowly appear across the roof plane in a clean left-to-right installation reveal, matching the calm pacing and roof-focused product-visualization feeling of a high-end solar reveal video. Keep the roof geometry, shingles, lighting, house edges, and camera perspective stable. The camera may drift very subtly like a stabilized drone, but there must be no hard cuts, no scene changes, no text, no logos, no people, and no installers. Panels should appear physically attached to believable roof planes only, not floating, not on trees, walls, sky, driveway, or neighboring surfaces. Make the panels dark graphite/black, premium, aligned in neat rows, with subtle realistic reflections at the final hold. Photorealistic architectural marketing footage, polished, calm, expensive.',
+  },
+  {
+    key: 'heatpump',
+    outputVideo: 'public/hero/energy-heat-pump.mp4',
+    outputPoster: 'public/hero/energy-heat-pump-poster.webp',
+    imagePath: '/Users/danzelgaminde/Downloads/chatgpt heat pump.png',
+    prompt:
+      'Use the uploaded heat pump image as the subject and improve it into a more realistic premium exterior product shot. Create an 8-second photorealistic video of a modern cold-climate heat pump operating beside a clean home wall. Make the unit look like a real photographed appliance with believable metal, plastic, grille depth, shadows, and scale. Subtle fan motion inside the unit, soft heat shimmer, and gentle sun beams move across the casing and surrounding wall as the system operates. Keep the camera slow and stable with a refined push-in or slight lateral drift. No text, no logos, no labels, no UI, no people, no hands, no cartoon airflow ribbons, no sci-fi effects, no oversaturated glow. Calm high-end renewable-home cinematography.',
+  },
+  {
+    key: 'ev',
+    outputVideo: 'public/hero/energy-ev-charger.mp4',
+    outputPoster: 'public/hero/energy-ev-charger-poster.webp',
+    referenceImages: [
+      '/Users/danzelgaminde/Downloads/maxperr.webp',
+      '/Users/danzelgaminde/Downloads/large-618-electrifyhomeintroduceshomestationaconnectedhomechargingsolutiontosimplifyelectricvehicleownership.jpg',
+    ],
+    prompt:
+      'Use the first uploaded reference image as the exact EV charger product model. The charger must match that model: vertical rounded capsule body, soft metallic blue front face, dark grey side body, black circular display near the top, single green vertical status light on the front, black cable, black charging handle, cable hanging from the bottom. Do not use the charger design from the second image. Use the second uploaded reference image only for the garage/car composition and the idea of a car entering a garage. Create an 8-second realistic residential garage video: a modern electric car slowly drives into a clean upscale garage, stops near the wall-mounted blue capsule charger, and the black charging cable plugs into the car charging port. Remove the person completely. No people, no hands, no text, no logos, no brand marks, no UI, no duplicate chargers, no white wall-box charger, no flat rectangular charger, no oversized charger, no warped cable. Keep the camera stable with a subtle cinematic dolly. Subtle green charging status glow at the end, realistic lighting, premium home-energy website footage.',
+  },
+]
 
-const PROMPT = `Use the uploaded reference photo as the exact exterior home style and starting scene. Create a cinematic drone-style shot of a modern luxury Canadian suburban home at soft dusk, grey siding, light stone facade, black trim, large driveway, warm architectural lighting, premium clean energy brand aesthetic. The camera feels like a smooth drone flying around the home in one continuous elegant motion.
+const PROMPT = `Use the uploaded reference photo as the exact exterior home style and starting scene. Create one continuous cinematic drone-style shot of a modern luxury Canadian suburban home at soft dusk, grey siding, light stone facade, black trim, large driveway, warm architectural lighting, premium clean energy brand aesthetic. The camera feels like a smooth drone flying around the home in one elegant unbroken take.
 
-Scene 1: The drone approaches the front of the home and rises toward the roof. High-efficiency matte black solar panels elegantly render and assemble onto the roof in a realistic premium product-visualization style. The panels must be black/dark graphite only, not blue, not silver, and not reflective bright blue. Place panels only on believable roof planes, never on trees, lawns, walls, driveways, neighboring homes, floating surfaces, or the sky. Subtle sunlight reflections move across the panels. Hold briefly on the completed solar array for a website text overlay moment.
+Opening movement: The drone approaches the front of the home and rises toward the roof in a slow left-to-right orbit. High-efficiency matte black solar panels gradually appear across the roof from one side to the other, as if being precisely rendered into place. The panels must be black/dark graphite only, not blue, not silver, and not reflective bright blue. Place panels only on believable main-home roof planes, never on trees, lawns, walls, driveways, neighboring homes, floating surfaces, or the sky. Subtle sunlight reflections move across the completed black solar array. Hold briefly on the roof for a website text overlay moment.
 
-Scene 2: The drone glides toward the home and transitions inside through a window or wall in a smooth architectural cutaway style. Show a clean interior wall vent and subtle animated airflow. Visualize warm air and cool air as soft translucent flowing ribbons, realistic and restrained, not cartoonish, moving through the vent and across the room. Show a modern heat pump system working efficiently in a cold-climate Canadian home. Hold briefly for a website text overlay moment.
+Middle movement: Without a hard cut, the camera glides toward the home and transitions inside through a window or wall in a smooth architectural cutaway style. Show a clean interior wall vent and subtle animated airflow. Visualize warm air and cool air as soft translucent flowing ribbons, realistic and restrained, not cartoonish, moving through the vent and across the room. Show a modern heat pump system working efficiently in a cold-climate Canadian home. Hold briefly for a website text overlay moment.
 
-Scene 3: The drone continues smoothly into the garage. Show a premium blue wall-mounted EV charger with a black cable and handle, green vertical status light, mounted neatly on the garage wall. The charger face must be blank with no readable text, no letters, no icons, no EV logo, no labels, and no brand marks. A modern electric car is parked nearby. The charging cable/plug moves smoothly and plugs into the car charging port, with a subtle glow indicating charging has started. Hold briefly for a website text overlay moment.
+Final movement: Without a hard cut, the camera continues smoothly into the garage. Show a premium blue wall-mounted EV charger with a black cable and handle, green vertical status light, mounted neatly on the garage wall. The charger face must be blank with no readable text, no letters, no icons, no EV logo, no labels, and no brand marks. A modern electric car is parked nearby. The charging cable/plug moves smoothly and plugs into the car charging port, with a subtle glow indicating charging has started. Hold briefly for a website text overlay moment.
 
 Visual style: luxury architectural cinematography, soft pale blue and white tones, clean premium renewable energy brand, realistic materials, subtle motion, no clutter, no people, no hands, no text inside the video, no logos, no watermarks, no UI, no cartoon style. The video must feel seamless, calm, expensive, and designed for a high-end website scrollytelling section.
 
-Negative guidance: no text, no captions, no logos, no brand marks, no people, no hands, no distorted house geometry, no unrealistic cartoon airflow, no harsh neon colors, no oversaturated colors, no shaky camera, no abrupt cuts, no messy garage, no cheap stock footage look, no futuristic sci-fi interface, no change in home style between scenes.`
+Negative guidance: no text, no captions, no logos, no brand marks, no people, no hands, no distorted house geometry, no unrealistic cartoon airflow, no harsh neon colors, no oversaturated colors, no shaky camera, no abrupt cuts, no scene-jump feeling, no messy garage, no cheap stock footage look, no futuristic sci-fi interface, no change in home style between moments.`
 
 for (const file of ['.env.local', '.env.vercel.production.local', '.env.vertex.production.local', '.env.vertex.preview.local']) {
   loadEnvFile(file)
 }
 
 async function main() {
+  if (GENERATE_CLIPS) {
+    await renderEnergyClips()
+    return
+  }
+
   const houseImage = resolve(process.argv[2] || DEFAULT_HOUSE_IMAGE)
   if (!existsSync(houseImage)) throw new Error(`House image not found: ${houseImage}`)
 
@@ -56,21 +92,85 @@ async function main() {
 
   const videoBuffer = hasVertexServiceAccount()
     ? await renderViaVertexServiceAccount({
+        prompt: PROMPT,
         imageBase64,
         durationSeconds: DURATION_SECONDS,
       })
     : hasVertexBridge()
     ? await renderViaVertexBridge({
+        prompt: PROMPT,
         imageBase64,
         durationSeconds: DURATION_SECONDS,
       })
     : await renderViaGeminiApi({
+        prompt: PROMPT,
         imageBase64,
       })
 
   writeFileSync(OUTPUT_VIDEO, videoBuffer)
   cleanKnownEvChargerMarks(OUTPUT_VIDEO)
   console.log(`Saved ${OUTPUT_VIDEO} (${videoBuffer.length} bytes)`)
+}
+
+async function renderEnergyClips() {
+  mkdirSync('public/hero', { recursive: true })
+
+  const clips = GENERATE_CLIP_KEY ? ENERGY_CLIPS.filter((clip) => clip.key === GENERATE_CLIP_KEY) : ENERGY_CLIPS
+  if (GENERATE_CLIP_KEY && clips.length === 0) throw new Error(`Unknown SCROLLY_CLIP: ${GENERATE_CLIP_KEY}`)
+
+  for (const clip of clips) {
+    console.log(`Rendering ${clip.key} clip...`)
+    const primaryImagePath = resolve(clip.imagePath || clip.referenceImages?.[0])
+    if (!existsSync(primaryImagePath)) throw new Error(`Reference image not found: ${primaryImagePath}`)
+
+    const primaryBuffer = readFileSync(primaryImagePath)
+    const poster = await sharp(primaryBuffer)
+      .rotate()
+      .resize(1600, 900, { fit: 'cover', position: 'center', kernel: sharp.kernel.lanczos3 })
+      .webp({ quality: 86 })
+      .toBuffer()
+    writeFileSync(clip.outputPoster, poster)
+
+    if (POSTER_ONLY) {
+      console.log(`Saved ${clip.outputPoster}`)
+      continue
+    }
+
+    const imageBase64 = clip.imagePath ? await buildReferencePng({ houseBuffer: primaryBuffer }) : null
+    const referenceImages = clip.referenceImages
+      ? await Promise.all(
+          clip.referenceImages.map(async (imagePath) => {
+            const buffer = readFileSync(resolve(imagePath))
+            return {
+              bytesBase64Encoded: await buildReferencePng({ houseBuffer: buffer }),
+              mimeType: 'image/png',
+            }
+          }),
+        )
+      : null
+
+    const videoBuffer = hasVertexServiceAccount()
+      ? await renderViaVertexServiceAccount({
+          prompt: clip.prompt,
+          imageBase64,
+          referenceImages,
+          durationSeconds: DURATION_SECONDS,
+        })
+      : hasVertexBridge()
+      ? await renderViaVertexBridge({
+          prompt: clip.prompt,
+          imageBase64,
+          durationSeconds: DURATION_SECONDS,
+        })
+      : await renderViaGeminiApi({
+          prompt: clip.prompt,
+          imageBase64,
+        })
+
+    writeFileSync(clip.outputVideo, videoBuffer)
+    stripAudio(clip.outputVideo)
+    console.log(`Saved ${clip.outputVideo} (${videoBuffer.length} bytes)`)
+  }
 }
 
 async function buildReferencePng({ houseBuffer }) {
@@ -88,13 +188,20 @@ function cleanKnownEvChargerMarks(videoPath) {
   if (!ffmpeg || process.env.SCROLLY_SKIP_EV_MARK_CLEANUP === '1') return
 
   const outputPath = `${videoPath}.tmp.mp4`
+  const { width, height } = getVideoSize(videoPath)
+  const sx = width / 1280
+  const sy = height / 720
+  const delogo = ({ x, y, w, h, enable }) =>
+    `delogo=x=${Math.round(x * sx)}:y=${Math.round(y * sy)}:w=${Math.round(w * sx)}:h=${Math.round(h * sy)}:show=0:enable='${enable}'`
   const filters = [
-    "delogo=x=485:y=98:w=60:h=55:show=0:enable='between(t,4.55,5.2)'",
-    "delogo=x=420:y=105:w=55:h=60:show=0:enable='between(t,5.1,6.0)'",
-    "delogo=x=340:y=105:w=70:h=60:show=0:enable='gte(t,5.9)'",
-    "delogo=x=485:y=345:w=70:h=65:show=0:enable='between(t,4.55,5.2)'",
-    "delogo=x=415:y=330:w=70:h=70:show=0:enable='between(t,5.1,6.0)'",
-    "delogo=x=325:y=330:w=90:h=80:show=0:enable='gte(t,5.9)'",
+    delogo({ x: 485, y: 98, w: 60, h: 55, enable: 'between(t,4.55,5.2)' }),
+    delogo({ x: 420, y: 105, w: 55, h: 60, enable: 'between(t,5.1,6.0)' }),
+    delogo({ x: 340, y: 105, w: 70, h: 60, enable: 'gte(t,5.9)' }),
+    delogo({ x: 485, y: 345, w: 70, h: 65, enable: 'between(t,4.55,5.2)' }),
+    delogo({ x: 415, y: 330, w: 70, h: 70, enable: 'between(t,5.1,6.0)' }),
+    delogo({ x: 325, y: 330, w: 90, h: 80, enable: 'gte(t,5.9)' }),
+    delogo({ x: 410, y: 258, w: 84, h: 78, enable: 'gte(t,5.7)' }),
+    delogo({ x: 414, y: 408, w: 68, h: 64, enable: 'gte(t,5.7)' }),
   ].join(',')
 
   try {
@@ -131,13 +238,47 @@ function cleanKnownEvChargerMarks(videoPath) {
   }
 }
 
-async function renderViaVertexBridge({ imageBase64, durationSeconds }) {
+function stripAudio(videoPath) {
+  if (!ffmpeg) return
+
+  const outputPath = `${videoPath}.silent.mp4`
+  try {
+    execFileSync(
+      ffmpeg,
+      ['-y', '-i', videoPath, '-an', '-c:v', 'copy', '-movflags', '+faststart', outputPath],
+      { stdio: 'ignore' },
+    )
+    renameSync(outputPath, videoPath)
+  } catch (error) {
+    try {
+      if (existsSync(outputPath)) unlinkSync(outputPath)
+    } catch {
+      // Keep the generated video if cleanup fails.
+    }
+
+    console.warn(`Skipped audio cleanup: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+function getVideoSize(videoPath) {
+  try {
+    execFileSync(ffmpeg, ['-hide_banner', '-i', videoPath], { stdio: ['ignore', 'ignore', 'pipe'] })
+  } catch (error) {
+    const stderr = error && typeof error === 'object' && 'stderr' in error ? String(error.stderr) : ''
+    const match = stderr.match(/Video:.*?(\d{3,5})x(\d{3,5})/)
+    if (match) return { width: Number(match[1]), height: Number(match[2]) }
+  }
+
+  return { width: 1280, height: 720 }
+}
+
+async function renderViaVertexBridge({ prompt, imageBase64, durationSeconds }) {
   const sharedSecret = requiredEnv('HERO_VIDEO_SHARED_SECRET')
   const deploymentUrl = process.env.HERO_VIDEO_DEPLOYMENT_URL || DEFAULT_DEPLOYMENT_URL
 
   const submit = await postVertexBridge(deploymentUrl, sharedSecret, {
     action: 'submit',
-    prompt: PROMPT,
+    prompt,
     imageBase64,
     durationSeconds,
   })
@@ -172,13 +313,13 @@ async function renderViaVertexBridge({ imageBase64, durationSeconds }) {
   throw new Error('Timed out waiting for Vertex Veo video')
 }
 
-async function renderViaGeminiApi({ imageBase64 }) {
-  const operationName = await submitVeo(imageBase64)
+async function renderViaGeminiApi({ prompt, imageBase64 }) {
+  const operationName = await submitVeo({ prompt, imageBase64 })
   console.log(`Submitted Gemini Veo operation: ${operationName}`)
   return waitForVideo(operationName)
 }
 
-async function renderViaVertexServiceAccount({ imageBase64, durationSeconds }) {
+async function renderViaVertexServiceAccount({ prompt, imageBase64, referenceImages, durationSeconds }) {
   const serviceAccount = loadServiceAccount()
   const accessToken = await getServiceAccountAccessToken(serviceAccount)
   const project = process.env.GOOGLE_CLOUD_PROJECT_ID || serviceAccount.project_id
@@ -189,7 +330,9 @@ async function renderViaVertexServiceAccount({ imageBase64, durationSeconds }) {
     project,
     location,
     storageUri,
+    prompt,
     imageBase64,
+    referenceImages,
     durationSeconds,
   })
 
@@ -203,13 +346,41 @@ async function renderViaVertexServiceAccount({ imageBase64, durationSeconds }) {
   })
 }
 
-async function submitVertexVeo({ accessToken, project, location, storageUri, imageBase64, durationSeconds }) {
+async function submitVertexVeo({
+  accessToken,
+  project,
+  location,
+  storageUri,
+  prompt,
+  imageBase64,
+  referenceImages,
+  durationSeconds,
+}) {
   const parameters = {
     sampleCount: 1,
     aspectRatio: '16:9',
     durationSeconds,
+    resolution: RESOLUTION,
     personGeneration: 'disallow',
     ...(storageUri ? { storageUri } : {}),
+  }
+  const instance = {
+    prompt,
+    ...(referenceImages?.length
+      ? {
+          referenceImages: referenceImages.map((image) => ({
+            image,
+            referenceType: 'asset',
+          })),
+        }
+      : imageBase64
+      ? {
+          image: {
+            bytesBase64Encoded: imageBase64,
+            mimeType: 'image/png',
+          },
+        }
+      : {}),
   }
 
   const res = await fetch(getVertexModelUrl(project, location) + ':predictLongRunning', {
@@ -219,15 +390,7 @@ async function submitVertexVeo({ accessToken, project, location, storageUri, ima
       'Content-Type': 'application/json; charset=utf-8',
     },
     body: JSON.stringify({
-      instances: [
-        {
-          prompt: PROMPT,
-          image: {
-            bytesBase64Encoded: imageBase64,
-            mimeType: 'image/png',
-          },
-        },
-      ],
+      instances: [instance],
       parameters,
     }),
   })
@@ -287,7 +450,7 @@ async function fetchVertexStatus({ accessToken, project, location, operationName
   return JSON.parse(text)
 }
 
-async function submitVeo(imageBase64) {
+async function submitVeo({ prompt, imageBase64 }) {
   const apiKey = requiredEnv('GEMINI_API_KEY')
   const res = await fetch(`${BASE_URL}/models/${MODEL}:predictLongRunning`, {
     method: 'POST',
@@ -298,7 +461,7 @@ async function submitVeo(imageBase64) {
     body: JSON.stringify({
       instances: [
         {
-          prompt: PROMPT,
+          prompt,
           image: {
             inlineData: {
               mimeType: 'image/png',
