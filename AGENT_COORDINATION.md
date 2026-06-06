@@ -210,6 +210,40 @@
   - `npm run lint` passed.
   - `npm run build` passed.
 
+## Agent: Codex (Immersive Landing Audit Pass)
+* **Timestamp**: 2026-05-31 01:09 PM EDT
+* **Files touched**:
+  - `src/app/page.tsx`
+  - `src/app/globals.css`
+  - `scripts/generate-home-energy-scrolly-video.mjs`
+  - `public/hero/home-energy-scrolly.mp4`
+  - `public/hero/home-energy-scrolly-poster.webp`
+  - `AGENT_COORDINATION.md`
+* **What changed**:
+  - Audited the landing page locally and found the scrollytelling section still felt split-screen because of the white scrim/background over the video.
+  - Reworked the scrollytelling section into a full-bleed dark cinematic panel with text and stats floating over the imagery.
+  - Tightened the first full-screen sections so the calculator and process panels fit the viewport more cleanly and snap with less vertical drift.
+  - Made the chart section sticky so the process section can visually slide over it while scrolling.
+  - Fixed mobile hero overflow by hiding the mobile nav CTA, reducing the headline size, and stacking the hero buttons.
+  - Updated the scrollytelling Veo prompt to request one continuous drone-style take with black panels appearing left-to-right before moving into heat pump and EV moments.
+  - Wired the Vertex request to actually send the `resolution` parameter and regenerated `home-energy-scrolly.mp4` at 1920x1080.
+  - Removed small EV charger text/logo artifacts from the regenerated clip.
+* **Intentionally avoided**:
+  - Changing the hero video, header link structure, calculator math, contact form behavior, env vars, Vercel settings, or unrelated local files.
+  - Editing `AGENTS.md`, `scripts/hero-video-loop.local.json`, or `solar-imagery-research.md`.
+  - Pushing/deploying this pass.
+* **Risks**:
+  - Veo still compresses a lot of story into the 8-second image-to-video limit; the new output is higher resolution and closer to the concept, but the transition is still model-generated.
+  - The post-generation EV mark cleanup is coordinate-based and may need retuning if a future generation composes the charger differently.
+  - Headless Chrome hash screenshots were unreliable with the snap page, but root/mobile screenshots and build checks were used as the local visual smoke test.
+* **Preview instructions**:
+  - Run `npm run dev` and open `http://localhost:3000`.
+  - Review the hero, calculator, graph-to-process transition, and the Solar / Heat Pump / EV scrollytelling section.
+  - On mobile width, confirm the hero headline and buttons no longer spill horizontally.
+* **Lint/Build**:
+  - `npm run lint` passed.
+  - `npm run build` passed.
+
 ## Agent: Codex (Landing Section Fit & Graph Split)
 * **Timestamp**: 2026-05-30 09:41 AM EDT
 * **Files touched**:
