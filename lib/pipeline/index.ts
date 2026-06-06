@@ -83,5 +83,15 @@ export async function runPipeline(prospect: Prospect): Promise<{
 
   stages.economics = true;
 
+  // stamp microsite URL so the dashboard "View Site" link lights up
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
+  if (appUrl) {
+    await updateProspect(prospect.id, {
+      microsite_url: `${appUrl}/${prospect.slug}`,
+      stage: "microsite_live",
+    });
+    stages.microsite = true;
+  }
+
   return { success: true, stages };
 }

@@ -35,6 +35,8 @@ export function PipelineActions({ prospect }: { prospect: Prospect }) {
 
     if (step === "solar") {
       endpoint = "/api/pipeline/solar";
+    } else if (step === "microsite") {
+      endpoint = "/api/pipeline/microsite";
     }
 
     const res = await fetch(endpoint, {
