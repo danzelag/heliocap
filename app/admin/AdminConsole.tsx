@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
 import type { Prospect, ProspectStage } from "@/lib/types";
 
 type StageKey = "sourced" | "qualified" | "rendered" | "sent" | "replied" | "booked";
@@ -37,8 +37,7 @@ const ACTIVITY_KINDS = {
 
 type ActivityKind = keyof typeof ACTIVITY_KINDS;
 
-type ActivityItem = {
-  id: string;
+type ProspectHistoryItem = {
   time: string;
   kind: ActivityKind;
   text: string;
@@ -61,11 +60,8 @@ const CAD = new Intl.NumberFormat("en-CA", {
 const NUMBER = new Intl.NumberFormat("en-CA");
 
 export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
-  const router = useRouter();
   const [selectedId, setSelectedId] = useState(prospects[0]?.id ?? "");
   const [stageFilter, setStageFilter] = useState<StageKey | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const [running, setRunning] = useState(false);
 
   const selected = prospects.find((prospect) => prospect.id === selectedId) ?? prospects[0] ?? null;
 
@@ -88,21 +84,6 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
   const shownProspects = stageFilter
     ? prospects.filter((prospect) => stagesFor(stageFilter).includes(prospect.stage))
     : prospects;
-
-  async function runPipeline() {
-    if (!selected) return;
-    setRunning(true);
-    try {
-      await fetch("/api/pipeline/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: selected.id }),
-      });
-      startTransition(() => router.refresh());
-    } finally {
-      setRunning(false);
-    }
-  }
 
   function pickStage(key: StageKey) {
     const next = stageFilter === key ? null : key;
@@ -163,33 +144,19 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
           onPickStage={pickStage}
         />
 
-        <main className="mt-8">
-          <div>
-            {selected ? (
-              <ProspectPreview
-                prospect={selected}
-                isRunning={running || isPending}
-                onRunPipeline={runPipeline}
-              />
-            ) : (
-              <EmptyConsole />
-            )}
-          </div>
-
-          <div className="mt-8 grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_430px]">
-            <div className="min-w-0">
-              <ProspectTable
-                prospects={shownProspects}
-                selectedId={selected?.id ?? ""}
-                filter={stageFilter}
-                onClearFilter={() => setStageFilter(null)}
-                onSelect={focusPreview}
-              />
-            </div>
-            <aside className="space-y-5 xl:sticky xl:top-5">
-              <SelectedVideoPanel prospect={selected} />
-              <ActivityFeed key={`${selected?.id ?? "empty"}-${prospects.length}`} prospects={prospects} selected={selected} />
-            </aside>
+        <main className="mt-[26px] grid items-start gap-[30px] xl:grid-cols-[392px_minmax(0,1fr)]">
+          <aside className="xl:sticky xl:top-[18px]">
+            <ProspectList
+              prospects={shownProspects}
+              totalCount={prospects.length}
+              selectedId={selected?.id ?? ""}
+              filter={stageFilter}
+              onClearFilter={() => setStageFilter(null)}
+              onSelect={focusPreview}
+            />
+          </aside>
+          <div className="min-w-0">
+            {selected ? <ProspectPreview prospect={selected} /> : <EmptyConsole />}
           </div>
         </main>
       </div>
@@ -197,15 +164,7 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
   );
 }
 
-function ProspectPreview({
-  prospect,
-  isRunning,
-  onRunPipeline,
-}: {
-  prospect: Prospect;
-  isRunning: boolean;
-  onRunPipeline: () => void;
-}) {
+function ProspectPreview({ prospect }: { prospect: Prospect }) {
   const model = getProspectModel(prospect);
   const stage = stageFor(prospect.stage);
 
@@ -250,30 +209,29 @@ function ProspectPreview({
         </div>
       </div>
 
-      <div className="grid gap-[26px] lg:grid-cols-[minmax(0,1.32fr)_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-4">
-          <SatellitePanel key={prospect.id} prospect={prospect} model={model} />
+      <div className="mb-[14px] flex items-center justify-between gap-4 border border-white/[0.07] bg-[#1a1a1f] px-[18px] py-[15px]">
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-[14px] gap-y-1">
+          <span className="font-serif text-[19px] font-semibold leading-none text-[#ece9e3]">
+            {prospect.owner_name ?? "Owner research pending"}
+          </span>
+          <span className="truncate text-[12.5px] text-stone-400">
+            {prospect.owner_title ?? "Facilities contact"} · {prospect.company_name}
+          </span>
         </div>
-
-        <div className="flex min-w-0 flex-col gap-6">
-          <Section label="Owner & contact">
-            <OwnerCard prospect={prospect} />
-          </Section>
-          <Section label="Roof condition">
-            <RoofAnalysis model={model} />
-          </Section>
-          <button
-            type="button"
-            onClick={onRunPipeline}
-            disabled={isRunning}
-            className="border border-[#c08a4b] bg-[#c08a4b] px-4 py-3 text-sm font-semibold text-[#131316] transition hover:bg-[#d8a866] disabled:cursor-wait disabled:opacity-60"
-          >
-            {isRunning ? "Running pipeline..." : "Run full pipeline"}
-          </button>
-        </div>
+        <span className="shrink-0 border border-[#86a06f]/45 px-2 py-1 text-[8.5px] uppercase tracking-[0.14em] text-[#a4ba8d]">
+          OWNER VERIFIED
+        </span>
       </div>
 
-      <div className="mt-7 grid gap-7 border-t border-white/[0.07] pt-7 lg:grid-cols-2">
+      <FlyoverPanel prospect={prospect} />
+
+      <div className="mt-[26px]">
+        <Section label="Activity history">
+          <ProspectHistory prospect={prospect} />
+        </Section>
+      </div>
+
+      <div className="mt-[26px] grid gap-[30px] lg:grid-cols-2">
         <Section label="Building specification">
           <SpecsGrid prospect={prospect} model={model} />
         </Section>
@@ -285,86 +243,19 @@ function ProspectPreview({
   );
 }
 
-function SatellitePanel({ prospect, model }: { prospect: Prospect; model: ProspectModel }) {
-  const [on, setOn] = useState(false);
-  const hasRenderedLayout = Boolean(prospect.panel_svg_url);
-
-  useEffect(() => {
-    const id = window.setTimeout(() => setOn(true), 90);
-    return () => window.clearTimeout(id);
-  }, [prospect.id]);
-
-  const cells = Array.from({ length: 187 });
-
-  return (
-    <div className="relative aspect-[16/10] overflow-hidden border border-white/12 bg-[#080a0d]">
-      {prospect.satellite_image_url ? (
-        <img
-          src={prospect.satellite_image_url}
-          alt={`Satellite view of ${prospect.address}`}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      ) : (
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_25%,rgba(192,138,75,0.16),transparent_28%),linear-gradient(135deg,#101318,#070809)]" />
-      )}
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,8,9,0.16)_0%,transparent_22%,transparent_68%,rgba(7,8,9,0.38)_100%)]" />
-      {hasRenderedLayout ? (
-        <img
-          src={prospect.panel_svg_url ?? ""}
-          alt="Solar panel layout overlay"
-          className="absolute inset-0 h-full w-full object-cover opacity-[0.92] mix-blend-screen"
-        />
-      ) : null}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:40px_40px]" />
-      {!hasRenderedLayout ? (
-        <div className="absolute left-[23%] top-[26%] h-[46%] w-[54%]">
-          <div
-            className="grid h-full w-full gap-0.5"
-            style={{
-              gridTemplateColumns: "repeat(17, minmax(0, 1fr))",
-              gridTemplateRows: "repeat(11, minmax(0, 1fr))",
-            }}
-          >
-            {cells.map((_, index) => (
-              <span
-                key={index}
-                className={`border border-[#c08a4b]/45 bg-gradient-to-br from-[#162132] to-[#0e1420] shadow-inner transition duration-300 ${
-                  on ? "scale-100 opacity-90" : "scale-50 opacity-0"
-                }`}
-                style={{ transitionDelay: `${Math.min(index * 7, 720)}ms` }}
-              />
-            ))}
-          </div>
-          <Corner position="left-[-2px] top-[-2px] border-r-0 border-b-0" />
-          <Corner position="right-[-2px] top-[-2px] border-l-0 border-b-0" />
-          <Corner position="left-[-2px] bottom-[-2px] border-r-0 border-t-0" />
-          <Corner position="right-[-2px] bottom-[-2px] border-l-0 border-t-0" />
-        </div>
-      ) : null}
-      <div className="absolute left-3 right-3 top-3 flex justify-between font-mono text-[10px] uppercase tracking-[0.1em] text-stone-200/75">
-        <span className="text-[#d8a866]">SATELLITE · 0.15 m/px</span>
-        <span>{coordinateLabel(prospect)}</span>
-      </div>
-      <div className="absolute bottom-3 left-3 flex flex-wrap gap-5 border border-white/[0.08] bg-[#080a0d]/70 px-3 py-2 backdrop-blur-sm">
-        <Readout label="Array" value={model.panelsLabel} />
-        <Readout label="Usable roof" value={model.usableRoofPctLabel} />
-        <Readout label="Azimuth" value={model.azimuth} />
-        <Readout label="Shading" value={model.shading} />
-      </div>
-    </div>
-  );
-}
-
 function FlyoverPanel({ prospect }: { prospect: Prospect }) {
   const ready = Boolean(prospect.video_url);
   const duration = "0:48";
 
   return (
-    <div className="relative aspect-[16/7.4] overflow-hidden border border-white/12 bg-[#070809]">
+    <div className="relative aspect-[2.75/1] overflow-hidden border border-white/12 bg-[#070809]">
       {prospect.video_thumbnail_url || prospect.satellite_image_url ? (
-        <img
+        <Image
           src={prospect.video_thumbnail_url ?? prospect.satellite_image_url ?? ""}
           alt=""
+          fill
+          unoptimized
+          sizes="(min-width: 1280px) calc(100vw - 500px), 100vw"
           className="absolute inset-0 h-full w-full object-cover opacity-60"
         />
       ) : (
@@ -396,97 +287,6 @@ function FlyoverPanel({ prospect }: { prospect: Prospect }) {
   );
 }
 
-function SelectedVideoPanel({ prospect }: { prospect: Prospect | null }) {
-  if (!prospect) {
-    return (
-      <section className="border border-white/[0.07] bg-[#1a1a1f]">
-        <div className="border-b border-white/[0.07] px-4 py-4">
-          <div className="text-xs uppercase tracking-[0.16em]">Selected video</div>
-        </div>
-        <div className="px-5 py-16 text-center text-sm text-stone-500">Select a prospect to load its flyover.</div>
-      </section>
-    );
-  }
-
-  const ready = Boolean(prospect.video_url);
-  const stage = stageFor(prospect.stage);
-
-  return (
-    <section className="border border-white/[0.07] bg-[#1a1a1f]">
-      <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] px-4 py-4">
-        <div className="min-w-0">
-          <div className="text-xs uppercase tracking-[0.16em] text-[#ece9e3]">Selected video</div>
-          <div className="mt-2 truncate text-sm font-medium text-stone-200">{prospect.address || prospect.company_name}</div>
-          <div className="mt-1 truncate text-[10.5px] text-stone-500">{prospect.company_name}</div>
-        </div>
-        <StagePill stage={stage} label={ready ? "Ready" : labelForStage(prospect.stage)} />
-      </div>
-      <div className="p-4">
-        <FlyoverPanel prospect={prospect} />
-      </div>
-    </section>
-  );
-}
-
-function OwnerCard({ prospect }: { prospect: Prospect }) {
-  return (
-    <div className="border border-white/[0.07] bg-[#1a1a1f]">
-      <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] p-4">
-        <div className="min-w-0">
-          <div className="font-serif text-[19px] font-semibold leading-[1.1]">{prospect.owner_name ?? "Owner research pending"}</div>
-          <div className="mt-1 text-xs text-stone-400">
-            {prospect.owner_title ?? "Facilities contact"} · {prospect.company_name}
-          </div>
-        </div>
-        <span className="shrink-0 border border-[#86a06f]/45 px-2 py-1 text-[8.5px] uppercase tracking-[0.14em] text-[#a4ba8d]">
-          OWNER VERIFIED
-        </span>
-      </div>
-      <div className="grid sm:grid-cols-2">
-        <ContactLink label="Direct" value={prospect.owner_mobile ?? "Pending"} href={prospect.owner_mobile ? `tel:${prospect.owner_mobile.replace(/[^\d+]/g, "")}` : undefined} />
-        <ContactLink label="Email" value={prospect.owner_email ?? "Pending"} href={prospect.owner_email ? `mailto:${prospect.owner_email}` : undefined} />
-      </div>
-    </div>
-  );
-}
-
-function RoofAnalysis({ model }: { model: ProspectModel }) {
-  return (
-    <div className="border border-white/[0.07] bg-[#1a1a1f] p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="font-serif text-4xl font-semibold">
-            {model.roofScore}
-            <span className="text-base font-normal text-stone-500">/100</span>
-          </div>
-          <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-stone-500">Condition index</div>
-        </div>
-        <span className={`border px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] ${model.urgencyClass}`}>
-          {model.urgency}
-        </span>
-      </div>
-      <div className="relative mt-4 h-1.5 bg-white/[0.07]">
-        <div
-          className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#9a6c38] to-[#c8704a]"
-          style={{ width: `${100 - model.roofScore}%` }}
-        />
-        <span className="absolute right-0 top-2 text-[9.5px] uppercase tracking-[0.1em] text-stone-500">
-          Degradation {100 - model.roofScore}%
-        </span>
-      </div>
-      <div className="mt-8 divide-y divide-white/[0.07]">
-        <RoofLine label="Roof age" value={model.roofAgeLabel} />
-        <RoofLine label="Observed" value={model.roofCondition} />
-        <RoofLine label="Replacement window" value={model.replacementWindow} hot />
-      </div>
-      <p className="mt-4 border-l-2 border-[#9a6c38] pl-3 text-xs leading-6 text-stone-500">
-        Re-roof + solar in a single mobilization — structural reinforcement and membrane replacement amortized across the
-        array install.
-      </p>
-    </div>
-  );
-}
-
 function SpecsGrid({ prospect, model }: { prospect: Prospect; model: ProspectModel }) {
   const specs = [
     ["Gross floor area", model.sqftLabel],
@@ -500,7 +300,7 @@ function SpecsGrid({ prospect, model }: { prospect: Prospect; model: ProspectMod
   ];
 
   return (
-    <div className="grid border border-white/[0.07] bg-white/[0.07] sm:grid-cols-2">
+    <div className="grid bg-white/[0.07] sm:grid-cols-2">
       {specs.map(([label, value]) => (
         <div className="bg-[#1a1a1f] p-4" key={label}>
           <div className="text-[10px] uppercase tracking-[0.12em] text-stone-500">{label}</div>
@@ -523,7 +323,7 @@ function SavingsLedger({ model }: { model: ProspectModel }) {
   ];
 
   return (
-    <div className="border border-white/[0.07] bg-[#1a1a1f] p-5">
+    <div className="p-5">
       <div>
         {rows.map(([label, value]) => (
           <div className="flex items-baseline gap-2 py-2 text-sm" key={label}>
@@ -555,128 +355,109 @@ function SavingsLedger({ model }: { model: ProspectModel }) {
   );
 }
 
-function ProspectTable({
+function ProspectList({
   prospects,
+  totalCount,
   selectedId,
   filter,
   onClearFilter,
   onSelect,
 }: {
   prospects: Prospect[];
+  totalCount: number;
   selectedId: string;
   filter: StageKey | null;
   onClearFilter: () => void;
   onSelect: (id: string) => void;
 }) {
   return (
-    <section className="mt-8">
-      <div className="mb-4 flex items-baseline justify-between gap-4">
-        <h2 className="font-serif text-2xl font-semibold">Prospect roster</h2>
+    <section className="flex max-h-[calc(100vh-34px)] min-h-0 flex-col border border-white/[0.07] bg-[#1a1a1f]">
+      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] px-[15px] py-[13px]">
+        <h2 className="text-xs uppercase tracking-[0.16em] text-[#ece9e3]">Prospect roster</h2>
         {filter ? (
           <button
             type="button"
             onClick={onClearFilter}
-            className="border border-[#c08a4b]/45 px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] text-[#c08a4b] transition hover:bg-[#c08a4b]/10"
+            className="border border-[#c08a4b]/45 px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-[#c08a4b] transition hover:bg-[#c08a4b]/10"
           >
-            {STAGE_META[filter].label} · clear
+            {STAGE_META[filter].label} x
           </button>
         ) : (
-          <span className="text-[11px] uppercase tracking-[0.16em] text-stone-500">{prospects.length} active · GTA West</span>
+          <span className="text-[9.5px] uppercase tracking-[0.14em] text-stone-500">{totalCount} active · GTA West</span>
         )}
       </div>
 
-      <div className="overflow-x-auto border border-white/[0.07]">
-        <div className="min-w-[860px]">
-          <div className="grid grid-cols-[2.2fr_1.8fr_1.1fr_1.15fr_1.1fr_0.9fr] gap-4 border-b border-white/[0.07] px-5 py-3 text-[9.5px] uppercase tracking-[0.16em] text-stone-500">
-            <div>Property</div>
-            <div>Owner</div>
-            <div>Roof age</div>
-            <div>System</div>
-            <div className="text-right">Net / yr</div>
-            <div>Stage</div>
+      <div className="min-h-0 flex-1 overflow-auto">
+        {prospects.map((prospect) => {
+          const model = getProspectModel(prospect);
+          const stage = stageFor(prospect.stage);
+          return (
+            <button
+              type="button"
+              key={prospect.id}
+              onClick={() => onSelect(prospect.id)}
+              className={`relative block w-full border-b border-white/[0.07] px-4 py-[13px] text-left transition last:border-b-0 hover:bg-[#212128] ${
+                prospect.id === selectedId ? "bg-[#212128] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-[#c08a4b]" : ""
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-[#ece9e3]">
+                  {prospect.address || prospect.company_name}
+                </span>
+                <StagePill stage={stage} label={labelForStage(prospect.stage)} />
+              </div>
+              <div className="mt-1 truncate text-[11px] text-stone-600">
+                {prospect.city || "Ontario"} · {prospect.owner_name ?? "Owner pending"}
+              </div>
+              <div className="mt-[9px] flex items-baseline gap-[13px] font-mono text-[11px] text-stone-400">
+                <span>{model.roofAgeShort}</span>
+                <span>{model.systemLabel}</span>
+                <span className="ml-auto text-[#d8a866]">{formatMoney(model.annualSavings)}/yr</span>
+              </div>
+            </button>
+          );
+        })}
+        {prospects.length === 0 ? (
+          <div className="px-5 py-12 text-center text-sm text-stone-500">
+            No prospects in this view.{" "}
+            <Link href="/admin/prospects/new" className="text-[#c08a4b] underline underline-offset-4">
+              Add one
+            </Link>
           </div>
-          {prospects.map((prospect) => {
-            const model = getProspectModel(prospect);
-            const stage = stageFor(prospect.stage);
-            return (
-              <button
-                type="button"
-                key={prospect.id}
-                onClick={() => onSelect(prospect.id)}
-                className={`grid w-full grid-cols-[2.2fr_1.8fr_1.1fr_1.15fr_1.1fr_0.9fr] items-center gap-4 border-b border-white/[0.07] px-5 py-4 text-left transition last:border-b-0 hover:bg-[#1a1a1f] ${
-                  prospect.id === selectedId ? "bg-[#212128] shadow-[inset_2px_0_0_#c08a4b]" : ""
-                }`}
-              >
-                <Cell primary={prospect.address || prospect.company_name} secondary={`${prospect.city || "Ontario"} · ${model.sqftLabel}`} />
-                <Cell primary={prospect.owner_name ?? "Owner pending"} secondary={prospect.company_name} />
-                <Cell primary={model.roofAgeShort} secondary={model.roofTypeShort} mono />
-                <Cell primary={model.systemLabel} secondary={model.panelsLabel} mono />
-                <Cell primary={formatMoney(model.annualSavings)} secondary={model.paybackLabel} mono align="right" accent />
-                <div>
-                  <StagePill stage={stage} label={labelForStage(prospect.stage)} />
-                </div>
-              </button>
-            );
-          })}
-          {prospects.length === 0 && (
-            <div className="px-5 py-12 text-center text-sm text-stone-500">
-              No prospects in this view.{" "}
-              <Link href="/admin/prospects/new" className="text-[#c08a4b] underline underline-offset-4">
-                Add one
-              </Link>
-            </div>
-          )}
-        </div>
+        ) : null}
       </div>
     </section>
   );
 }
 
-function ActivityFeed({ prospects, selected }: { prospects: Prospect[]; selected: Prospect | null }) {
-  const initial = useMemo(() => buildActivity(prospects, selected), [prospects, selected]);
-  const [items, setItems] = useState(initial);
-
-  useEffect(() => {
-    if (!selected) return;
-    const stream = activityStream(selected);
-    let index = 0;
-    const id = window.setInterval(() => {
-      const next = stream[index % stream.length];
-      index += 1;
-      setItems((current) => [
-        { ...next, id: `${Date.now()}-${index}`, time: "now" },
-        ...current.map((item) => ({ ...item, time: bumpTime(item.time) })),
-      ].slice(0, 9));
-    }, 5200);
-    return () => window.clearInterval(id);
-  }, [selected]);
+function ProspectHistory({ prospect }: { prospect: Prospect }) {
+  const items = buildProspectHistory(prospect);
 
   return (
-    <section className="border border-white/[0.07] bg-[#1a1a1f]">
-      <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-4">
-        <div className="flex items-center gap-3 text-xs uppercase tracking-[0.16em]">
-          <LiveDot />
-          Live activity
-        </div>
-        <div className="text-[9.5px] uppercase tracking-[0.14em] text-stone-500">agent · running</div>
-      </div>
-      <div className="max-h-[calc(100vh-120px)] overflow-auto">
-        {items.map((item, index) => {
-          const meta = ACTIVITY_KINDS[item.kind];
-          return (
-            <div className="flex gap-3 border-b border-white/[0.07] px-4 py-3 last:border-b-0" key={item.id}>
-              <div className="w-8 shrink-0 pt-0.5 font-mono text-[10px] text-stone-600">{index === 0 ? item.time : item.time}</div>
-              <div className="text-xs leading-6">
-                <span className={`mr-2 inline-block border px-1.5 py-0.5 text-[8px] uppercase tracking-[0.12em] ${meta.className}`}>
-                  {meta.tag}
-                </span>
-                <span className="text-stone-400">{item.text}</span>
-              </div>
+    <div className="py-1">
+      {items.map((item, index) => {
+        const meta = ACTIVITY_KINDS[item.kind];
+        return (
+          <div className="grid grid-cols-[74px_22px_minmax(0,1fr)] px-5 py-3" key={`${item.time}-${item.text}`}>
+            <div className="pt-0.5 font-mono text-[10.5px] text-stone-600">{item.time}</div>
+            <div className="relative self-stretch">
+              {index < items.length - 1 ? <span className="absolute left-[3px] top-[9px] bottom-[-12px] w-px bg-white/12" /> : null}
+              <span
+                className={`absolute left-0 top-[5px] h-[7px] w-[7px] rounded-full ${
+                  index === 0 ? "bg-[#c08a4b] shadow-[0_0_0_4px_rgba(192,138,75,0.14)]" : "bg-white/12"
+                }`}
+              />
             </div>
-          );
-        })}
-      </div>
-    </section>
+            <div className="min-w-0 text-[13px] leading-6">
+              <span className={`mr-2 inline-block border px-1.5 py-0.5 text-[8px] uppercase tracking-[0.12em] ${meta.className}`}>
+                {meta.tag}
+              </span>
+              <span className="text-stone-400">{item.text}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -721,43 +502,48 @@ function OperatorMenu({
 }) {
   return (
     <section className="border-b border-white/[0.07]">
-      <div className="grid border-x border-white/[0.07] bg-[#1a1a1f]/55 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
-        <div className="grid sm:grid-cols-2 xl:grid-cols-4">
+      <div className="flex flex-wrap items-stretch border-b border-white/[0.07]">
+        <div className="flex min-w-0 flex-1 flex-wrap">
           {metrics.map((metric) => (
             <div
-              className="border-b border-r border-white/[0.07] px-4 py-3 xl:border-b-0"
+              className="flex items-baseline gap-2 border-r border-white/[0.07] px-[22px] py-[14px] first:pl-0"
               key={metric.label}
             >
-              <div className="font-mono text-lg leading-none text-[#ece9e3]">
+              <div className="font-mono text-[21px] font-semibold leading-none text-[#ece9e3]">
                 {metric.prefix}
                 <CountUp
                   value={metric.value}
                   decimals={metric.decimals}
                   format={(n) => (metric.decimals ? n.toFixed(metric.decimals) : formatNumber(n))}
                 />
-                {metric.unit ? <span className="ml-1 text-[11px] text-[#c08a4b]">{metric.unit}</span> : null}
+                {metric.unit ? <span className="ml-1 text-sm text-[#c08a4b]">{metric.unit}</span> : null}
               </div>
-              <div className="mt-2 truncate text-[10.5px] text-stone-400">{metric.label}</div>
-              <div className="mt-1 text-[9px] uppercase tracking-[0.18em] text-stone-600">Today</div>
+              <div className="truncate text-[11.5px] text-stone-400">{metric.label}</div>
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
+        <span className="ml-auto flex items-center pr-0 text-[10px] uppercase tracking-[0.22em] text-stone-600">Today</span>
+      </div>
+      <div className="flex flex-wrap items-stretch">
+        <span className="flex items-center border-r border-white/[0.07] pr-[18px] text-[10px] uppercase tracking-[0.2em] text-stone-600">
+          Pipeline
+        </span>
+        <div className="flex min-w-0 flex-1 flex-wrap">
           {pipeline.map((item) => {
             const active = activeStage === item.key;
             return (
               <button
                 type="button"
                 onClick={() => onPickStage(item.key)}
-                className={`border-b border-r border-white/[0.07] px-4 py-3 text-left transition xl:border-b-0 ${
-                  active ? "bg-[#212128] shadow-[inset_0_-2px_0_#c08a4b]" : "hover:bg-[#212128]"
+                className={`relative flex items-baseline gap-[7px] border-r border-white/[0.07] px-[18px] py-3 text-left transition ${
+                  active ? "bg-[#212128] shadow-[inset_0_-2px_0_#c08a4b]" : "hover:bg-[#1a1a1f]"
                 }`}
                 key={item.key}
               >
-                <div className={`font-mono text-lg leading-none ${active ? "text-[#d8a866]" : "text-[#ece9e3]"}`}>
+                <div className={`font-mono text-base font-semibold leading-none ${active ? "text-[#c08a4b]" : "text-[#ece9e3]"}`}>
                   <CountUp value={item.count} />
                 </div>
-                <div className="mt-2 text-[10.5px] uppercase tracking-[0.16em] text-stone-500">{item.label}</div>
+                <div className={`text-[11px] uppercase tracking-[0.12em] ${active ? "text-[#d8a866]" : "text-stone-600"}`}>{item.label}</div>
               </button>
             );
           })}
@@ -769,8 +555,8 @@ function OperatorMenu({
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <section>
-      <div className="mb-3 flex items-center gap-4 text-[10.5px] uppercase tracking-[0.26em] text-stone-500">
+    <section className="border border-white/[0.07] bg-[#1a1a1f]">
+      <div className="flex items-center gap-4 border-b border-white/[0.07] px-4 py-[13px] text-[10.5px] uppercase tracking-[0.26em] text-stone-500">
         <span>{label}</span>
         <span className="h-px flex-1 bg-white/[0.07]" />
       </div>
@@ -787,55 +573,6 @@ function StagePill({ stage, label }: { stage: StageKey; label: string }) {
   );
 }
 
-function ContactLink({ label, value, href }: { label: string; value: string; href?: string }) {
-  const content = (
-    <>
-      <span className="text-[9px] uppercase tracking-[0.16em] text-stone-500">{label}</span>
-      <span className="overflow-hidden text-ellipsis font-mono text-xs">{value}</span>
-    </>
-  );
-
-  if (!href) {
-    return (
-      <div className="flex min-w-0 flex-col gap-1 border-b border-white/[0.07] p-4 sm:border-b-0 sm:border-r sm:last:border-r-0">
-        {content}
-      </div>
-    );
-  }
-
-  return (
-    <a
-      className="flex min-w-0 flex-col gap-1 border-b border-white/[0.07] p-4 transition hover:bg-[#212128] sm:border-b-0 sm:border-r sm:last:border-r-0"
-      href={href}
-    >
-      {content}
-    </a>
-  );
-}
-
-function Cell({
-  primary,
-  secondary,
-  mono,
-  accent,
-  align,
-}: {
-  primary: string;
-  secondary: string;
-  mono?: boolean;
-  accent?: boolean;
-  align?: "right";
-}) {
-  return (
-    <div className={`min-w-0 ${align === "right" ? "text-right" : ""}`}>
-      <div className={`truncate text-sm ${mono ? "font-mono text-xs" : ""} ${accent ? "text-[#d8a866]" : "text-[#ece9e3]"}`}>
-        {primary}
-      </div>
-      <div className="mt-1 truncate text-[10.5px] text-stone-600">{secondary}</div>
-    </div>
-  );
-}
-
 function LedgerMetric({ value, label }: { value: string; label: string }) {
   return (
     <div className="bg-[#1a1a1f] p-4">
@@ -843,28 +580,6 @@ function LedgerMetric({ value, label }: { value: string; label: string }) {
       <div className="mt-2 text-[9.5px] uppercase tracking-[0.14em] text-stone-500">{label}</div>
     </div>
   );
-}
-
-function RoofLine({ label, value, hot }: { label: string; value: string; hot?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 py-2 text-sm">
-      <span className="text-stone-400">{label}</span>
-      <b className={`text-right font-medium ${hot ? "text-[#c8704a]" : ""}`}>{value}</b>
-    </div>
-  );
-}
-
-function Readout({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[8.5px] uppercase tracking-[0.16em] text-stone-500">{label}</span>
-      <span className="font-mono text-xs">{value}</span>
-    </div>
-  );
-}
-
-function Corner({ position }: { position: string }) {
-  return <span className={`absolute h-4 w-4 border border-[#c08a4b] ${position}`} />;
 }
 
 function ClawMark() {
@@ -968,43 +683,70 @@ function labelForStage(stage: ProspectStage) {
   return STAGE_META[stageFor(stage)].label;
 }
 
-function buildActivity(prospects: Prospect[], selected: Prospect | null): ActivityItem[] {
-  const rows = prospects.slice(0, 6);
-  const fallback = selected ? [selected] : rows;
-  const source = rows.length ? rows : fallback;
-
-  return source.slice(0, 6).map((prospect, index) => ({
-    id: `${prospect.id}-${index}`,
-    time: `${index + 1}m`,
-    kind: activityKindFor(prospect.stage),
-    text: activityText(prospect),
-  }));
-}
-
-function activityStream(prospect: Prospect): ActivityItem[] {
-  return [
-    { id: "a", time: "now", kind: "panel", text: `Panel layout refreshed for ${prospect.address || prospect.company_name}.` },
-    { id: "b", time: "now", kind: "render", text: `Flyover render checked for ${prospect.company_name}.` },
-    { id: "c", time: "now", kind: "incentive", text: `Incentive stack recalculated for ${prospect.city || "Ontario"} prospect.` },
-  ];
-}
-
-function activityKindFor(stage: ProspectStage): ActivityKind {
-  if (stage === "replied" || stage === "booked") return "reply";
-  if (stage === "emailed" || stage === "followed_up") return "send";
-  if (["satellite_done", "solar_done", "video_done", "microsite_live"].includes(stage)) return "render";
-  if (stage === "qualified") return "qualify";
-  return "source";
-}
-
-function activityText(prospect: Prospect) {
+function buildProspectHistory(prospect: Prospect): ProspectHistoryItem[] {
+  const model = getProspectModel(prospect);
+  const currentStage = stageFor(prospect.stage);
+  const stageIndex = STAGE_FLOW.findIndex((item) => item.key === currentStage);
   const target = prospect.address || prospect.company_name;
-  if (prospect.stage === "booked") return `Discovery call booked with ${prospect.owner_name ?? prospect.company_name}.`;
-  if (prospect.stage === "replied") return `Owner reply captured for ${target}.`;
-  if (prospect.stage === "emailed" || prospect.stage === "followed_up") return `Personalized proposal sent to ${prospect.owner_email ?? prospect.company_name}.`;
-  if (["satellite_done", "solar_done", "video_done", "microsite_live"].includes(prospect.stage)) return `Rendering package ready for ${target}.`;
-  if (prospect.stage === "qualified") return `Roof age and owner match qualified for ${target}.`;
-  return `Assessor record sourced for ${target}.`;
+  const city = prospect.city || "Ontario";
+  const owner = prospect.owner_name ?? prospect.company_name;
+  const events: Array<{ kind: ActivityKind; text: string }> = [
+    {
+      kind: "source",
+      text: `Sourced - record matched in ${city} · ${model.sqftLabel}`,
+    },
+  ];
+
+  if (stageIndex >= 1) {
+    events.push({
+      kind: "qualify",
+      text: `Qualified - roof age ${model.roofAgeShort}, owner contact confirmed`,
+    });
+  }
+
+  if (stageIndex >= 2) {
+    events.push(
+      {
+        kind: "panel",
+        text: `Panel layout solved - ${model.panelsLabel}, ${model.offsetLabel} offset`,
+      },
+      {
+        kind: "render",
+        text: `Flyover rendered - ${prospect.video_url ? "runtime 0:48" : "queued for final pass"}`,
+      },
+      {
+        kind: "incentive",
+        text: `Incentive stack flagged - ${formatMoneyCompact(model.incentive)}`,
+      }
+    );
+  }
+
+  if (stageIndex >= 3) {
+    events.push({
+      kind: "send",
+      text: `Proposal delivered to ${owner}`,
+    });
+  }
+
+  if (stageIndex >= 4) {
+    events.push({
+      kind: "reply",
+      text: `Owner replied - booking link sent for ${target}`,
+    });
+  }
+
+  if (stageIndex >= 5) {
+    events.push({
+      kind: "reply",
+      text: "Discovery call booked",
+    });
+  }
+
+  const times = ["just now", "26 min", "2 h", "5 h", "yesterday", "2 d", "4 d", "6 d", "9 d"];
+  return events.reverse().map((event, index) => ({
+    ...event,
+    time: times[index] ?? `${index + 2} d`,
+  }));
 }
 
 function lastTouch(prospect: Prospect) {
@@ -1015,19 +757,6 @@ function lastTouch(prospect: Prospect) {
   if (prospect.video_url) return "Flyover render ready";
   if (prospect.panel_count) return "Solar layout modeled";
   return "Awaiting next agent step";
-}
-
-function coordinateLabel(prospect: Prospect) {
-  if (prospect.lat && prospect.lng) {
-    return `${Math.abs(prospect.lat).toFixed(4)}° N · ${Math.abs(prospect.lng).toFixed(4)}° W`;
-  }
-  return "43.6532° N · 79.6711° W";
-}
-
-function bumpTime(time: string) {
-  if (time === "now") return "1m";
-  const minutes = Number.parseInt(time, 10);
-  return Number.isFinite(minutes) ? `${minutes + 1}m` : time;
 }
 
 function formatConsoleDate(date: Date) {
