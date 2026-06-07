@@ -18,7 +18,7 @@ const STAGE_ORDER = PIPELINE_STEPS.map((s) => s.stage);
 function isCompleted(prospect: Prospect, stage: string): boolean {
   const idx = STAGE_ORDER.indexOf(stage);
   const currentIdx = STAGE_ORDER.indexOf(prospect.stage);
-  return currentIdx >= idx;
+  return currentIdx >= idx && currentIdx !== -1;
 }
 
 export function PipelineActions({ prospect }: { prospect: Prospect }) {
@@ -72,64 +72,57 @@ export function PipelineActions({ prospect }: { prospect: Prospect }) {
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">
-        Pipeline
-      </h3>
+    <section className="border border-white/[0.07] bg-[#1a1a1f]">
+      <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-4">
+        <div>
+          <div className="text-xs uppercase tracking-[0.16em] text-[#ece9e3]">Pipeline</div>
+          <div className="mt-1 text-[10.5px] text-stone-500">Agent steps</div>
+        </div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.12em] text-stone-500">{prospect.stage}</div>
+      </div>
 
-      <div className="space-y-2 mb-4">
+      <div>
         {PIPELINE_STEPS.map((step) => {
           const done = isCompleted(prospect, step.stage);
           const isLoading = loading === step.key;
           return (
-            <div key={step.key} className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${done ? "bg-green-500 border-green-500" : "border-gray-300"}`}
+            <div className="flex items-center justify-between gap-4 border-b border-white/[0.07] px-4 py-3 last:border-b-0" key={step.key}>
+              <div className="flex min-w-0 items-center gap-3">
+                <span
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                    done ? "border-[#86a06f] bg-[#86a06f]" : "border-white/20"
+                  }`}
                 >
-                  {done && (
-                    <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path
-                        fillRule="evenodd"
-                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                        clipRule="evenodd"
-                      />
-                    </svg>
-                  )}
-                </div>
-                <span className={`text-sm ${done ? "text-gray-500 line-through" : "text-gray-900"}`}>
-                  {step.label}
+                  {done ? <span className="h-1.5 w-1.5 rounded-full bg-[#131316]" /> : null}
                 </span>
+                <span className={`truncate text-sm ${done ? "text-stone-500" : "text-stone-200"}`}>{step.label}</span>
               </div>
-              {!done && (
+              {!done ? (
                 <button
                   onClick={() => runStep(step.key)}
-                  disabled={!!loading}
-                  className="text-xs text-indigo-600 hover:underline disabled:opacity-40"
+                  disabled={Boolean(loading)}
+                  className="shrink-0 border border-[#c08a4b]/45 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-[#d8a866] transition hover:bg-[#c08a4b]/10 disabled:cursor-wait disabled:opacity-40"
                 >
-                  {isLoading ? "Running..." : "Run"}
+                  {isLoading ? "Running" : "Run"}
                 </button>
-              )}
+              ) : null}
             </div>
           );
         })}
       </div>
 
-      {error && (
-        <p className="text-red-600 text-xs bg-red-50 rounded px-3 py-2 mb-3">{error}</p>
-      )}
+      {error ? <p className="mx-4 mt-4 border border-[#c8704a]/40 bg-[#c8704a]/10 px-3 py-2 text-xs text-[#c8704a]">{error}</p> : null}
 
-      <button
-        onClick={runAll}
-        disabled={!!loading}
-        className="w-full bg-black text-white text-sm py-2.5 rounded-lg hover:bg-gray-800 transition disabled:opacity-50"
-      >
-        {loading === "all" ? "Running Pipeline..." : "Run Full Pipeline"}
-      </button>
-
-      {prospect.slug && (
-        <p className="text-xs text-gray-400 mt-3 text-center font-mono">{prospect.slug}</p>
-      )}
-    </div>
+      <div className="p-4">
+        <button
+          onClick={runAll}
+          disabled={Boolean(loading)}
+          className="w-full border border-[#c08a4b] bg-[#c08a4b] px-4 py-3 text-sm font-semibold text-[#131316] transition hover:bg-[#d8a866] disabled:cursor-wait disabled:opacity-60"
+        >
+          {loading === "all" ? "Running pipeline..." : "Run Full Pipeline"}
+        </button>
+        {prospect.slug ? <p className="mt-3 text-center font-mono text-xs text-stone-600">{prospect.slug}</p> : null}
+      </div>
+    </section>
   );
 }
