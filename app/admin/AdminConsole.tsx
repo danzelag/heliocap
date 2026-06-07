@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Prospect, ProspectStage } from "@/lib/types";
 
@@ -54,6 +54,7 @@ const NUMBER = new Intl.NumberFormat("en-CA");
 
 export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
   const router = useRouter();
+  const previewRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState(prospects[0]?.id ?? "");
   const [stageFilter, setStageFilter] = useState<StageKey | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -102,6 +103,13 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
     setStageFilter(next);
     const first = next ? prospects.find((prospect) => stagesFor(next).includes(prospect.stage)) : prospects[0];
     if (first) setSelectedId(first.id);
+  }
+
+  function focusPreview(id: string) {
+    setSelectedId(id);
+    window.requestAnimationFrame(() => {
+      previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   return (
@@ -183,22 +191,24 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
 
         <main className="mt-8 grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
           <div className="min-w-0">
-            {selected ? (
-              <ProspectPreview
-                prospect={selected}
-                isRunning={running || isPending}
-                onRunPipeline={runPipeline}
-              />
-            ) : (
-              <EmptyConsole />
-            )}
+            <div ref={previewRef}>
+              {selected ? (
+                <ProspectPreview
+                  prospect={selected}
+                  isRunning={running || isPending}
+                  onRunPipeline={runPipeline}
+                />
+              ) : (
+                <EmptyConsole />
+              )}
+            </div>
 
             <ProspectTable
               prospects={shownProspects}
               selectedId={selected?.id ?? ""}
               filter={stageFilter}
               onClearFilter={() => setStageFilter(null)}
-              onSelect={setSelectedId}
+              onSelect={focusPreview}
             />
           </div>
           <aside className="xl:sticky xl:top-5">
