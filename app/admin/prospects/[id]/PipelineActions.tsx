@@ -31,7 +31,7 @@ export function PipelineActions({ prospect }: { prospect: Prospect }) {
     setError("");
 
     let endpoint = "/api/pipeline/run";
-    let body: Record<string, string> = { id: prospect.id };
+    const body: Record<string, string> = { id: prospect.id };
 
     if (step === "solar") {
       endpoint = "/api/pipeline/solar";
