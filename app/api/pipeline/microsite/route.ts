@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProspect, updateProspect } from "@/lib/supabase";
+import { buildProposalUrl } from "@/lib/proposals";
 
 export async function POST(req: NextRequest) {
   const { id } = await req.json();
@@ -10,11 +11,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Run solar analysis first" }, { status: 400 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  const micrositeUrl = `${appUrl}/${prospect.slug}`;
-
   const updated = await updateProspect(prospect.id, {
-    microsite_url: micrositeUrl,
+    microsite_url: buildProposalUrl(prospect.slug),
     stage: "microsite_live",
   });
 

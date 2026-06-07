@@ -1,6 +1,8 @@
 import Link from "next/link";
+import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getProspect } from "@/lib/supabase";
+import { buildProposalPath } from "@/lib/proposals";
 import type { Prospect, ProspectStage } from "@/lib/types";
 import { PipelineActions } from "./PipelineActions";
 
@@ -35,16 +37,16 @@ export default async function ProspectDetailPage({
                 OPEN<span className="text-[#c08a4b]">CLAW</span>
               </div>
               <div className="mt-1 text-[10.5px] uppercase tracking-[0.28em] text-stone-500">
-                Prospect record · GTA West
+                Prospect record · CRM workspace
               </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Link
-              href="/admin"
+              href="/admin/prospects"
               className="border border-white/12 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-stone-400 transition hover:border-[#c08a4b]/50 hover:text-[#d8a866]"
             >
-              Back to console
+              Back to CRM
             </Link>
             <StagePill stage={stage} label={labelForStage(prospect.stage)} />
           </div>
@@ -57,14 +59,12 @@ export default async function ProspectDetailPage({
                 <StagePill stage={stage} label={labelForStage(prospect.stage)} />
                 <span className="text-xs text-stone-400">{lastTouch(prospect)}</span>
                 {prospect.microsite_url ? (
-                  <a
-                    href={prospect.microsite_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <Link
+                    href={buildProposalPath(prospect.slug)}
                     className="ml-auto text-[11px] uppercase tracking-[0.14em] text-[#d8a866] hover:text-[#d8a866]"
                   >
-                    View microsite
-                  </a>
+                    View proposal page
+                  </Link>
                 ) : null}
               </div>
               <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:gap-[30px]">
@@ -124,9 +124,12 @@ function SatellitePanel({ prospect, model }: { prospect: Prospect; model: Prospe
   return (
     <div className="relative aspect-[16/10] overflow-hidden border border-white/12 bg-[#080a0d]">
       {prospect.satellite_image_url ? (
-        <img
+        <Image
           src={prospect.satellite_image_url}
           alt={`Satellite view of ${prospect.address}`}
+          fill
+          unoptimized
+          sizes="(min-width: 1280px) calc(100vw - 480px), 100vw"
           className="absolute inset-0 h-full w-full object-cover"
         />
       ) : (
@@ -134,9 +137,12 @@ function SatellitePanel({ prospect, model }: { prospect: Prospect; model: Prospe
       )}
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,8,9,0.16)_0%,transparent_22%,transparent_68%,rgba(7,8,9,0.38)_100%)]" />
       {hasRenderedLayout ? (
-        <img
+        <Image
           src={prospect.panel_svg_url ?? ""}
           alt="Solar panel layout overlay"
+          fill
+          unoptimized
+          sizes="(min-width: 1280px) calc(100vw - 480px), 100vw"
           className="absolute inset-0 h-full w-full object-cover opacity-[0.92] mix-blend-screen"
         />
       ) : (
@@ -194,9 +200,12 @@ function SelectedVideoPanel({ prospect }: { prospect: Prospect }) {
       <div className="p-4">
         <div className="relative aspect-video overflow-hidden border border-white/12 bg-[#070809]">
           {prospect.video_thumbnail_url || prospect.satellite_image_url ? (
-            <img
+            <Image
               src={prospect.video_thumbnail_url ?? prospect.satellite_image_url ?? ""}
               alt=""
+              fill
+              unoptimized
+              sizes="380px"
               className="absolute inset-0 h-full w-full object-cover opacity-60"
             />
           ) : (

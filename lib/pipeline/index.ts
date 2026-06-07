@@ -3,6 +3,7 @@ import { fetchSatelliteImage } from "./satellite";
 import { fetchSolarInsights, calculateEconomics, generatePanelSvg } from "./solar";
 import { fetchCurrentIncentiveRate } from "./outreach";
 import { updateProspect, supabaseAdmin } from "../supabase";
+import { buildProposalUrl } from "../proposals";
 import type { Prospect } from "../types";
 
 export async function runPipeline(prospect: Prospect): Promise<{
@@ -84,14 +85,11 @@ export async function runPipeline(prospect: Prospect): Promise<{
   stages.economics = true;
 
   // stamp microsite URL so the dashboard "View Site" link lights up
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
-  if (appUrl) {
-    await updateProspect(prospect.id, {
-      microsite_url: `${appUrl}/${prospect.slug}`,
-      stage: "microsite_live",
-    });
-    stages.microsite = true;
-  }
+  await updateProspect(prospect.id, {
+    microsite_url: buildProposalUrl(prospect.slug),
+    stage: "microsite_live",
+  });
+  stages.microsite = true;
 
   return { success: true, stages };
 }

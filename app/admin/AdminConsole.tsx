@@ -3,14 +3,16 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { buildProposalPath } from "@/lib/proposals";
 import type { Prospect, ProspectStage } from "@/lib/types";
 
-type StageKey = "sourced" | "qualified" | "rendered" | "sent" | "replied" | "booked";
+type StageKey = "sourced" | "qualified" | "rendered" | "published" | "sent" | "replied" | "booked";
 
 const STAGE_FLOW: { key: StageKey; label: string; stages: ProspectStage[] }[] = [
   { key: "sourced", label: "Sourced", stages: ["sourced", "geocoded"] },
   { key: "qualified", label: "Qualified", stages: ["qualified"] },
-  { key: "rendered", label: "Rendered", stages: ["satellite_done", "solar_done", "video_done", "microsite_live"] },
+  { key: "rendered", label: "Rendered", stages: ["satellite_done", "solar_done", "video_done"] },
+  { key: "published", label: "Published", stages: ["microsite_live"] },
   { key: "sent", label: "Sent", stages: ["emailed", "followed_up"] },
   { key: "replied", label: "Replied", stages: ["replied"] },
   { key: "booked", label: "Booked", stages: ["booked"] },
@@ -20,6 +22,7 @@ const STAGE_META: Record<StageKey, { label: string; className: string }> = {
   sourced: { label: "Sourced", className: "border-white/12 text-stone-500" },
   qualified: { label: "Qualified", className: "border-[#c08a4b]/40 text-[#c08a4b]" },
   rendered: { label: "Rendered", className: "border-[#d8a866]/45 text-[#d8a866]" },
+  published: { label: "Published", className: "border-[#c08a4b]/60 bg-[#c08a4b]/10 text-[#d8a866]" },
   sent: { label: "Sent", className: "border-[#c08a4b]/60 bg-[#c08a4b]/10 text-[#c08a4b]" },
   replied: { label: "Replied", className: "border-[#86a06f]/50 bg-[#86a06f]/10 text-[#a4ba8d]" },
   booked: { label: "Booked", className: "border-[#c08a4b] bg-[#c08a4b] text-[#131316]" },
@@ -27,6 +30,7 @@ const STAGE_META: Record<StageKey, { label: string; className: string }> = {
 
 const ACTIVITY_KINDS = {
   render: { tag: "RENDER", className: "border-[#c08a4b]/45 text-[#d8a866]" },
+  publish: { tag: "PUBLISH", className: "border-[#c08a4b]/55 text-[#d8a866]" },
   panel: { tag: "LAYOUT", className: "border-[#c08a4b]/40 text-[#c08a4b]" },
   send: { tag: "SEND", className: "border-[#c08a4b]/55 text-[#c08a4b]" },
   qualify: { tag: "QUALIFY", className: "border-white/12 text-stone-500" },
@@ -75,10 +79,8 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
   );
 
   const activeProspects = prospects.filter((prospect) => !["skipped", "dead"].includes(prospect.stage));
-  const renderedCount = prospects.filter((prospect) =>
-    ["satellite_done", "solar_done", "video_done", "microsite_live"].includes(prospect.stage)
-  ).length;
-  const bookedCount = prospects.filter((prospect) => prospect.stage === "booked").length;
+  const renderedCount = prospects.filter((prospect) => ["satellite_done", "solar_done", "video_done"].includes(prospect.stage)).length;
+  const publishedCount = prospects.filter((prospect) => Boolean(prospect.microsite_url)).length;
   const incentiveTotal = activeProspects.reduce((sum, prospect) => sum + (prospect.incentive_amount ?? 0), 0);
 
   const shownProspects = stageFilter
@@ -107,16 +109,22 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
                 OPEN<span className="text-[#c08a4b]">CLAW</span>
               </div>
               <div className="mt-1 text-[10.5px] uppercase tracking-[0.28em] text-stone-500">
-                Autonomous solar prospecting · GTA West
+                Proposal console · final products
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-4 text-[11px] uppercase tracking-[0.16em] text-stone-500 sm:gap-7">
+          <div className="flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.16em] text-stone-500 sm:gap-4">
             <div className="flex items-center gap-3 text-stone-300">
               <LiveDot />
               Workshop running
             </div>
             <div>{formatConsoleDate(new Date())}</div>
+            <Link
+              href="/admin/prospects"
+              className="border border-white/12 px-3 py-2 text-stone-300 transition hover:bg-[#212128]"
+            >
+              Prospect CRM
+            </Link>
             <Link
               href="/admin/prospects/new"
               className="border border-[#c08a4b]/50 px-3 py-2 text-[#d8a866] transition hover:bg-[#c08a4b]/10"
@@ -128,9 +136,9 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
 
         <OperatorMenu
           metrics={[
-            { label: "Prospects processed", value: prospects.length },
+            { label: "Proposals published", value: prospects.length },
             { label: "Flyovers generated", value: renderedCount },
-            { label: "Calls booked", value: bookedCount },
+            { label: "Proposal pages live", value: publishedCount },
             {
               label: "Incentive dollars flagged",
               value: incentiveTotal / 1_000_000,
@@ -146,7 +154,7 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
 
         <main className="mt-[26px] grid items-start gap-[30px] xl:grid-cols-[392px_minmax(0,1fr)]">
           <aside className="xl:sticky xl:top-[18px]">
-            <ProspectList
+            <ProposalList
               prospects={shownProspects}
               totalCount={prospects.length}
               selectedId={selected?.id ?? ""}
@@ -175,14 +183,12 @@ function ProspectPreview({ prospect }: { prospect: Prospect }) {
           <StagePill stage={stage} label={labelForStage(prospect.stage)} />
           <span className="text-xs text-stone-400">{lastTouch(prospect)}</span>
           {prospect.microsite_url && (
-            <a
-              href={prospect.microsite_url}
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              href={buildProposalPath(prospect.slug)}
               className="ml-auto text-[11px] uppercase tracking-[0.14em] text-[#d8a866] hover:text-[#d8a866]"
             >
-              View microsite
-            </a>
+              View page
+            </Link>
           )}
           <Link
             href={`/admin/prospects/${prospect.id}`}
@@ -355,7 +361,7 @@ function SavingsLedger({ model }: { model: ProspectModel }) {
   );
 }
 
-function ProspectList({
+function ProposalList({
   prospects,
   totalCount,
   selectedId,
@@ -373,7 +379,7 @@ function ProspectList({
   return (
     <section className="flex max-h-[calc(100vh-34px)] min-h-0 flex-col border border-white/[0.07] bg-[#1a1a1f]">
       <div className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] px-[15px] py-[13px]">
-        <h2 className="text-xs uppercase tracking-[0.16em] text-[#ece9e3]">Prospect roster</h2>
+        <h2 className="text-xs uppercase tracking-[0.16em] text-[#ece9e3]">Proposal roster</h2>
         {filter ? (
           <button
             type="button"
@@ -383,7 +389,7 @@ function ProspectList({
             {STAGE_META[filter].label} x
           </button>
         ) : (
-          <span className="text-[9.5px] uppercase tracking-[0.14em] text-stone-500">{totalCount} active · GTA West</span>
+          <span className="text-[9.5px] uppercase tracking-[0.14em] text-stone-500">{totalCount} live · GTA West</span>
         )}
       </div>
 
@@ -392,36 +398,50 @@ function ProspectList({
           const model = getProspectModel(prospect);
           const stage = stageFor(prospect.stage);
           return (
-            <button
-              type="button"
+            <div
               key={prospect.id}
-              onClick={() => onSelect(prospect.id)}
               className={`relative block w-full border-b border-white/[0.07] px-4 py-[13px] text-left transition last:border-b-0 hover:bg-[#212128] ${
                 prospect.id === selectedId ? "bg-[#212128] before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-[#c08a4b]" : ""
               }`}
             >
-              <div className="flex items-center justify-between gap-3">
-                <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-[#ece9e3]">
-                  {prospect.address || prospect.company_name}
-                </span>
-                <StagePill stage={stage} label={labelForStage(prospect.stage)} />
+              <button type="button" onClick={() => onSelect(prospect.id)} className="block w-full text-left">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-[#ece9e3]">
+                    {prospect.address || prospect.company_name}
+                  </span>
+                  <StagePill stage={stage} label={labelForStage(prospect.stage)} />
+                </div>
+                <div className="mt-1 truncate text-[11px] text-stone-600">
+                  {prospect.city || "Ontario"} · {prospect.owner_name ?? "Owner pending"}
+                </div>
+                <div className="mt-[9px] flex items-baseline gap-[13px] font-mono text-[11px] text-stone-400">
+                  <span>{model.roofAgeShort}</span>
+                  <span>{model.systemLabel}</span>
+                  <span className="ml-auto text-[#d8a866]">{formatMoney(model.annualSavings)}/yr</span>
+                </div>
+              </button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  href={buildProposalPath(prospect.slug)}
+                  className="inline-flex border border-[#c08a4b]/45 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[#d8a866] transition hover:bg-[#c08a4b]/10"
+                >
+                  View page
+                </Link>
+                <Link
+                  href={`/admin/prospects/${prospect.id}`}
+                  className="inline-flex border border-white/12 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-stone-300 transition hover:bg-[#212128]"
+                >
+                  View info
+                </Link>
               </div>
-              <div className="mt-1 truncate text-[11px] text-stone-600">
-                {prospect.city || "Ontario"} · {prospect.owner_name ?? "Owner pending"}
-              </div>
-              <div className="mt-[9px] flex items-baseline gap-[13px] font-mono text-[11px] text-stone-400">
-                <span>{model.roofAgeShort}</span>
-                <span>{model.systemLabel}</span>
-                <span className="ml-auto text-[#d8a866]">{formatMoney(model.annualSavings)}/yr</span>
-              </div>
-            </button>
+            </div>
           );
         })}
         {prospects.length === 0 ? (
           <div className="px-5 py-12 text-center text-sm text-stone-500">
-            No prospects in this view.{" "}
-            <Link href="/admin/prospects/new" className="text-[#c08a4b] underline underline-offset-4">
-              Add one
+            No published proposals yet.{" "}
+            <Link href="/admin/prospects" className="text-[#c08a4b] underline underline-offset-4">
+              Open the prospect CRM
             </Link>
           </div>
         ) : null}
@@ -601,9 +621,9 @@ function LiveDot() {
 function EmptyConsole() {
   return (
     <div className="border border-white/[0.07] bg-[#1a1a1f] px-6 py-16 text-center text-stone-500">
-      No prospects yet.{" "}
-      <Link href="/admin/prospects/new" className="text-[#c08a4b] underline underline-offset-4">
-        Add the first prospect
+      No proposals are live yet.{" "}
+      <Link href="/admin/prospects" className="text-[#c08a4b] underline underline-offset-4">
+        Publish one from the prospect CRM
       </Link>
       .
     </div>
@@ -668,7 +688,8 @@ function stageFor(stage: ProspectStage): StageKey {
   if (stage === "booked") return "booked";
   if (stage === "replied") return "replied";
   if (stage === "emailed" || stage === "followed_up") return "sent";
-  if (["satellite_done", "solar_done", "video_done", "microsite_live"].includes(stage)) return "rendered";
+  if (stage === "microsite_live") return "published";
+  if (["satellite_done", "solar_done", "video_done"].includes(stage)) return "rendered";
   if (stage === "qualified") return "qualified";
   return "sourced";
 }
@@ -723,19 +744,26 @@ function buildProspectHistory(prospect: Prospect): ProspectHistoryItem[] {
 
   if (stageIndex >= 3) {
     events.push({
+      kind: "publish",
+      text: `Proposal page published - ${buildProposalPath(prospect.slug)}`,
+    });
+  }
+
+  if (stageIndex >= 4) {
+    events.push({
       kind: "send",
       text: `Proposal delivered to ${owner}`,
     });
   }
 
-  if (stageIndex >= 4) {
+  if (stageIndex >= 5) {
     events.push({
       kind: "reply",
       text: `Owner replied - booking link sent for ${target}`,
     });
   }
 
-  if (stageIndex >= 5) {
+  if (stageIndex >= 6) {
     events.push({
       kind: "reply",
       text: "Discovery call booked",
@@ -753,7 +781,7 @@ function lastTouch(prospect: Prospect) {
   if (prospect.stage === "booked") return "Discovery call booked";
   if (prospect.stage === "replied") return "Owner replied";
   if (prospect.email_sent_at) return `Proposal sent ${shortDate(prospect.email_sent_at)}`;
-  if (prospect.microsite_url) return "Microsite live";
+  if (prospect.microsite_url) return "Proposal page live";
   if (prospect.video_url) return "Flyover render ready";
   if (prospect.panel_count) return "Solar layout modeled";
   return "Awaiting next agent step";

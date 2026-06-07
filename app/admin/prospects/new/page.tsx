@@ -61,10 +61,10 @@ export default function NewProspectPage() {
             </div>
           </div>
           <Link
-            href="/admin"
+            href="/admin/prospects"
             className="w-fit border border-white/12 px-3 py-2 text-[11px] uppercase tracking-[0.16em] text-stone-400 transition hover:border-[#c08a4b]/50 hover:text-[#d8a866]"
           >
-            Back to console
+            Back to CRM
           </Link>
         </header>
 

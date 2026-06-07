@@ -9,7 +9,7 @@ const PIPELINE_STEPS = [
   { key: "satellite", label: "Satellite Image", stage: "satellite_done" },
   { key: "solar", label: "Solar Analysis", stage: "solar_done" },
   { key: "video", label: "Generate Video", stage: "video_done" },
-  { key: "microsite", label: "Publish Microsite", stage: "microsite_live" },
+  { key: "microsite", label: "Publish Proposal Page", stage: "microsite_live" },
   { key: "email", label: "Send Email", stage: "emailed" },
 ];
 

@@ -43,6 +43,17 @@ export async function getProspectBySlug(slug: string): Promise<Prospect | null> 
   return data;
 }
 
+export async function getProspectsByIds(ids: string[]): Promise<Prospect[]> {
+  if (!ids.length) return [];
+
+  const { data } = await supabaseAdmin()
+    .from("prospects")
+    .select("*")
+    .in("id", ids);
+
+  return data ?? [];
+}
+
 export async function updateProspect(
   id: string,
   updates: Partial<Prospect>
@@ -67,5 +78,28 @@ export async function listProspects(
     .limit(limit);
   if (stage) q = q.eq("stage", stage);
   const { data } = await q;
+  return data ?? [];
+}
+
+export async function listActiveProspects(limit = 200): Promise<Prospect[]> {
+  const { data } = await supabaseAdmin()
+    .from("prospects")
+    .select("*")
+    .neq("stage", "dead")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  return data ?? [];
+}
+
+export async function listProposals(limit = 100): Promise<Prospect[]> {
+  const { data } = await supabaseAdmin()
+    .from("prospects")
+    .select("*")
+    .not("microsite_url", "is", null)
+    .neq("stage", "dead")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
   return data ?? [];
 }
