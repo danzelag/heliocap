@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Prospect, ProspectStage } from "@/lib/types";
 
@@ -44,6 +44,14 @@ type ActivityItem = {
   text: string;
 };
 
+type OperatorMetric = {
+  label: string;
+  value: number;
+  prefix?: string;
+  unit?: string;
+  decimals?: number;
+};
+
 const CAD = new Intl.NumberFormat("en-CA", {
   style: "currency",
   currency: "CAD",
@@ -54,7 +62,6 @@ const NUMBER = new Intl.NumberFormat("en-CA");
 
 export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
   const router = useRouter();
-  const previewRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState(prospects[0]?.id ?? "");
   const [stageFilter, setStageFilter] = useState<StageKey | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -106,9 +113,6 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
 
   function focusPreview(id: string) {
     setSelectedId(id);
-    window.requestAnimationFrame(() => {
-      previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
   }
 
   return (
@@ -141,78 +145,52 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
           </div>
         </header>
 
-        <section className="grid border-b border-white/[0.07] sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard label="Prospects processed" sub="Today" value={prospects.length} />
-          <MetricCard label="Flyovers generated" sub="Today" value={renderedCount} />
-          <MetricCard label="Calls booked" sub="Today" value={bookedCount} />
-          <MetricCard
-            label="Incentive dollars flagged"
-            sub="Today"
-            value={incentiveTotal / 1_000_000}
-            prefix="$"
-            unit="M"
-            decimals={2}
-          />
-        </section>
+        <OperatorMenu
+          metrics={[
+            { label: "Prospects processed", value: prospects.length },
+            { label: "Flyovers generated", value: renderedCount },
+            { label: "Calls booked", value: bookedCount },
+            {
+              label: "Incentive dollars flagged",
+              value: incentiveTotal / 1_000_000,
+              prefix: "$",
+              unit: "M",
+              decimals: 2,
+            },
+          ]}
+          pipeline={pipeline}
+          activeStage={stageFilter}
+          onPickStage={pickStage}
+        />
 
-        <section className="flex snap-x gap-0 overflow-x-auto border-b border-white/[0.07] py-6">
-          {pipeline.map((item, index) => (
-            <div className="flex shrink-0 items-center" key={item.key}>
-              <button
-                type="button"
-                onClick={() => pickStage(item.key)}
-                className="group relative flex min-w-[130px] flex-col items-start gap-2 pr-7 text-left opacity-90 transition hover:opacity-100"
-              >
-                <span
-                  className={`font-serif text-3xl leading-none transition group-hover:text-[#d8a866] ${
-                    stageFilter === item.key ? "text-[#c08a4b]" : "text-[#ece9e3]"
-                  }`}
-                >
-                  <CountUp value={item.count} />
-                </span>
-                <span className="text-[11px] uppercase tracking-[0.18em] text-stone-500">{item.label}</span>
-                <span
-                  className={`absolute -bottom-[27px] left-0 h-[7px] w-[7px] rounded-full transition ${
-                    stageFilter === item.key ? "bg-[#c08a4b] shadow-[0_0_0_4px_rgba(192,138,75,0.15)]" : "bg-white/15"
-                  }`}
-                />
-              </button>
-              {index < pipeline.length - 1 && (
-                <div className="mb-2 pr-7 text-stone-600" aria-hidden="true">
-                  <svg width="34" height="10" viewBox="0 0 34 10" fill="none">
-                    <path d="M0 5H30M26 1L31 5L26 9" stroke="currentColor" />
-                  </svg>
-                </div>
-              )}
-            </div>
-          ))}
-        </section>
-
-        <main className="mt-8 grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
-          <div className="min-w-0">
-            <div ref={previewRef}>
-              {selected ? (
-                <ProspectPreview
-                  prospect={selected}
-                  isRunning={running || isPending}
-                  onRunPipeline={runPipeline}
-                />
-              ) : (
-                <EmptyConsole />
-              )}
-            </div>
-
-            <ProspectTable
-              prospects={shownProspects}
-              selectedId={selected?.id ?? ""}
-              filter={stageFilter}
-              onClearFilter={() => setStageFilter(null)}
-              onSelect={focusPreview}
-            />
+        <main className="mt-8">
+          <div>
+            {selected ? (
+              <ProspectPreview
+                prospect={selected}
+                isRunning={running || isPending}
+                onRunPipeline={runPipeline}
+              />
+            ) : (
+              <EmptyConsole />
+            )}
           </div>
-          <aside className="xl:sticky xl:top-5">
-            <ActivityFeed key={`${selected?.id ?? "empty"}-${prospects.length}`} prospects={prospects} selected={selected} />
-          </aside>
+
+          <div className="mt-8 grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_430px]">
+            <div className="min-w-0">
+              <ProspectTable
+                prospects={shownProspects}
+                selectedId={selected?.id ?? ""}
+                filter={stageFilter}
+                onClearFilter={() => setStageFilter(null)}
+                onSelect={focusPreview}
+              />
+            </div>
+            <aside className="space-y-5 xl:sticky xl:top-5">
+              <SelectedVideoPanel prospect={selected} />
+              <ActivityFeed key={`${selected?.id ?? "empty"}-${prospects.length}`} prospects={prospects} selected={selected} />
+            </aside>
+          </div>
         </main>
       </div>
     </div>
@@ -275,7 +253,6 @@ function ProspectPreview({
       <div className="grid gap-[26px] lg:grid-cols-[minmax(0,1.32fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
           <SatellitePanel key={prospect.id} prospect={prospect} model={model} />
-          <FlyoverPanel prospect={prospect} />
         </div>
 
         <div className="flex min-w-0 flex-col gap-6">
@@ -394,37 +371,60 @@ function FlyoverPanel({ prospect }: { prospect: Prospect }) {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(192,138,75,0.12),transparent_30%),linear-gradient(135deg,#141414,#050505)]" />
       )}
       <div className="absolute inset-0 bg-gradient-to-b from-[#070809]/60 via-transparent to-[#070809]/80" />
-      <div className="absolute left-4 right-4 top-3 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.18em]">
+      {ready ? (
+        <video
+          key={prospect.video_url}
+          src={prospect.video_url ?? undefined}
+          poster={prospect.video_thumbnail_url ?? prospect.satellite_image_url ?? undefined}
+          controls
+          preload="metadata"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : null}
+      <div className="pointer-events-none absolute left-4 right-4 top-3 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.18em]">
         <span className="text-stone-100/85">CINEMATIC FLYOVER</span>
         <span className={`border px-2 py-1 ${ready ? "border-[#c08a4b]/50 text-[#d8a866]" : "border-white/12 text-stone-500"}`}>
           {ready ? `READY · ${duration}` : "NOT RENDERED"}
         </span>
       </div>
-      {ready ? (
-        <>
-          <a
-            href={prospect.video_url ?? "#"}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="absolute left-1/2 top-[46%] flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-stone-200/60 bg-[#080a0d]/50 transition hover:scale-105 hover:border-[#c08a4b] hover:bg-[#c08a4b]/15"
-            aria-label="Open flyover video"
-          >
-            <span className="ml-1 h-0 w-0 border-y-[10px] border-l-[16px] border-y-transparent border-l-stone-100" />
-          </a>
-          <div className="absolute bottom-3 left-4 right-4 flex items-center gap-3">
-            <span className="font-mono text-[10px] text-stone-300">0:02</span>
-            <span className="h-px flex-1 bg-white/20">
-              <span className="block h-px w-2/3 bg-[#c08a4b]" />
-            </span>
-            <span className="font-mono text-[10px] text-stone-300">{duration}</span>
-          </div>
-        </>
-      ) : (
+      {!ready ? (
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[11px] uppercase tracking-[0.16em] text-stone-500">
           Flyover queued for render
         </div>
-      )}
+      ) : null}
     </div>
+  );
+}
+
+function SelectedVideoPanel({ prospect }: { prospect: Prospect | null }) {
+  if (!prospect) {
+    return (
+      <section className="border border-white/[0.07] bg-[#1a1a1f]">
+        <div className="border-b border-white/[0.07] px-4 py-4">
+          <div className="text-xs uppercase tracking-[0.16em]">Selected video</div>
+        </div>
+        <div className="px-5 py-16 text-center text-sm text-stone-500">Select a prospect to load its flyover.</div>
+      </section>
+    );
+  }
+
+  const ready = Boolean(prospect.video_url);
+  const stage = stageFor(prospect.stage);
+
+  return (
+    <section className="border border-white/[0.07] bg-[#1a1a1f]">
+      <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] px-4 py-4">
+        <div className="min-w-0">
+          <div className="text-xs uppercase tracking-[0.16em] text-[#ece9e3]">Selected video</div>
+          <div className="mt-2 truncate text-sm font-medium text-stone-200">{prospect.address || prospect.company_name}</div>
+          <div className="mt-1 truncate text-[10.5px] text-stone-500">{prospect.company_name}</div>
+        </div>
+        <StagePill stage={stage} label={ready ? "Ready" : labelForStage(prospect.stage)} />
+      </div>
+      <div className="p-4">
+        <FlyoverPanel prospect={prospect} />
+      </div>
+    </section>
   );
 }
 
@@ -708,31 +708,62 @@ function CountUp({
   return <>{format(rounded)}</>;
 }
 
-function MetricCard({
-  value,
-  label,
-  sub,
-  prefix = "",
-  unit = "",
-  decimals = 0,
+function OperatorMenu({
+  metrics,
+  pipeline,
+  activeStage,
+  onPickStage,
 }: {
-  value: number;
-  label: string;
-  sub: string;
-  prefix?: string;
-  unit?: string;
-  decimals?: number;
+  metrics: OperatorMetric[];
+  pipeline: Array<{ key: StageKey; label: string; count: number }>;
+  activeStage: StageKey | null;
+  onPickStage: (key: StageKey) => void;
 }) {
   return (
-    <div className="border-b border-r border-white/[0.07] border-b-transparent px-0 py-6 sm:px-7 first:sm:pl-0">
-      <div className="font-serif text-[42px] font-medium leading-none text-[#ece9e3]">
-        {prefix}
-        <CountUp value={value} decimals={decimals} format={(n) => (decimals ? n.toFixed(decimals) : formatNumber(n))} />
-        {unit && <span className="ml-1 text-2xl text-[#c08a4b]">{unit}</span>}
+    <section className="border-b border-white/[0.07]">
+      <div className="grid border-x border-white/[0.07] bg-[#1a1a1f]/55 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+        <div className="grid sm:grid-cols-2 xl:grid-cols-4">
+          {metrics.map((metric) => (
+            <div
+              className="border-b border-r border-white/[0.07] px-4 py-3 xl:border-b-0"
+              key={metric.label}
+            >
+              <div className="font-mono text-lg leading-none text-[#ece9e3]">
+                {metric.prefix}
+                <CountUp
+                  value={metric.value}
+                  decimals={metric.decimals}
+                  format={(n) => (metric.decimals ? n.toFixed(metric.decimals) : formatNumber(n))}
+                />
+                {metric.unit ? <span className="ml-1 text-[11px] text-[#c08a4b]">{metric.unit}</span> : null}
+              </div>
+              <div className="mt-2 truncate text-[10.5px] text-stone-400">{metric.label}</div>
+              <div className="mt-1 text-[9px] uppercase tracking-[0.18em] text-stone-600">Today</div>
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6">
+          {pipeline.map((item) => {
+            const active = activeStage === item.key;
+            return (
+              <button
+                type="button"
+                onClick={() => onPickStage(item.key)}
+                className={`border-b border-r border-white/[0.07] px-4 py-3 text-left transition xl:border-b-0 ${
+                  active ? "bg-[#212128] shadow-[inset_0_-2px_0_#c08a4b]" : "hover:bg-[#212128]"
+                }`}
+                key={item.key}
+              >
+                <div className={`font-mono text-lg leading-none ${active ? "text-[#d8a866]" : "text-[#ece9e3]"}`}>
+                  <CountUp value={item.count} />
+                </div>
+                <div className="mt-2 text-[10.5px] uppercase tracking-[0.16em] text-stone-500">{item.label}</div>
+              </button>
+            );
+          })}
+        </div>
       </div>
-      <div className="mt-3 text-xs tracking-wide text-stone-400">{label}</div>
-      <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-stone-600">{sub}</div>
-    </div>
+    </section>
   );
 }
 
