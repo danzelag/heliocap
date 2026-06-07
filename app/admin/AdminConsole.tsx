@@ -18,21 +18,21 @@ const STAGE_FLOW: { key: StageKey; label: string; stages: ProspectStage[] }[] = 
 
 const STAGE_META: Record<StageKey, { label: string; className: string }> = {
   sourced: { label: "Sourced", className: "border-white/12 text-stone-500" },
-  qualified: { label: "Qualified", className: "border-[#9fb3c4]/40 text-[#9fb3c4]" },
-  rendered: { label: "Rendered", className: "border-[#d8a866]/45 text-[#d8a866]" },
-  sent: { label: "Sent", className: "border-[#c08a4b]/60 bg-[#c08a4b]/10 text-[#c08a4b]" },
+  qualified: { label: "Qualified", className: "border-[#9fb0bd]/40 text-[#9fb0bd]" },
+  rendered: { label: "Rendered", className: "border-[#c2d0db]/45 text-[#c2d0db]" },
+  sent: { label: "Sent", className: "border-[#9fb0bd]/60 bg-[#9fb0bd]/10 text-[#9fb0bd]" },
   replied: { label: "Replied", className: "border-[#86a06f]/50 bg-[#86a06f]/10 text-[#a4ba8d]" },
-  booked: { label: "Booked", className: "border-[#c08a4b] bg-[#c08a4b] text-[#0b0b0d]" },
+  booked: { label: "Booked", className: "border-[#9fb0bd] bg-[#9fb0bd] text-[#131316]" },
 };
 
 const ACTIVITY_KINDS = {
-  render: { tag: "RENDER", className: "border-[#c08a4b]/45 text-[#d8a866]" },
-  panel: { tag: "LAYOUT", className: "border-[#9fb3c4]/40 text-[#9fb3c4]" },
-  send: { tag: "SEND", className: "border-[#c08a4b]/55 text-[#c08a4b]" },
+  render: { tag: "RENDER", className: "border-[#9fb0bd]/45 text-[#c2d0db]" },
+  panel: { tag: "LAYOUT", className: "border-[#9fb0bd]/40 text-[#9fb0bd]" },
+  send: { tag: "SEND", className: "border-[#9fb0bd]/55 text-[#9fb0bd]" },
   qualify: { tag: "QUALIFY", className: "border-white/12 text-stone-500" },
   reply: { tag: "REPLY", className: "border-[#86a06f]/50 text-[#a4ba8d]" },
   source: { tag: "SOURCE", className: "border-white/12 text-stone-500" },
-  incentive: { tag: "INCENTIVE", className: "border-[#c08a4b]/55 text-[#c08a4b]" },
+  incentive: { tag: "INCENTIVE", className: "border-[#9fb0bd]/55 text-[#9fb0bd]" },
 } as const;
 
 type ActivityKind = keyof typeof ACTIVITY_KINDS;
@@ -105,14 +105,14 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
   }
 
   return (
-    <div className="min-h-screen bg-[#0b0b0d] text-[#ece9e3] selection:bg-[#c08a4b]/30">
+    <div className="min-h-screen bg-[#131316] text-[#ece9e3] selection:bg-[#9fb0bd]/30">
       <div className="mx-auto max-w-[1660px] px-5 pb-20 pt-6 sm:px-8">
         <header className="flex flex-col gap-5 border-b border-white/[0.07] pb-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
             <ClawMark />
             <div>
               <div className="text-lg font-semibold tracking-[0.34em]">
-                OPEN<span className="text-[#c08a4b]">CLAW</span>
+                OPEN<span className="text-[#9fb0bd]">CLAW</span>
               </div>
               <div className="mt-1 text-[10.5px] uppercase tracking-[0.28em] text-stone-500">
                 Autonomous solar prospecting · Ontario commercial
@@ -127,7 +127,7 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
             <div>{formatConsoleDate(new Date())}</div>
             <Link
               href="/admin/prospects/new"
-              className="border border-[#c08a4b]/50 px-3 py-2 text-[#d8a866] transition hover:bg-[#c08a4b]/10"
+              className="border border-[#9fb0bd]/50 px-3 py-2 text-[#c2d0db] transition hover:bg-[#9fb0bd]/10"
             >
               Add prospect
             </Link>
@@ -157,8 +157,8 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
                 className="group relative flex min-w-[130px] flex-col items-start gap-2 pr-7 text-left opacity-90 transition hover:opacity-100"
               >
                 <span
-                  className={`font-serif text-3xl leading-none transition group-hover:text-[#d8a866] ${
-                    stageFilter === item.key ? "text-[#c08a4b]" : "text-[#ece9e3]"
+                  className={`font-serif text-3xl leading-none transition group-hover:text-[#c2d0db] ${
+                    stageFilter === item.key ? "text-[#9fb0bd]" : "text-[#ece9e3]"
                   }`}
                 >
                   <CountUp value={item.count} />
@@ -166,7 +166,7 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
                 <span className="text-[11px] uppercase tracking-[0.18em] text-stone-500">{item.label}</span>
                 <span
                   className={`absolute -bottom-[27px] left-0 h-[7px] w-[7px] rounded-full transition ${
-                    stageFilter === item.key ? "bg-[#c08a4b] shadow-[0_0_0_4px_rgba(192,138,75,0.15)]" : "bg-white/15"
+                    stageFilter === item.key ? "bg-[#9fb0bd] shadow-[0_0_0_4px_rgba(159,176,189,0.15)]" : "bg-white/15"
                   }`}
                 />
               </button>
@@ -223,7 +223,7 @@ function ProspectPreview({
   const stage = stageFor(prospect.stage);
 
   return (
-    <section className="border border-white/[0.07] bg-gradient-to-b from-[#121215] to-[#0b0b0d] p-5 sm:p-7">
+    <section className="border border-white/[0.07] bg-gradient-to-b from-[#1a1a1f] to-[#131316] p-5 sm:p-7">
       <div className="border-b border-white/[0.07] pb-6">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <StagePill stage={stage} label={labelForStage(prospect.stage)} />
@@ -233,7 +233,7 @@ function ProspectPreview({
               href={prospect.microsite_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="ml-auto text-[11px] uppercase tracking-[0.14em] text-[#d8a866] hover:text-[#f0c07c]"
+              className="ml-auto text-[11px] uppercase tracking-[0.14em] text-[#c2d0db] hover:text-[#c2d0db]"
             >
               View microsite
             </a>
@@ -255,7 +255,7 @@ function ProspectPreview({
             </p>
           </div>
           <div className="text-left lg:text-right">
-            <div className="font-serif text-3xl text-[#c08a4b]">
+            <div className="font-serif text-3xl text-[#9fb0bd]">
               <CountUp value={model.co2Tonnes} />
             </div>
             <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-stone-500">t CO2 / yr avoided</div>
@@ -280,7 +280,7 @@ function ProspectPreview({
             type="button"
             onClick={onRunPipeline}
             disabled={isRunning}
-            className="border border-[#c08a4b] bg-[#c08a4b] px-4 py-3 text-sm font-semibold text-[#0b0b0d] transition hover:bg-[#d8a866] disabled:cursor-wait disabled:opacity-60"
+            className="border border-[#9fb0bd] bg-[#9fb0bd] px-4 py-3 text-sm font-semibold text-[#131316] transition hover:bg-[#c2d0db] disabled:cursor-wait disabled:opacity-60"
           >
             {isRunning ? "Running pipeline..." : "Run full pipeline"}
           </button>
@@ -336,7 +336,7 @@ function SatellitePanel({ prospect, model }: { prospect: Prospect; model: Prospe
           {cells.map((_, index) => (
             <span
               key={index}
-              className={`border border-[#c08a4b]/45 bg-gradient-to-br from-[#162132] to-[#0e1420] shadow-inner transition duration-300 ${
+              className={`border border-[#9fb0bd]/45 bg-gradient-to-br from-[#162132] to-[#0e1420] shadow-inner transition duration-300 ${
                 on ? "scale-100 opacity-90" : "scale-50 opacity-0"
               }`}
               style={{ transitionDelay: `${Math.min(index * 7, 720)}ms` }}
@@ -349,7 +349,7 @@ function SatellitePanel({ prospect, model }: { prospect: Prospect; model: Prospe
         <Corner position="right-[-2px] bottom-[-2px] border-l-0 border-t-0" />
       </div>
       <div className="absolute left-3 right-3 top-3 flex justify-between font-mono text-[10px] uppercase tracking-[0.1em] text-stone-200/75">
-        <span className="text-[#d8a866]">Satellite · 0.15 m/px</span>
+        <span className="text-[#c2d0db]">Satellite · 0.15 m/px</span>
         <span>{coordinateLabel(prospect)}</span>
       </div>
       <div className="absolute bottom-3 left-3 flex flex-wrap gap-5 border border-white/[0.08] bg-[#080a0d]/70 px-3 py-2 backdrop-blur-sm">
@@ -379,7 +379,7 @@ function FlyoverPanel({ prospect }: { prospect: Prospect }) {
       <div className="absolute inset-0 bg-gradient-to-b from-[#070809]/60 via-transparent to-[#070809]/80" />
       <div className="absolute left-4 right-4 top-3 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.18em]">
         <span>Cinematic flyover</span>
-        <span className={`border px-2 py-1 ${ready ? "border-[#c08a4b]/50 text-[#d8a866]" : "border-white/12 text-stone-500"}`}>
+        <span className={`border px-2 py-1 ${ready ? "border-[#9fb0bd]/50 text-[#c2d0db]" : "border-white/12 text-stone-500"}`}>
           {ready ? "Ready" : "Queued"}
         </span>
       </div>
@@ -389,7 +389,7 @@ function FlyoverPanel({ prospect }: { prospect: Prospect }) {
             href={prospect.video_url ?? "#"}
             target="_blank"
             rel="noopener noreferrer"
-            className="absolute left-1/2 top-[46%] flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-stone-200/60 bg-[#080a0d]/50 transition hover:scale-105 hover:border-[#c08a4b] hover:bg-[#c08a4b]/15"
+            className="absolute left-1/2 top-[46%] flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-stone-200/60 bg-[#080a0d]/50 transition hover:scale-105 hover:border-[#9fb0bd] hover:bg-[#9fb0bd]/15"
             aria-label="Open flyover video"
           >
             <span className="ml-1 h-0 w-0 border-y-[10px] border-l-[16px] border-y-transparent border-l-stone-100" />
@@ -397,7 +397,7 @@ function FlyoverPanel({ prospect }: { prospect: Prospect }) {
           <div className="absolute bottom-3 left-4 right-4 flex items-center gap-3">
             <span className="font-mono text-[10px] text-stone-300">0:00</span>
             <span className="h-px flex-1 bg-white/20">
-              <span className="block h-px w-2/3 bg-[#c08a4b]" />
+              <span className="block h-px w-2/3 bg-[#9fb0bd]" />
             </span>
             <span className="font-mono text-[10px] text-stone-300">0:48</span>
           </div>
@@ -413,7 +413,7 @@ function FlyoverPanel({ prospect }: { prospect: Prospect }) {
 
 function OwnerCard({ prospect }: { prospect: Prospect }) {
   return (
-    <div className="border border-white/[0.07] bg-[#121215]">
+    <div className="border border-white/[0.07] bg-[#1a1a1f]">
       <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] p-4">
         <div className="min-w-0">
           <div className="font-serif text-xl font-semibold">{prospect.owner_name ?? "Owner research pending"}</div>
@@ -435,7 +435,7 @@ function OwnerCard({ prospect }: { prospect: Prospect }) {
 
 function RoofAnalysis({ model }: { model: ProspectModel }) {
   return (
-    <div className="border border-white/[0.07] bg-[#121215] p-4">
+    <div className="border border-white/[0.07] bg-[#1a1a1f] p-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="font-serif text-4xl font-semibold">
@@ -450,7 +450,7 @@ function RoofAnalysis({ model }: { model: ProspectModel }) {
       </div>
       <div className="relative mt-4 h-1.5 bg-white/[0.07]">
         <div
-          className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#9a6c38] to-[#c8704a]"
+          className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#6c7c89] to-[#c8704a]"
           style={{ width: `${100 - model.roofScore}%` }}
         />
         <span className="absolute right-0 top-2 text-[9.5px] uppercase tracking-[0.1em] text-stone-500">
@@ -462,7 +462,7 @@ function RoofAnalysis({ model }: { model: ProspectModel }) {
         <RoofLine label="Observed" value={model.roofCondition} />
         <RoofLine label="Replacement window" value={model.replacementWindow} hot />
       </div>
-      <p className="mt-4 border-l-2 border-[#9a6c38] pl-3 text-xs leading-6 text-stone-500">
+      <p className="mt-4 border-l-2 border-[#6c7c89] pl-3 text-xs leading-6 text-stone-500">
         Re-roof plus solar in a single mobilization, with membrane replacement and array install reviewed as one scope.
       </p>
     </div>
@@ -484,7 +484,7 @@ function SpecsGrid({ prospect, model }: { prospect: Prospect; model: ProspectMod
   return (
     <div className="grid border border-white/[0.07] bg-white/[0.07] sm:grid-cols-2">
       {specs.map(([label, value]) => (
-        <div className="bg-[#121215] p-4" key={label}>
+        <div className="bg-[#1a1a1f] p-4" key={label}>
           <div className="text-[10px] uppercase tracking-[0.12em] text-stone-500">{label}</div>
           <div className="mt-1 text-sm font-medium">{value}</div>
         </div>
@@ -505,7 +505,7 @@ function SavingsLedger({ model }: { model: ProspectModel }) {
   ];
 
   return (
-    <div className="border border-white/[0.07] bg-[#121215] p-5">
+    <div className="border border-white/[0.07] bg-[#1a1a1f] p-5">
       <div>
         {rows.map(([label, value]) => (
           <div className="flex items-baseline gap-2 py-2 text-sm" key={label}>
@@ -517,7 +517,7 @@ function SavingsLedger({ model }: { model: ProspectModel }) {
       </div>
       <div className="mt-4 flex items-center justify-between border-t border-white/12 pt-4">
         <span className="text-xs uppercase tracking-[0.1em] text-stone-400">Annual energy savings</span>
-        <span className="font-serif text-3xl font-semibold text-[#c08a4b]">
+        <span className="font-serif text-3xl font-semibold text-[#9fb0bd]">
           <CountUp value={model.annualSavings} format={formatMoney} />
         </span>
       </div>
@@ -558,7 +558,7 @@ function ProspectTable({
           <button
             type="button"
             onClick={onClearFilter}
-            className="border border-[#c08a4b]/45 px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] text-[#c08a4b] transition hover:bg-[#c08a4b]/10"
+            className="border border-[#9fb0bd]/45 px-3 py-1.5 text-[11px] uppercase tracking-[0.1em] text-[#9fb0bd] transition hover:bg-[#9fb0bd]/10"
           >
             {STAGE_META[filter].label} · clear
           </button>
@@ -585,8 +585,8 @@ function ProspectTable({
                 type="button"
                 key={prospect.id}
                 onClick={() => onSelect(prospect.id)}
-                className={`grid w-full grid-cols-[2.2fr_1.8fr_1.1fr_1.15fr_1.1fr_0.9fr] items-center gap-4 border-b border-white/[0.07] px-5 py-4 text-left transition last:border-b-0 hover:bg-[#121215] ${
-                  prospect.id === selectedId ? "bg-[#17171b] shadow-[inset_2px_0_0_#c08a4b]" : ""
+                className={`grid w-full grid-cols-[2.2fr_1.8fr_1.1fr_1.15fr_1.1fr_0.9fr] items-center gap-4 border-b border-white/[0.07] px-5 py-4 text-left transition last:border-b-0 hover:bg-[#1a1a1f] ${
+                  prospect.id === selectedId ? "bg-[#212128] shadow-[inset_2px_0_0_#9fb0bd]" : ""
                 }`}
               >
                 <Cell primary={prospect.address || prospect.company_name} secondary={`${prospect.city || "Ontario"} · ${model.sqftLabel}`} />
@@ -603,7 +603,7 @@ function ProspectTable({
           {prospects.length === 0 && (
             <div className="px-5 py-12 text-center text-sm text-stone-500">
               No prospects in this view.{" "}
-              <Link href="/admin/prospects/new" className="text-[#c08a4b] underline underline-offset-4">
+              <Link href="/admin/prospects/new" className="text-[#9fb0bd] underline underline-offset-4">
                 Add one
               </Link>
             </div>
@@ -634,7 +634,7 @@ function ActivityFeed({ prospects, selected }: { prospects: Prospect[]; selected
   }, [selected]);
 
   return (
-    <section className="border border-white/[0.07] bg-[#121215]">
+    <section className="border border-white/[0.07] bg-[#1a1a1f]">
       <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-4">
         <div className="flex items-center gap-3 text-xs uppercase tracking-[0.16em]">
           <LiveDot />
@@ -710,7 +710,7 @@ function MetricCard({
       <div className="font-serif text-[42px] font-medium leading-none text-[#ece9e3]">
         {prefix}
         <CountUp value={value} decimals={decimals} format={(n) => (decimals ? n.toFixed(decimals) : formatNumber(n))} />
-        {unit && <span className="ml-1 text-2xl text-[#c08a4b]">{unit}</span>}
+        {unit && <span className="ml-1 text-2xl text-[#9fb0bd]">{unit}</span>}
       </div>
       <div className="mt-3 text-xs tracking-wide text-stone-400">{label}</div>
       <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-stone-600">{sub}</div>
@@ -751,7 +751,7 @@ function ContactLink({ label, value, href }: { label: string; value: string; hre
   }
 
   return (
-    <a className="flex min-w-0 flex-col gap-1 border-b border-white/[0.07] p-4 transition hover:bg-[#17171b] sm:border-b-0 sm:border-r" href={href}>
+    <a className="flex min-w-0 flex-col gap-1 border-b border-white/[0.07] p-4 transition hover:bg-[#212128] sm:border-b-0 sm:border-r" href={href}>
       {content}
     </a>
   );
@@ -772,7 +772,7 @@ function Cell({
 }) {
   return (
     <div className={`min-w-0 ${align === "right" ? "text-right" : ""}`}>
-      <div className={`truncate text-sm ${mono ? "font-mono text-xs" : ""} ${accent ? "text-[#d8a866]" : "text-[#ece9e3]"}`}>
+      <div className={`truncate text-sm ${mono ? "font-mono text-xs" : ""} ${accent ? "text-[#c2d0db]" : "text-[#ece9e3]"}`}>
         {primary}
       </div>
       <div className="mt-1 truncate text-[10.5px] text-stone-600">{secondary}</div>
@@ -782,7 +782,7 @@ function Cell({
 
 function LedgerMetric({ value, label }: { value: string; label: string }) {
   return (
-    <div className="bg-[#121215] p-4">
+    <div className="bg-[#1a1a1f] p-4">
       <div className="font-serif text-2xl font-medium">{value}</div>
       <div className="mt-2 text-[9.5px] uppercase tracking-[0.14em] text-stone-500">{label}</div>
     </div>
@@ -808,30 +808,30 @@ function Readout({ label, value }: { label: string; value: string }) {
 }
 
 function Corner({ position }: { position: string }) {
-  return <span className={`absolute h-4 w-4 border border-[#c08a4b] ${position}`} />;
+  return <span className={`absolute h-4 w-4 border border-[#9fb0bd] ${position}`} />;
 }
 
 function ClawMark() {
   return (
     <svg className="h-[30px] w-[30px] shrink-0" viewBox="0 0 30 30" fill="none" aria-hidden="true">
-      <rect x="1" y="1" width="28" height="28" stroke="#c08a4b" strokeWidth="1" opacity="0.5" />
-      <path d="M15 5L15 25M8 9L8 21M22 9L22 21" stroke="#c08a4b" strokeWidth="1.4" strokeLinecap="square" />
-      <circle cx="15" cy="15" r="3.4" fill="#c08a4b" />
+      <rect x="1" y="1" width="28" height="28" stroke="#9fb0bd" strokeWidth="1" opacity="0.5" />
+      <path d="M15 5L15 25M8 9L8 21M22 9L22 21" stroke="#9fb0bd" strokeWidth="1.4" strokeLinecap="square" />
+      <circle cx="15" cy="15" r="3.4" fill="#9fb0bd" />
     </svg>
   );
 }
 
 function LiveDot() {
   return (
-    <span className="relative inline-block h-2 w-2 rounded-full bg-[#c08a4b] after:absolute after:inset-[-4px] after:rounded-full after:border after:border-[#c08a4b] after:opacity-60 after:content-[''] after:animate-[pulse_2.4s_ease-out_infinite]" />
+    <span className="relative inline-block h-2 w-2 rounded-full bg-[#9fb0bd] after:absolute after:inset-[-4px] after:rounded-full after:border after:border-[#9fb0bd] after:opacity-60 after:content-[''] after:animate-[pulse_2.4s_ease-out_infinite]" />
   );
 }
 
 function EmptyConsole() {
   return (
-    <div className="border border-white/[0.07] bg-[#121215] px-6 py-16 text-center text-stone-500">
+    <div className="border border-white/[0.07] bg-[#1a1a1f] px-6 py-16 text-center text-stone-500">
       No prospects yet.{" "}
-      <Link href="/admin/prospects/new" className="text-[#c08a4b] underline underline-offset-4">
+      <Link href="/admin/prospects/new" className="text-[#9fb0bd] underline underline-offset-4">
         Add the first prospect
       </Link>
       .
@@ -858,7 +858,7 @@ function getProspectModel(prospect: Prospect) {
     roofScore <= 28
       ? "border-[#c8704a]/50 bg-[#c8704a]/10 text-[#c8704a]"
       : roofScore <= 40
-        ? "border-[#c08a4b]/45 text-[#d8a866]"
+        ? "border-[#9fb0bd]/45 text-[#c2d0db]"
         : "border-white/12 text-stone-400";
 
   return {
