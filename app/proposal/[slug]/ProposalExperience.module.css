@@ -274,7 +274,6 @@
 
 .heroTitle em,
 .curveHeadline em,
-.caseHeadline em,
 .closeHeadline em,
 .flyoverTitle em {
   color: var(--gold-deep);
@@ -749,7 +748,6 @@
 }
 
 .curveHeadline,
-.caseHeadline,
 .cleanHeadline,
 .closeHeadline {
   margin: 22px 0 0;
@@ -850,113 +848,6 @@
     stroke-dasharray: 1;
     stroke-dashoffset: 1;
   }
-}
-
-.caseScene {
-  display: flex;
-  min-height: 118vh;
-  align-items: center;
-  padding: 14vh 0;
-  background: linear-gradient(180deg, var(--paper), var(--paper-2) 60%, var(--paper));
-}
-
-.caseGrid {
-  display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
-  gap: 60px;
-  align-items: center;
-}
-
-.caseHeadline {
-  font-size: clamp(44px, 6.6vw, 104px);
-  line-height: 0.98;
-}
-
-.roofCase {
-  border-top: 1px solid var(--line);
-  padding-top: 24px;
-}
-
-.gaugeTop {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 22px;
-}
-
-.gaugeScore {
-  color: var(--ink);
-  font-family: var(--font-playfair), Georgia, serif;
-  font-size: 92px;
-  line-height: 0.85;
-}
-
-.gaugeScore small {
-  color: var(--ink-3);
-  font-size: 26px;
-}
-
-.gaugeTag {
-  border: 1px solid rgba(140, 95, 34, 0.42);
-  color: var(--gold-deep);
-  font-size: 10.5px;
-  letter-spacing: 0.14em;
-  padding: 6px 11px;
-  text-transform: uppercase;
-}
-
-.gaugeBar {
-  position: relative;
-  height: 6px;
-  margin-top: 20px;
-  overflow: hidden;
-  background: rgba(33, 29, 22, 0.09);
-}
-
-.gaugeBar span {
-  display: block;
-  height: 100%;
-  background: linear-gradient(90deg, var(--gold-2), var(--gold-deep));
-}
-
-.gaugeScale {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 9px;
-  color: var(--ink-3);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.caseLines {
-  margin-top: 30px;
-  border-top: 1px solid var(--line);
-}
-
-.lineItem {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 19px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-.lineItem span {
-  color: var(--ink-2);
-  font-size: 14px;
-}
-
-.lineItem b {
-  color: var(--ink);
-  font-family: var(--font-dm-mono), ui-monospace, monospace;
-  font-size: 14px;
-  font-weight: 400;
-  text-align: right;
-}
-
-.lineItem .hotValue {
-  color: var(--gold-deep);
 }
 
 .cleanScene {
@@ -1162,7 +1053,6 @@
   }
 
   .curveGrid,
-  .caseGrid,
   .cleanGrid {
     grid-template-columns: 1fr;
   }

@@ -37,6 +37,8 @@ Use `GOOGLE_MAPS_API_KEY` for the Google Cloud APIs in this project. The enabled
 
 Prospect intake must use Google Places so operators can only save real, selected property addresses. Do not accept arbitrary typed address strings as a valid prospect location.
 
+Prospect intake should include a visual verification step before Gemini omni generation: show the selected property target from Google Earth/3D imagery when available; if Earth rendering is unavailable, show a Google Maps satellite fallback with a clear warning. Also show a Solar API heatmap/solar preview so the operator can verify the target and solar data before sending the prospect into video generation.
+
 ## Product Boundaries
 
 - The admin console is for final proposal products.

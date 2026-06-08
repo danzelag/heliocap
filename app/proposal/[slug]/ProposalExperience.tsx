@@ -21,10 +21,6 @@ type ProposalModel = {
   sqft: number;
   yearBuilt: number | null;
   roofAge: number;
-  roofScore: number;
-  roofCondition: string;
-  roofType: string;
-  replaceWindow: string;
   panelCount: number;
   systemKw: number;
   yearlyKwh: number;
@@ -52,7 +48,6 @@ const SCENES = [
   "Savings",
   "Payback",
   "Cash curve",
-  "Roof",
   "Carbon",
   "Begin",
 ];
@@ -270,47 +265,7 @@ export function ProposalExperience({ prospect, bookingUrl }: ProposalExperienceP
         </div>
       </section>
 
-      <section id="scene-6" className={`${styles.scene} ${styles.caseScene}`} data-proposal-scene>
-        <div className={`${styles.wrap} ${styles.caseGrid}`}>
-          <div>
-            <Reveal className={styles.kicker}>
-              <span />
-              The decision in front of you
-            </Reveal>
-            <Reveal as="h2" className={styles.caseHeadline}>
-              You are going to re-roof anyway. <em>Do it once.</em>
-            </Reveal>
-            <Reveal as="p" className={styles.lead}>
-              The membrane at {p.address} is {p.roofAge} years into its service life. Stack solar onto the same
-              mobilization and the structural work, permit set, and rooftop disruption are consolidated.
-            </Reveal>
-          </div>
-          <Reveal className={styles.roofCase} distance={30}>
-            <div className={styles.gaugeTop}>
-              <div className={styles.gaugeScore}>
-                {p.roofScore}
-                <small>/100</small>
-              </div>
-              <div className={styles.gaugeTag}>{p.roofScore <= 28 ? "Critical" : "Elevated"} window</div>
-            </div>
-            <div className={styles.gaugeBar}>
-              <span style={{ width: `${100 - p.roofScore}%` }} />
-            </div>
-            <div className={styles.gaugeScale}>
-              <span>New</span>
-              <span>{100 - p.roofScore}% degraded</span>
-              <span>End of life</span>
-            </div>
-            <div className={styles.caseLines}>
-              <LineItem label="Assembly" value={p.roofType} />
-              <LineItem label="Observed" value={p.roofCondition} />
-              <LineItem label="Replacement window" value={p.replaceWindow} hot />
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      <section id="scene-7" className={`${styles.scene} ${styles.cleanScene}`} data-proposal-scene>
+      <section id="scene-6" className={`${styles.scene} ${styles.cleanScene}`} data-proposal-scene>
         <div className={`${styles.wrap} ${styles.cleanGrid}`}>
           <Reveal className={styles.cleanBig}>
             <ScrollNumber value={p.co2Tonnes} />
@@ -331,7 +286,7 @@ export function ProposalExperience({ prospect, bookingUrl }: ProposalExperienceP
         </div>
       </section>
 
-      <section id="scene-8" className={`${styles.scene} ${styles.closeScene}`} data-proposal-scene>
+      <section id="scene-7" className={`${styles.scene} ${styles.closeScene}`} data-proposal-scene>
         <div className={styles.wrap}>
           <Reveal as="h2" className={styles.closeHeadline}>
             Let&apos;s walk your roof, <em>{firstName(p.owner)}</em>.
@@ -671,15 +626,6 @@ function Readout({ label, value }: { label: string; value: string }) {
   );
 }
 
-function LineItem({ label, value, hot }: { label: string; value: string; hot?: boolean }) {
-  return (
-    <div className={styles.lineItem}>
-      <span>{label}</span>
-      <b className={hot ? styles.hotValue : ""}>{value}</b>
-    </div>
-  );
-}
-
 function Equation({
   value,
   label,
@@ -724,14 +670,6 @@ function toProposalModel(prospect: Prospect): ProposalModel {
   const savings25yr = prospect.savings_25yr ?? Math.round(yearlySavings * 25 * 1.03);
   const netCost = Math.max(systemCost - incentiveAmount, yearlySavings * 4.8);
   const paybackYears = clamp(netCost / Math.max(yearlySavings, 1), 4.2, 8.9);
-  const roofScore = clampInt(94 - roofAge * 3.2, 18, 58);
-  const replaceWindow = roofAge >= 22 ? "0-2 yrs" : roofAge >= 18 ? "2-3 yrs" : "3-5 yrs";
-  const roofCondition =
-    roofScore <= 28
-      ? "End of service life - membrane fatigue"
-      : roofScore <= 40
-        ? "Aging - seam lift and surface wear"
-        : "Fair - monitor before renewal";
 
   return {
     id: prospect.id,
@@ -743,10 +681,6 @@ function toProposalModel(prospect: Prospect): ProposalModel {
     sqft,
     yearBuilt: prospect.year_built,
     roofAge,
-    roofScore,
-    roofCondition,
-    roofType: prospect.industry ? `Commercial ${prospect.industry.toLowerCase()} roof` : "Low-slope commercial membrane",
-    replaceWindow,
     panelCount,
     systemKw,
     yearlyKwh,
@@ -808,10 +742,6 @@ function fmtMWh(value: number) {
 
 function clamp(value: number, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
-}
-
-function clampInt(value: number, min: number, max: number) {
-  return Math.round(clamp(value, min, max));
 }
 
 function smooth(value: number) {

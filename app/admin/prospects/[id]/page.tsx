@@ -91,9 +91,6 @@ export default async function ProspectDetailPage({
                 <Section label="Owner & contact">
                   <OwnerCard prospect={prospect} />
                 </Section>
-                <Section label="Roof condition">
-                  <RoofAnalysis model={model} />
-                </Section>
               </div>
             </div>
 
@@ -260,37 +257,6 @@ function OwnerCard({ prospect }: { prospect: Prospect }) {
   );
 }
 
-function RoofAnalysis({ model }: { model: ProspectModel }) {
-  return (
-    <div className="border border-white/[0.07] bg-[#1a1a1f] p-4">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="font-serif text-4xl font-semibold">
-            {model.roofScore}
-            <span className="text-base font-normal text-stone-500">/100</span>
-          </div>
-          <div className="mt-1 text-[10px] uppercase tracking-[0.16em] text-stone-500">Condition index</div>
-        </div>
-        <span className={`border px-3 py-1.5 text-[10px] uppercase tracking-[0.14em] ${model.urgencyClass}`}>
-          {model.urgency}
-        </span>
-      </div>
-      <div className="relative mt-4 h-1.5 bg-white/[0.07]">
-        <div className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#9a6c38] to-[#c8704a]" style={{ width: `${100 - model.roofScore}%` }} />
-        <span className="absolute right-0 top-2 text-[9.5px] uppercase tracking-[0.1em] text-stone-500">Degradation {100 - model.roofScore}%</span>
-      </div>
-      <div className="mt-8 divide-y divide-white/[0.07]">
-        <Line label="Roof age" value={model.roofAgeLabel} />
-        <Line label="Observed" value={model.roofCondition} />
-        <Line label="Replacement window" value={model.replacementWindow} hot />
-      </div>
-      <p className="mt-4 border-l-2 border-[#9a6c38] pl-3 text-xs leading-6 text-stone-500">
-        Re-roof + solar in a single mobilization, with structural and membrane replacement reviewed alongside array install.
-      </p>
-    </div>
-  );
-}
-
 function SpecsGrid({ prospect, model }: { prospect: Prospect; model: ProspectModel }) {
   const specs = [
     ["Gross floor area", model.sqftLabel],
@@ -368,15 +334,6 @@ function Contact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Line({ label, value, hot }: { label: string; value: string; hot?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4 py-2 text-sm">
-      <span className="text-stone-400">{label}</span>
-      <b className={`text-right font-medium ${hot ? "text-[#c8704a]" : ""}`}>{value}</b>
-    </div>
-  );
-}
-
 function Readout({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col gap-1">
@@ -414,7 +371,6 @@ const STAGE_META: Record<StageKey, { label: string; className: string }> = {
 type ProspectModel = ReturnType<typeof getProspectModel>;
 
 function getProspectModel(prospect: Prospect) {
-  const roofAge = prospect.roof_age ?? (prospect.year_built ? new Date().getFullYear() - prospect.year_built : null);
   const sqft = prospect.sqft ?? 0;
   const usableRoofPct = sqft ? 0.74 : 0;
   const usableRoof = Math.round(sqft * usableRoofPct);
@@ -424,14 +380,6 @@ function getProspectModel(prospect: Prospect) {
   const annualSavings = prospect.yearly_savings ?? (annualKwh ? Math.round(annualKwh * 0.147) : 0);
   const lifetimeSavings = prospect.savings_25yr ?? Math.round(annualSavings * 21.5);
   const incentive = prospect.incentive_amount ?? (systemKw ? Math.round(systemKw * 390) : 0);
-  const roofScore = roofAge == null ? 62 : Math.max(18, Math.min(88, 92 - roofAge * 3));
-  const urgency = roofScore <= 28 ? "Critical" : roofScore <= 40 ? "Elevated" : "Moderate";
-  const urgencyClass =
-    roofScore <= 28
-      ? "border-[#c8704a]/50 bg-[#c8704a]/10 text-[#c8704a]"
-      : roofScore <= 40
-        ? "border-[#c08a4b]/45 text-[#d8a866]"
-        : "border-white/12 text-stone-400";
 
   return {
     sqftLabel: sqft ? `${formatNumber(sqft)} sqft` : "Pending",
@@ -443,12 +391,6 @@ function getProspectModel(prospect: Prospect) {
     annualSavings,
     lifetimeSavings,
     incentive,
-    roofAgeLabel: roofAge == null ? "Pending" : `${roofAge} yrs / 25 typical`,
-    roofScore,
-    urgency,
-    urgencyClass,
-    roofCondition: roofAge == null ? "Awaiting roof record" : roofAge >= 22 ? "End of service life" : roofAge >= 17 ? "Aging membrane" : "Fair condition",
-    replacementWindow: roofAge == null ? "Pending" : roofAge >= 22 ? "0-2 yrs" : roofAge >= 17 ? "1-3 yrs" : "5-7 yrs",
     roofType: prospect.year_built && prospect.year_built < 1998 ? "Built-up gravel" : "Modified bitumen",
     azimuth: prospect.lng && prospect.lng < -79.65 ? "182 deg S" : "176 deg S",
     shading: "Negligible",

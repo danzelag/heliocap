@@ -21,6 +21,25 @@ type SelectedPlace = {
   lng: number;
 };
 
+type SolarPreview = {
+  target: {
+    imageUrl: string;
+    source: string;
+    warning: string;
+  };
+  solar: {
+    ok: boolean;
+    error?: string;
+    panelCount?: number;
+    systemKw?: number;
+    yearlyKwh?: number;
+    yearlySavings?: number;
+    annualFluxUrl?: string | null;
+    dataLayerWarning?: string | null;
+    heatmapSvg?: string;
+  };
+};
+
 export default function NewProspectPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -107,6 +126,7 @@ export default function NewProspectPage() {
             <Section title="Building">
               <Field label="Company Name" name="company_name" required />
               <AddressAutocomplete selectedPlace={selectedPlace} onSelect={setSelectedPlace} />
+              {selectedPlace ? <TargetVerification key={selectedPlace.placeId} place={selectedPlace} /> : null}
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Building Sqft" name="sqft" type="number" />
                 <Field label="Year Built" name="year_built" type="number" />
@@ -136,6 +156,117 @@ export default function NewProspectPage() {
             </button>
           </form>
         </main>
+      </div>
+    </div>
+  );
+}
+
+function TargetVerification({ place }: { place: SelectedPlace }) {
+  const [preview, setPreview] = useState<SolarPreview | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch(`/api/solar/preview?lat=${place.lat}&lng=${place.lng}`, {
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "Solar preview failed");
+        setPreview(json);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setPreview({
+            target: {
+              imageUrl: `/api/maps/static?lat=${place.lat}&lng=${place.lng}&zoom=18&size=960x540&maptype=satellite`,
+              source: "google_maps_satellite_fallback",
+              warning: "Google Earth target unavailable. Showing Google Maps satellite fallback.",
+            },
+            solar: {
+              ok: false,
+              error: error instanceof Error ? error.message : "Solar preview failed",
+            },
+          });
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [place]);
+
+  const heatmapSrc = preview?.solar.heatmapSvg
+    ? `data:image/svg+xml;utf8,${encodeURIComponent(preview.solar.heatmapSvg)}`
+    : null;
+  const targetImage = preview?.target.imageUrl ?? `/api/maps/static?lat=${place.lat}&lng=${place.lng}&zoom=18&size=960x540&maptype=satellite`;
+
+  return (
+    <div className="border border-white/[0.07] bg-[#101014]">
+      <div className="grid gap-px bg-white/[0.07] xl:grid-cols-2">
+        <div className="bg-[#17171b] p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-[#d8a866]">Solar target</div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500">
+              {place.lat.toFixed(4)} N · {Math.abs(place.lng).toFixed(4)} W
+            </div>
+          </div>
+          <div className="relative aspect-video overflow-hidden border border-white/[0.08] bg-black">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={targetImage} alt={`${place.streetAddress} target`} className="h-full w-full object-cover opacity-90" />
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.04)_1px,transparent_1px)] bg-[length:40px_40px]" />
+            <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 border border-[#d8a866]">
+              <span className="absolute -left-1 -top-1 h-3 w-3 border-l border-t border-[#d8a866]" />
+              <span className="absolute -right-1 -top-1 h-3 w-3 border-r border-t border-[#d8a866]" />
+              <span className="absolute -bottom-1 -left-1 h-3 w-3 border-b border-l border-[#d8a866]" />
+              <span className="absolute -bottom-1 -right-1 h-3 w-3 border-b border-r border-[#d8a866]" />
+            </div>
+            <div className="absolute bottom-3 left-3 border border-[#d8a866]/40 bg-black/70 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#d8a866]">
+              Maps satellite fallback
+            </div>
+          </div>
+          <p className="mt-3 border border-[#c08a4b]/25 bg-[#c08a4b]/10 px-3 py-2 text-xs leading-5 text-[#d8a866]">
+            {preview?.target.warning ?? "Google Earth target loading. If Earth capture is unavailable, Maps satellite fallback is shown."}
+          </p>
+        </div>
+
+        <div className="bg-[#17171b] p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="text-[10px] uppercase tracking-[0.2em] text-[#d8a866]">Solar heat map</div>
+            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500">
+              {loading ? "Solar API · loading" : preview?.solar.ok ? "Solar API · verified" : "Solar API · pending"}
+            </div>
+          </div>
+          <div className="relative aspect-video overflow-hidden border border-white/[0.08] bg-black">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={targetImage} alt={`${place.streetAddress} solar base`} className="h-full w-full object-cover opacity-45 grayscale" />
+            {heatmapSrc ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={heatmapSrc} alt="Solar API heat map overlay" className="absolute inset-0 h-full w-full object-cover" />
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-stone-500">
+                {loading ? "Generating solar heat map..." : preview?.solar.error ?? "Solar heat map will appear after address verification."}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 border border-white/[0.07] bg-white/[0.07] sm:grid-cols-4">
+            <Readout label="Panels" value={preview?.solar.panelCount ? preview.solar.panelCount.toLocaleString() : "Pending"} />
+            <Readout label="System" value={preview?.solar.systemKw ? `${preview.solar.systemKw.toLocaleString()} kW` : "Pending"} />
+            <Readout label="Annual" value={preview?.solar.yearlyKwh ? `${Math.round(preview.solar.yearlyKwh / 1000).toLocaleString()} MWh` : "Pending"} />
+            <Readout label="Savings" value={preview?.solar.yearlySavings ? `$${preview.solar.yearlySavings.toLocaleString()}` : "Pending"} />
+          </div>
+
+          {preview?.solar.dataLayerWarning ? (
+            <p className="mt-3 text-xs text-stone-500">{preview.solar.dataLayerWarning}</p>
+          ) : preview?.solar.annualFluxUrl ? (
+            <p className="mt-3 text-xs text-stone-500">
+              Annual flux GeoTIFF located. Browser preview uses panel-energy heat map overlay.
+            </p>
+          ) : null}
+        </div>
       </div>
     </div>
   );
