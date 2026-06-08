@@ -10,14 +10,32 @@ The workflow is:
 
 1. Pull commercial buildings from parcel records.
 2. Filter for the aging-roof window and strong commercial solar fit.
-3. Fetch satellite imagery and roof geometry.
-4. Use Google Solar API data for real panel placements, output, roof segment information, and project economics.
+3. Fetch/derive the property visual spine from Google:
+   - Google Earth / 3D-style property imagery for the actual building.
+   - Google Solar API heatmap / solar data for roof potential and production context.
+4. Use Google Solar API data for real panel placements, output, roof segment information, heatmap context, and project economics.
 5. Identify the real human decision maker behind LLC/property ownership.
-6. Generate a cinematic VEO/fal-style flyover using the prospect's actual building imagery.
+6. Send the Google Earth 3D property image and Google Solar heatmap/solar context into Gemini omni for video generation.
 7. Composite panel overlays, incentive math, countdowns, and personalized proposal details.
 8. Publish a dynamic microsite at `/proposal/[slug]`.
 9. Send email, LinkedIn, SMS, and direct mail outreach.
 10. Classify replies and route interested owners to booking.
+
+## Google API Key Source
+
+Use `GOOGLE_MAPS_API_KEY` for the Google Cloud APIs in this project. The enabled APIs for that key are:
+
+- Geocoding API
+- Google Earth Engine API
+- Map Tiles API
+- Maps JavaScript API
+- Maps Static API
+- Places API
+- Places API (New)
+- Solar API
+- Street View Static API
+
+Prospect intake must use Google Places so operators can only save real, selected property addresses. Do not accept arbitrary typed address strings as a valid prospect location.
 
 ## Product Boundaries
 

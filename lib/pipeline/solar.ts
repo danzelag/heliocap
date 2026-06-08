@@ -23,7 +23,7 @@ export async function fetchSolarInsights(
   lat: number,
   lng: number
 ): Promise<PipelineResult<SolarInsights>> {
-  const key = process.env.GOOGLE_SOLAR_API_KEY;
+  const key = process.env.GOOGLE_MAPS_API_KEY ?? process.env.GOOGLE_SOLAR_API_KEY;
   const url =
     `https://solar.googleapis.com/v1/buildingInsights:findClosest` +
     `?location.latitude=${lat}&location.longitude=${lng}&requiredQuality=HIGH&key=${key}`;

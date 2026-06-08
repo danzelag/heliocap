@@ -1,24 +1,47 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+
+type PlaceSuggestion = {
+  placeId: string;
+  text: string;
+  mainText: string;
+  secondaryText: string;
+};
+
+type SelectedPlace = {
+  placeId: string;
+  formattedAddress: string;
+  streetAddress: string;
+  city: string;
+  province: string;
+  lat: number;
+  lng: number;
+};
 
 export default function NewProspectPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!selectedPlace) {
+      setError("Select a real address from Google Places before saving.");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
     const form = new FormData(e.currentTarget);
     const data = {
       company_name: form.get("company_name"),
-      address: form.get("address"),
-      city: form.get("city"),
+      google_place_id: form.get("google_place_id"),
+      places_session_token: form.get("places_session_token"),
       sqft: form.get("sqft") ? parseInt(form.get("sqft") as string) : null,
       year_built: form.get("year_built") ? parseInt(form.get("year_built") as string) : null,
       industry: form.get("industry") || null,
@@ -76,15 +99,14 @@ export default function NewProspectPage() {
             </p>
             <div className="mt-6 grid grid-cols-2 border border-white/[0.07] bg-white/[0.07]">
               <Readout label="Region" value="GTA West" />
-              <Readout label="Mode" value="Manual" />
+              <Readout label="Mode" value="Places" />
             </div>
           </aside>
 
           <form onSubmit={handleSubmit} className="border border-white/[0.07] bg-gradient-to-b from-[#1a1a1f] to-[#131316] p-5 sm:p-7">
             <Section title="Building">
               <Field label="Company Name" name="company_name" required />
-              <Field label="Street Address" name="address" required />
-              <Field label="City (Ontario)" name="city" required defaultValue="Brampton" />
+              <AddressAutocomplete selectedPlace={selectedPlace} onSelect={setSelectedPlace} />
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Building Sqft" name="sqft" type="number" />
                 <Field label="Year Built" name="year_built" type="number" />
@@ -107,14 +129,154 @@ export default function NewProspectPage() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !selectedPlace}
               className="mt-7 w-full border border-[#c08a4b] bg-[#c08a4b] px-4 py-3 text-sm font-semibold text-[#131316] transition hover:bg-[#d8a866] disabled:cursor-wait disabled:opacity-60"
             >
-              {loading ? "Saving prospect..." : "Save Prospect"}
+              {loading ? "Saving prospect..." : selectedPlace ? "Save Prospect" : "Select a verified address"}
             </button>
           </form>
         </main>
       </div>
+    </div>
+  );
+}
+
+function AddressAutocomplete({
+  selectedPlace,
+  onSelect,
+}: {
+  selectedPlace: SelectedPlace | null;
+  onSelect: (place: SelectedPlace | null) => void;
+}) {
+  const [query, setQuery] = useState(selectedPlace?.formattedAddress ?? "");
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const sessionTokenRef = useRef("");
+  const getSessionToken = useCallback(() => {
+    if (!sessionTokenRef.current) {
+      sessionTokenRef.current = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    return sessionTokenRef.current;
+  }, []);
+
+  useEffect(() => {
+    if (selectedPlace || query.trim().length < 3) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setLoading(true);
+      setError("");
+      const sessionToken = getSessionToken();
+
+      try {
+        const res = await fetch("/api/places/autocomplete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ input: query, sessionToken }),
+          signal: controller.signal,
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "Address lookup failed");
+        setSuggestions(json.suggestions ?? []);
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setError(err instanceof Error ? err.message : "Address lookup failed");
+          setSuggestions([]);
+        }
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }, 260);
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [getSessionToken, query, selectedPlace]);
+
+  async function selectSuggestion(suggestion: PlaceSuggestion) {
+    setLoading(true);
+    setError("");
+    const sessionToken = getSessionToken();
+
+    try {
+      const res = await fetch("/api/places/details", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ placeId: suggestion.placeId, sessionToken }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Address verification failed");
+      setQuery(json.place.formattedAddress);
+      setSuggestions([]);
+      onSelect(json.place);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Address verification failed");
+      onSelect(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="relative">
+      <label className="mb-2 block text-[10px] uppercase tracking-[0.16em] text-stone-500">
+        Verified Property Address <span className="text-[#c8704a]">*</span>
+      </label>
+      <input
+        value={query}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          onSelect(null);
+          setError("");
+          setSuggestions([]);
+        }}
+        placeholder="Start typing the commercial property address"
+        autoComplete="off"
+        className="w-full border border-white/12 bg-[#131316] px-3 py-2.5 text-sm text-[#ece9e3] outline-none transition placeholder:text-stone-700 focus:border-[#c08a4b]/70 focus:bg-[#17171b]"
+      />
+      <input type="hidden" name="google_place_id" value={selectedPlace?.placeId ?? ""} />
+
+      {suggestions.length ? (
+        <div className="absolute left-0 right-0 top-[72px] z-20 max-h-72 overflow-y-auto border border-[#c08a4b]/35 bg-[#18181d] shadow-2xl">
+          {suggestions.map((suggestion) => (
+            <button
+              key={suggestion.placeId}
+              type="button"
+              onClick={() => selectSuggestion(suggestion)}
+              className="block w-full border-b border-white/[0.06] px-3 py-3 text-left transition last:border-b-0 hover:bg-white/[0.06]"
+            >
+              <span className="block text-sm text-[#ece9e3]">{suggestion.mainText || suggestion.text}</span>
+              {suggestion.secondaryText ? (
+                <span className="mt-1 block text-xs text-stone-500">{suggestion.secondaryText}</span>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-stone-500">
+        {loading ? <span>Checking Google Places...</span> : null}
+        {selectedPlace ? (
+          <>
+            <span className="border border-[#7f9264]/40 bg-[#7f9264]/10 px-2 py-1 text-[#9fb27b]">
+              Google verified
+            </span>
+            <span>{selectedPlace.streetAddress}</span>
+            <span>·</span>
+            <span>
+              {selectedPlace.city}, {selectedPlace.province}
+            </span>
+          </>
+        ) : (
+          <span>Choose a Google Places result to unlock saving.</span>
+        )}
+      </div>
+
+      {error ? <p className="mt-2 text-xs text-[#c8704a]">{error}</p> : null}
     </div>
   );
 }
