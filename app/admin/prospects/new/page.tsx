@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { GoogleEarthTarget } from "./GoogleEarthTarget";
 
 type PlaceSuggestion = {
   placeId: string;
@@ -25,7 +26,7 @@ type SolarPreview = {
   target: {
     imageUrl: string;
     source: string;
-    warning: string;
+    warning: string | null;
   };
   solar: {
     ok: boolean;
@@ -35,9 +36,17 @@ type SolarPreview = {
     yearlyKwh?: number;
     yearlySavings?: number;
     annualFluxUrl?: string | null;
+    rgbUrl?: string | null;
+    maskUrl?: string | null;
     dataLayerWarning?: string | null;
-    heatmapSvg?: string;
+    analysisImageUrl?: string;
+    analysisSource?: "proposal_cluster_overlay" | "panel_cluster_fallback";
   };
+};
+
+type BrowserMapsConfig = {
+  apiKey: string;
+  earthEnabled: boolean;
 };
 
 export default function NewProspectPage() {
@@ -89,7 +98,7 @@ export default function NewProspectPage() {
 
   return (
     <div className="min-h-screen bg-[#131316] text-[#ece9e3] selection:bg-[#c08a4b]/30">
-      <div className="mx-auto max-w-[1180px] px-5 pb-20 pt-6 sm:px-8">
+      <div className="mx-auto max-w-[1560px] px-5 pb-20 pt-6 sm:px-8">
         <header className="flex flex-col gap-5 border-b border-white/[0.07] pb-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
             <ClawMark />
@@ -110,7 +119,7 @@ export default function NewProspectPage() {
           </Link>
         </header>
 
-        <main className="grid gap-8 pt-8 lg:grid-cols-[320px_minmax(0,1fr)]">
+        <main className="grid gap-8 pt-8 lg:grid-cols-[340px_minmax(0,1fr)]">
           <aside className="border border-white/[0.07] bg-[#1a1a1f] p-5 lg:sticky lg:top-6 lg:self-start">
             <div className="font-serif text-3xl font-semibold leading-none">Add prospect</div>
             <p className="mt-4 text-sm leading-6 text-stone-400">
@@ -163,7 +172,28 @@ export default function NewProspectPage() {
 
 function TargetVerification({ place }: { place: SelectedPlace }) {
   const [preview, setPreview] = useState<SolarPreview | null>(null);
+  const [mapsConfig, setMapsConfig] = useState<BrowserMapsConfig | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    fetch("/api/maps/browser-config", {
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "Maps config failed");
+        setMapsConfig(json);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setMapsConfig({ apiKey: "", earthEnabled: false });
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -180,7 +210,7 @@ function TargetVerification({ place }: { place: SelectedPlace }) {
         if (!controller.signal.aborted) {
           setPreview({
             target: {
-              imageUrl: `/api/maps/static?lat=${place.lat}&lng=${place.lng}&zoom=18&size=960x540&maptype=satellite`,
+              imageUrl: `/api/maps/static?lat=${place.lat}&lng=${place.lng}&zoom=18&size=640x400&maptype=satellite`,
               source: "google_maps_satellite_fallback",
               warning: "Google Earth target unavailable. Showing Google Maps satellite fallback.",
             },
@@ -198,61 +228,70 @@ function TargetVerification({ place }: { place: SelectedPlace }) {
     return () => controller.abort();
   }, [place]);
 
-  const heatmapSrc = preview?.solar.heatmapSvg
-    ? `data:image/svg+xml;utf8,${encodeURIComponent(preview.solar.heatmapSvg)}`
-    : null;
-  const targetImage = preview?.target.imageUrl ?? `/api/maps/static?lat=${place.lat}&lng=${place.lng}&zoom=18&size=960x540&maptype=satellite`;
+  const targetImage = preview?.target.imageUrl ?? `/api/maps/static?lat=${place.lat}&lng=${place.lng}&zoom=18&size=640x400&maptype=satellite`;
+  const analysisImage = preview?.solar.analysisImageUrl;
 
   return (
     <div className="border border-white/[0.07] bg-[#101014]">
-      <div className="grid gap-px bg-white/[0.07] xl:grid-cols-2">
-        <div className="bg-[#17171b] p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="border-b border-white/[0.07] px-5 py-4">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.22em] text-[#d8a866]">Proposal verification</div>
+            <div className="mt-2 font-serif text-[26px] leading-none text-[#ece9e3] sm:text-[32px]">Target + solar confidence check</div>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-400">
+              Confirm the real property target in Earth-style imagery, then review the premium solar zone overlay before sending the building into proposal video generation.
+            </p>
+          </div>
+          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500">
+            {place.lat.toFixed(4)} N · {Math.abs(place.lng).toFixed(4)} W
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-px bg-white/[0.07] 2xl:grid-cols-[minmax(0,1.04fr)_minmax(0,1fr)]">
+        <div className="bg-[#17171b] p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <div className="text-[10px] uppercase tracking-[0.2em] text-[#d8a866]">Solar target</div>
             <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500">
-              {place.lat.toFixed(4)} N · {Math.abs(place.lng).toFixed(4)} W
+              {mapsConfig?.earthEnabled ? "Google Earth 3D + Maps fallback" : "Maps fallback only"}
             </div>
           </div>
-          <div className="relative aspect-video overflow-hidden border border-white/[0.08] bg-black">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={targetImage} alt={`${place.streetAddress} target`} className="h-full w-full object-cover opacity-90" />
-            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.04)_1px,transparent_1px)] bg-[length:40px_40px]" />
-            <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 border border-[#d8a866]">
-              <span className="absolute -left-1 -top-1 h-3 w-3 border-l border-t border-[#d8a866]" />
-              <span className="absolute -right-1 -top-1 h-3 w-3 border-r border-t border-[#d8a866]" />
-              <span className="absolute -bottom-1 -left-1 h-3 w-3 border-b border-l border-[#d8a866]" />
-              <span className="absolute -bottom-1 -right-1 h-3 w-3 border-b border-r border-[#d8a866]" />
-            </div>
-            <div className="absolute bottom-3 left-3 border border-[#d8a866]/40 bg-black/70 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#d8a866]">
-              Maps satellite fallback
-            </div>
-          </div>
-          <p className="mt-3 border border-[#c08a4b]/25 bg-[#c08a4b]/10 px-3 py-2 text-xs leading-5 text-[#d8a866]">
-            {preview?.target.warning ?? "Google Earth target loading. If Earth capture is unavailable, Maps satellite fallback is shown."}
-          </p>
+          <GoogleEarthTarget
+            address={place.streetAddress}
+            apiKey={mapsConfig?.earthEnabled ? mapsConfig.apiKey : null}
+            fallbackImageUrl={targetImage}
+            lat={place.lat}
+            lng={place.lng}
+          />
         </div>
 
-        <div className="bg-[#17171b] p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="bg-[#17171b] p-5">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <div className="text-[10px] uppercase tracking-[0.2em] text-[#d8a866]">Solar heat map</div>
             <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500">
               {loading ? "Solar API · loading" : preview?.solar.ok ? "Solar API · verified" : "Solar API · pending"}
             </div>
           </div>
-          <div className="relative aspect-video overflow-hidden border border-white/[0.08] bg-black">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={targetImage} alt={`${place.streetAddress} solar base`} className="h-full w-full object-cover opacity-45 grayscale" />
-            {heatmapSrc ? (
+          <div className="relative aspect-[16/10] min-h-[340px] overflow-hidden border border-white/[0.08] bg-black lg:min-h-[520px]">
+            {analysisImage ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={heatmapSrc} alt="Solar API heat map overlay" className="absolute inset-0 h-full w-full object-cover" />
+              <img src={analysisImage} alt={`${place.streetAddress} premium solar analysis`} className="h-full w-full object-cover" />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-stone-500">
                 {loading ? "Generating solar heat map..." : preview?.solar.error ?? "Solar heat map will appear after address verification."}
               </div>
             )}
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,.08)_0%,rgba(0,0,0,0)_28%,rgba(0,0,0,0)_72%,rgba(0,0,0,.34)_100%)]" />
+            <div className="absolute bottom-3 left-3 border border-[#d8a866]/40 bg-black/70 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#d8a866]">
+              {preview?.solar.analysisSource === "proposal_cluster_overlay" ? "Proposal solar zone overlay" : "Panel-cluster fallback analysis"}
+            </div>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 border border-white/[0.07] bg-white/[0.07] sm:grid-cols-4">
+          <p className="mt-3 border border-white/[0.08] bg-[#111116] px-3 py-2 text-xs leading-5 text-stone-400">
+            Strongest commercial solar zones only. The roof stays dark and clean so you can validate target quality without the noisy full-roof flood fill.
+          </p>
+
+          <div className="mt-4 grid grid-cols-2 border border-white/[0.07] bg-white/[0.07] sm:grid-cols-4">
             <Readout label="Panels" value={preview?.solar.panelCount ? preview.solar.panelCount.toLocaleString() : "Pending"} />
             <Readout label="System" value={preview?.solar.systemKw ? `${preview.solar.systemKw.toLocaleString()} kW` : "Pending"} />
             <Readout label="Annual" value={preview?.solar.yearlyKwh ? `${Math.round(preview.solar.yearlyKwh / 1000).toLocaleString()} MWh` : "Pending"} />
@@ -260,10 +299,10 @@ function TargetVerification({ place }: { place: SelectedPlace }) {
           </div>
 
           {preview?.solar.dataLayerWarning ? (
-            <p className="mt-3 text-xs text-stone-500">{preview.solar.dataLayerWarning}</p>
+            <p className="mt-3 border border-[#c08a4b]/20 bg-[#c08a4b]/8 px-3 py-2 text-xs leading-5 text-stone-400">{preview.solar.dataLayerWarning}</p>
           ) : preview?.solar.annualFluxUrl ? (
-            <p className="mt-3 text-xs text-stone-500">
-              Annual flux GeoTIFF located. Browser preview uses panel-energy heat map overlay.
+            <p className="mt-3 border border-white/[0.08] bg-[#111116] px-3 py-2 text-xs leading-5 text-stone-400">
+              Annual flux, RGB imagery, and roof mask were retrieved from Solar API for this analysis pass.
             </p>
           ) : null}
         </div>
