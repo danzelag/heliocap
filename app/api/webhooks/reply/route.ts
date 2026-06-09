@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { classifyReply } from "@/lib/pipeline/outreach";
-import { updateProspect, supabaseAdmin } from "@/lib/supabase";
+import { updateProspect } from "@/lib/supabase";
 
 // Webhook called by Instantly when an email reply arrives
 export async function POST(req: NextRequest) {

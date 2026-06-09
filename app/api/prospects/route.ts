@@ -87,6 +87,32 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(data, { status: 201 });
 }
 
+export async function DELETE(req: NextRequest) {
+  const body = await req.json().catch(() => ({}));
+  const ids = Array.isArray(body.ids)
+    ? body.ids.filter((id: unknown): id is string => typeof id === "string" && id.trim().length > 0)
+    : [];
+
+  if (!ids.length) {
+    return NextResponse.json({ error: "Select at least one prospect to delete." }, { status: 400 });
+  }
+
+  const uniqueIds = Array.from(new Set(ids));
+  const { data, error } = await supabaseAdmin()
+    .from("prospects")
+    .delete()
+    .in("id", uniqueIds)
+    .select("id");
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  return NextResponse.json({
+    deletedIds: data?.map((row) => row.id) ?? [],
+  });
+}
+
 function generateSlug(companyName: string, city: string): string {
   const base = `${companyName}-${city}`
     .toLowerCase()

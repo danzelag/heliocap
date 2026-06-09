@@ -121,17 +121,21 @@ export default function NewProspectPage() {
           </Link>
         </header>
 
-        <main className="grid gap-8 pt-8 lg:grid-cols-[340px_minmax(0,1fr)]">
-          <aside className="border border-white/[0.07] bg-[#1a1a1f] p-5 lg:sticky lg:top-6 lg:self-start">
-            <div className="font-serif text-3xl font-semibold leading-none">Add prospect</div>
-            <p className="mt-4 text-sm leading-6 text-stone-400">
-              Intake a commercial roof, owner contact, and building profile for the OpenClaw pipeline.
-            </p>
-            <div className="mt-6 grid grid-cols-2 border border-white/[0.07] bg-white/[0.07]">
-              <Readout label="Region" value="GTA West" />
-              <Readout label="Mode" value="Places" />
+        <main className="space-y-8 pt-8">
+          <section className="border border-white/[0.07] bg-[#1a1a1f] p-5 sm:p-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-3xl">
+                <div className="font-serif text-3xl font-semibold leading-none">Add prospect</div>
+                <p className="mt-4 text-sm leading-6 text-stone-400">
+                  Intake a commercial roof, owner contact, and building profile for the OpenClaw pipeline.
+                </p>
+              </div>
+              <div className="grid w-full grid-cols-2 border border-white/[0.07] bg-white/[0.07] sm:w-[320px]">
+                <Readout label="Region" value="GTA West" />
+                <Readout label="Mode" value="Places" />
+              </div>
             </div>
-          </aside>
+          </section>
 
           <form onSubmit={handleSubmit} className="border border-white/[0.07] bg-gradient-to-b from-[#1a1a1f] to-[#131316] p-5 sm:p-7">
             <Section title="Building">
@@ -301,7 +305,7 @@ function TargetVerification({ place }: { place: SelectedPlace }) {
           </div>
         </div>
 
-        <div className="relative aspect-[16/10] min-h-[430px] overflow-hidden border border-white/[0.08] bg-black lg:min-h-[620px]">
+        <div className="relative aspect-[16/10] overflow-hidden border border-white/[0.08] bg-black">
           <div className={mode === "target" ? "absolute inset-0" : "hidden"}>
             <GoogleEarthTarget
               address={place.streetAddress}
@@ -315,7 +319,7 @@ function TargetVerification({ place }: { place: SelectedPlace }) {
           <div className={mode === "solar" ? "absolute inset-0" : "hidden"}>
             {analysisImage ? (
               /* eslint-disable-next-line @next/next/no-img-element */
-              <img src={analysisImage} alt={`${place.streetAddress} premium solar analysis`} className="h-full w-full object-cover" />
+              <img src={analysisImage} alt={`${place.streetAddress} premium solar analysis`} className="absolute inset-0 h-full w-full object-cover" />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-stone-500">
                 {loading ? "Generating solar overlay..." : preview?.solar.error ?? "Solar overlay will appear after address verification."}

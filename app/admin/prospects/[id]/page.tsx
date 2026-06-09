@@ -5,6 +5,7 @@ import { getProspect } from "@/lib/supabase";
 import { buildProposalPath } from "@/lib/proposals";
 import type { Prospect, ProspectStage } from "@/lib/types";
 import { PipelineActions } from "./PipelineActions";
+import { ProspectSolarWorkspace } from "./ProspectSolarWorkspace";
 
 const CAD = new Intl.NumberFormat("en-CA", {
   style: "currency",
@@ -83,18 +84,12 @@ export default async function ProspectDetailPage({
               </div>
             </div>
 
-            <div className="grid gap-[26px] lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
-              <div className="min-w-0">
-                <SatellitePanel prospect={prospect} model={model} />
-              </div>
-              <div className="flex min-w-0 flex-col gap-6">
-                <Section label="Owner & contact">
-                  <OwnerCard prospect={prospect} />
-                </Section>
-              </div>
-            </div>
+            <ProspectSolarWorkspace prospect={prospect} model={model} />
 
             <div className="mt-7 grid gap-7 border-t border-white/[0.07] pt-7 lg:grid-cols-2">
+              <Section label="Owner & contact">
+                <OwnerCard prospect={prospect} />
+              </Section>
               <Section label="Building specification">
                 <SpecsGrid prospect={prospect} model={model} />
               </Section>
@@ -109,71 +104,6 @@ export default async function ProspectDetailPage({
             <PipelineActions prospect={prospect} />
           </aside>
         </main>
-      </div>
-    </div>
-  );
-}
-
-function SatellitePanel({ prospect, model }: { prospect: Prospect; model: ProspectModel }) {
-  const cells = Array.from({ length: 187 });
-  const hasRenderedLayout = Boolean(prospect.panel_svg_url);
-
-  return (
-    <div className="relative aspect-[16/10] overflow-hidden border border-white/12 bg-[#080a0d]">
-      {prospect.satellite_image_url ? (
-        <Image
-          src={prospect.satellite_image_url}
-          alt={`Satellite view of ${prospect.address}`}
-          fill
-          unoptimized
-          sizes="(min-width: 1280px) calc(100vw - 480px), 100vw"
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      ) : (
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_25%,rgba(192,138,75,0.16),transparent_28%),linear-gradient(135deg,#101318,#070809)]" />
-      )}
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(7,8,9,0.16)_0%,transparent_22%,transparent_68%,rgba(7,8,9,0.38)_100%)]" />
-      {hasRenderedLayout ? (
-        <Image
-          src={prospect.panel_svg_url ?? ""}
-          alt="Solar panel layout overlay"
-          fill
-          unoptimized
-          sizes="(min-width: 1280px) calc(100vw - 480px), 100vw"
-          className="absolute inset-0 h-full w-full object-cover opacity-[0.92] mix-blend-screen"
-        />
-      ) : (
-        <div className="absolute left-[23%] top-[26%] h-[46%] w-[54%]">
-          <div
-            className="grid h-full w-full gap-0.5"
-            style={{
-              gridTemplateColumns: "repeat(17, minmax(0, 1fr))",
-              gridTemplateRows: "repeat(11, minmax(0, 1fr))",
-            }}
-          >
-            {cells.map((_, index) => (
-              <span
-                className="border border-[#c08a4b]/45 bg-gradient-to-br from-[#162132] to-[#0e1420] opacity-90 shadow-inner"
-                key={index}
-              />
-            ))}
-          </div>
-          <Corner position="left-[-2px] top-[-2px] border-r-0 border-b-0" />
-          <Corner position="right-[-2px] top-[-2px] border-l-0 border-b-0" />
-          <Corner position="left-[-2px] bottom-[-2px] border-r-0 border-t-0" />
-          <Corner position="right-[-2px] bottom-[-2px] border-l-0 border-t-0" />
-        </div>
-      )}
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:40px_40px]" />
-      <div className="absolute left-3 right-3 top-3 flex justify-between font-mono text-[10px] uppercase tracking-[0.1em] text-stone-200/75">
-        <span className="text-[#d8a866]">SATELLITE · 0.15 m/px</span>
-        <span>{coordinateLabel(prospect)}</span>
-      </div>
-      <div className="absolute bottom-3 left-3 flex flex-wrap gap-5 border border-white/[0.08] bg-[#080a0d]/70 px-3 py-2 backdrop-blur-sm">
-        <Readout label="Array" value={model.panelsLabel} />
-        <Readout label="Usable roof" value={model.usableRoofPctLabel} />
-        <Readout label="Azimuth" value={model.azimuth} />
-        <Readout label="Shading" value={model.shading} />
       </div>
     </div>
   );
@@ -334,19 +264,6 @@ function Contact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Readout({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[8.5px] uppercase tracking-[0.16em] text-stone-500">{label}</span>
-      <span className="font-mono text-xs">{value}</span>
-    </div>
-  );
-}
-
-function Corner({ position }: { position: string }) {
-  return <span className={`absolute h-4 w-4 border border-[#c08a4b] ${position}`} />;
-}
-
 function ClawMark() {
   return (
     <svg className="h-[30px] w-[30px] shrink-0" viewBox="0 0 30 30" fill="none" aria-hidden="true">
@@ -421,13 +338,6 @@ function lastTouch(prospect: Prospect) {
   if (prospect.video_url) return "Flyover render ready";
   if (prospect.panel_count) return "Solar layout modeled";
   return "Awaiting next agent step";
-}
-
-function coordinateLabel(prospect: Prospect) {
-  if (prospect.lat && prospect.lng) {
-    return `${Math.abs(prospect.lat).toFixed(4)} deg N · ${Math.abs(prospect.lng).toFixed(4)} deg W`;
-  }
-  return "43.6532 deg N · 79.6711 deg W";
 }
 
 function formatProspectSubline(prospect: Prospect, model: ProspectModel) {

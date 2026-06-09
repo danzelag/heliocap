@@ -71,13 +71,42 @@ export interface RoofSegment {
   azimuthDegrees: number;
   stats: { areaMeters2: number; sunshineQuantiles: number[] };
   center: { latitude: number; longitude: number };
+  boundingBox?: {
+    sw: { latitude: number; longitude: number };
+    ne: { latitude: number; longitude: number };
+  };
+  planeHeightAtCenterMeters?: number;
+}
+
+export interface SolarPanelConfig {
+  panelsCount: number;
+  yearlyEnergyDcKwh: number;
+  roofSegmentSummaries: Array<{
+    pitchDegrees: number;
+    azimuthDegrees: number;
+    panelsCount: number;
+    yearlyEnergyDcKwh: number;
+    segmentIndex: number;
+  }>;
 }
 
 export interface SolarInsights {
   panels: SolarPanel[];
   roofSegments: RoofSegment[];
+  solarPanelConfigs: SolarPanelConfig[];
   maxArrayPanelsCount: number;
   maxSunshineHoursPerYear: number;
+  panelCapacityWatts: number;
+  panelHeightMeters: number;
+  panelWidthMeters: number;
+  panelLifetimeYears: number;
+  maxArrayAreaMeters2: number;
+  carbonOffsetFactorKgPerMwh: number;
+  wholeRoofStats: { areaMeters2: number; sunshineQuantiles: number[]; groundAreaMeters2?: number } | null;
+  buildingStats: { areaMeters2: number; sunshineQuantiles: number[]; groundAreaMeters2?: number } | null;
+  imageryQuality: "HIGH" | "MEDIUM" | "BASE" | null;
+  imageryDate: { year: number; month: number; day: number } | null;
+  imageryProcessedDate: { year: number; month: number; day: number } | null;
 }
 
 export interface PipelineResult<T = unknown> {

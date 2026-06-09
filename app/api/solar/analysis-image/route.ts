@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { calculateEconomics, fetchSolarInsights } from "@/lib/pipeline/solar";
-import { buildSolarAnalysisImage, fetchSolarDataLayers } from "@/lib/solarPreview";
+import { DEFAULT_ANALYSIS_ZOOM, buildSolarAnalysisImage, fetchSolarDataLayers } from "@/lib/solarPreview";
 
 export async function GET(req: NextRequest) {
   const lat = Number(req.nextUrl.searchParams.get("lat"));
   const lng = Number(req.nextUrl.searchParams.get("lng"));
   const yearBuilt = Number(req.nextUrl.searchParams.get("year_built") ?? "2000");
-  const zoom = Number(req.nextUrl.searchParams.get("zoom") ?? "18");
+  const zoom = Number(req.nextUrl.searchParams.get("zoom") ?? String(DEFAULT_ANALYSIS_ZOOM));
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return NextResponse.json({ error: "lat and lng are required" }, { status: 400 });

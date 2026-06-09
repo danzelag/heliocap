@@ -48,8 +48,20 @@ export async function fetchSolarInsights(
     data: {
       panels: sp.solarPanels ?? [],
       roofSegments: sp.roofSegmentStats ?? [],
+      solarPanelConfigs: sp.solarPanelConfigs ?? [],
       maxArrayPanelsCount: sp.maxArrayPanelsCount ?? 0,
       maxSunshineHoursPerYear: sp.maxSunshineHoursPerYear ?? 0,
+      panelCapacityWatts: sp.panelCapacityWatts ?? WATTS_PER_PANEL,
+      panelHeightMeters: sp.panelHeightMeters ?? 0,
+      panelWidthMeters: sp.panelWidthMeters ?? 0,
+      panelLifetimeYears: sp.panelLifetimeYears ?? 25,
+      maxArrayAreaMeters2: sp.maxArrayAreaMeters2 ?? 0,
+      carbonOffsetFactorKgPerMwh: sp.carbonOffsetFactorKgPerMwh ?? 0,
+      wholeRoofStats: sp.wholeRoofStats ?? null,
+      buildingStats: sp.buildingStats ?? null,
+      imageryQuality: json.imageryQuality ?? null,
+      imageryDate: json.imageryDate ?? null,
+      imageryProcessedDate: json.imageryProcessedDate ?? null,
     },
   };
 }
@@ -65,7 +77,8 @@ export function calculateEconomics(
   const deployedPanels = sorted.slice(0, Math.floor(sorted.length * 0.7));
 
   const panelCount = deployedPanels.length;
-  const systemKw = (panelCount * WATTS_PER_PANEL) / 1000;
+  const panelWatts = insights.panelCapacityWatts || WATTS_PER_PANEL;
+  const systemKw = (panelCount * panelWatts) / 1000;
   const yearlyKwh = deployedPanels.reduce(
     (s, p) => s + p.yearlyEnergyDcKwh,
     0

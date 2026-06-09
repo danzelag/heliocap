@@ -101,16 +101,15 @@ export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng,
           setCredits(creditText);
         }
 
+        if (!cancelled) {
+          setTargetStatus("earth_live", null);
+        }
+
         try {
           const dataUrl = viewer.scene.canvas.toDataURL("image/jpeg", 0.92);
-          if (!cancelled) {
-            setCaptureUrl(dataUrl);
-            setTargetStatus("earth_capture", null);
-          }
+          if (!cancelled) setCaptureUrl(dataUrl);
         } catch {
-          if (!cancelled) {
-            setTargetStatus("earth_live", "Google Earth 3D rendered live, but the still capture was blocked. Keeping the live 3D target active.");
-          }
+          if (!cancelled) setCaptureUrl(null);
         }
       } catch (error) {
         if (!cancelled) {
@@ -138,17 +137,22 @@ export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng,
 
   return (
     <>
-      <div className="relative h-full min-h-[420px] overflow-hidden bg-black">
+      <div className="relative h-full overflow-hidden bg-black">
         {source === "earth_capture" && captureUrl ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={captureUrl} alt={`${address} Google Earth target`} className="h-full w-full object-cover" />
+            <img src={captureUrl} alt={`${address} Google Earth target`} className="absolute inset-0 h-full w-full object-cover" />
+            <AttributionBadge text={credits} />
+          </>
+        ) : source === "earth_live" || source === "loading" ? (
+          <>
+            <div ref={embeddedRef} className="absolute inset-0" />
             <AttributionBadge text={credits} />
           </>
         ) : source === "google_maps_satellite_fallback" ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={fallbackImageUrl} alt={`${address} Google Maps satellite fallback`} className="h-full w-full object-cover opacity-90" />
+            <img src={fallbackImageUrl} alt={`${address} Google Maps satellite fallback`} className="absolute inset-0 h-full w-full object-cover opacity-90" />
             <AttributionBadge text="Google Maps satellite" />
           </>
         ) : (
@@ -285,8 +289,8 @@ function createViewer(Cesium: CesiumGlobal, container: Element) {
     fullscreenButton: false,
     infoBox: false,
     selectionIndicator: false,
-    requestRenderMode: true,
-    shouldAnimate: false,
+    requestRenderMode: false,
+    shouldAnimate: true,
   });
 
   viewer.scene.globe.show = false;

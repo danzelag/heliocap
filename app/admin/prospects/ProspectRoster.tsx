@@ -18,10 +18,14 @@ type ProposalCreationResult = {
   proposals: Prospect[];
 };
 
+type DeleteProspectsResult = {
+  deletedIds: string[];
+};
+
 export function ProspectRoster({ prospects }: { prospects: Prospect[] }) {
   const [rows, setRows] = useState(prospects);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [running, setRunning] = useState<"mailer" | "proposal" | null>(null);
+  const [running, setRunning] = useState<"mailer" | "proposal" | "delete" | null>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -61,6 +65,42 @@ export function ProspectRoster({ prospects }: { prospects: Prospect[] }) {
     setMessage(
       `Mailer check ran on ${data.checked} prospect${data.checked === 1 ? "" : "s"}: ${data.ready} ready, ${data.missingEmail} missing email, ${data.blocked} blocked.`
     );
+    setRunning(null);
+  }
+
+  async function deleteSelected() {
+    if (!selectedIds.length) {
+      setError("Select at least one prospect first.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete ${selectedIds.length} selected prospect${selectedIds.length === 1 ? "" : "s"}? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    const ids = selectedIds;
+    setRunning("delete");
+    setError("");
+    setMessage("");
+
+    const res = await fetch("/api/prospects", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+
+    const data = (await res.json()) as DeleteProspectsResult & { error?: string };
+    if (!res.ok) {
+      setError(data.error ?? "Delete failed.");
+      setRunning(null);
+      return;
+    }
+
+    const deleted = new Set(data.deletedIds);
+    setRows((current) => current.filter((row) => !deleted.has(row.id)));
+    setSelectedIds((current) => current.filter((id) => !deleted.has(id)));
+    setMessage(`Deleted ${deleted.size} prospect${deleted.size === 1 ? "" : "s"}.`);
     setRunning(null);
   }
 
@@ -128,6 +168,14 @@ export function ProspectRoster({ prospects }: { prospects: Prospect[] }) {
             className="border border-[#c08a4b]/55 bg-[#c08a4b]/10 px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-[#d8a866] transition hover:bg-[#c08a4b]/18 disabled:cursor-wait disabled:opacity-40"
           >
             {running === "proposal" ? "Publishing..." : "Make proposals"}
+          </button>
+          <button
+            type="button"
+            onClick={deleteSelected}
+            disabled={running !== null || !selectedIds.length}
+            className="border border-[#c8704a]/45 bg-[#c8704a]/10 px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-[#d99a82] transition hover:bg-[#c8704a]/18 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {running === "delete" ? "Deleting..." : "Delete selected"}
           </button>
         </div>
       </div>
@@ -236,7 +284,7 @@ export function ProspectRoster({ prospects }: { prospects: Prospect[] }) {
                         href={`/admin/prospects/${prospect.id}`}
                         className="inline-flex border border-white/12 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-stone-300 transition hover:bg-[#212128]"
                       >
-                        View info
+                        Solar workspace
                       </Link>
                       {published ? (
                         <Link
