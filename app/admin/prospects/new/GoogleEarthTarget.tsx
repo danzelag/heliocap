@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const CESIUM_VERSION = "1.142";
 const CESIUM_SCRIPT = `https://cesium.com/downloads/cesiumjs/releases/${CESIUM_VERSION}/Build/Cesium/Cesium.js`;
@@ -8,12 +8,18 @@ const CESIUM_CSS = `https://cesium.com/downloads/cesiumjs/releases/${CESIUM_VERS
 
 type EarthSource = "loading" | "earth_capture" | "earth_live" | "google_maps_satellite_fallback";
 
+export type EarthTargetStatus = {
+  source: EarthSource;
+  warning: string | null;
+};
+
 type GoogleEarthTargetProps = {
   address: string;
   apiKey: string | null;
   fallbackImageUrl: string;
   lat: number;
   lng: number;
+  onStatusChange?: (status: EarthTargetStatus) => void;
 };
 
 declare global {
@@ -58,15 +64,17 @@ type CesiumTileset = {
   readyPromise?: Promise<unknown>;
 };
 
-export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng }: GoogleEarthTargetProps) {
+export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng, onStatusChange }: GoogleEarthTargetProps) {
   const [source, setSource] = useState<EarthSource>(apiKey ? "loading" : "google_maps_satellite_fallback");
   const [captureUrl, setCaptureUrl] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(
-    apiKey ? null : "Google Earth 3D is unavailable for this browser session. Showing Google Maps satellite fallback."
-  );
   const [credits, setCredits] = useState("3D Tiles");
   const [viewerOpen, setViewerOpen] = useState(false);
   const embeddedRef = useRef<HTMLDivElement>(null);
+
+  const setTargetStatus = useCallback((nextSource: EarthSource, nextWarning: string | null) => {
+    setSource(nextSource);
+    onStatusChange?.({ source: nextSource, warning: nextWarning });
+  }, [onStatusChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +82,7 @@ export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng 
     const browserKey = apiKey ?? "";
 
     if (!browserKey || !embeddedRef.current) {
-      setSource("google_maps_satellite_fallback");
+      setTargetStatus("google_maps_satellite_fallback", "Google Earth 3D is unavailable for this browser session. Showing Google Maps satellite fallback.");
       return undefined;
     }
 
@@ -97,19 +105,17 @@ export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng 
           const dataUrl = viewer.scene.canvas.toDataURL("image/jpeg", 0.92);
           if (!cancelled) {
             setCaptureUrl(dataUrl);
-            setSource("earth_capture");
-            setWarning(null);
+            setTargetStatus("earth_capture", null);
           }
         } catch {
           if (!cancelled) {
-            setSource("earth_live");
-            setWarning("Google Earth 3D rendered live, but the still capture was blocked. Keeping the live 3D target active.");
+            setTargetStatus("earth_live", "Google Earth 3D rendered live, but the still capture was blocked. Keeping the live 3D target active.");
           }
         }
       } catch (error) {
         if (!cancelled) {
-          setSource("google_maps_satellite_fallback");
-          setWarning(
+          setTargetStatus(
+            "google_maps_satellite_fallback",
             error instanceof Error
               ? `Google Earth 3D did not render. Showing Google Maps satellite fallback. ${error.message}`
               : "Google Earth 3D did not render. Showing Google Maps satellite fallback."
@@ -126,13 +132,13 @@ export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng 
         viewer.destroy();
       }
     };
-  }, [apiKey, lat, lng]);
+  }, [apiKey, lat, lng, setTargetStatus]);
 
   const usesEarth = source === "earth_capture" || source === "earth_live";
 
   return (
     <>
-      <div className="relative aspect-[16/10] min-h-[340px] overflow-hidden border border-white/[0.08] bg-black lg:min-h-[520px]">
+      <div className="relative h-full min-h-[420px] overflow-hidden bg-black">
         {source === "earth_capture" && captureUrl ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -179,14 +185,6 @@ export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng 
           ) : null}
         </div>
       </div>
-
-      {warning ? (
-        <p className="mt-3 border border-[#c08a4b]/25 bg-[#c08a4b]/10 px-3 py-2 text-xs leading-5 text-[#d8a866]">{warning}</p>
-      ) : (
-        <p className="mt-3 border border-white/[0.08] bg-[#111116] px-3 py-2 text-xs leading-5 text-stone-400">
-          Earth-style photorealistic 3D target is active. Open the live inspector if you want to orbit the property before generating the proposal.
-        </p>
-      )}
 
       {viewerOpen && apiKey ? (
         <EarthInspectModal address={address} apiKey={apiKey} lat={lat} lng={lng} onClose={() => setViewerOpen(false)} />

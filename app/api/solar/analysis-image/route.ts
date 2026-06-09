@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
   const dataLayers = await fetchSolarDataLayers({ lat, lng });
   const analysis = await buildSolarAnalysisImage({
     dataLayers,
+    insights: insights.data,
     panels: economics.deployedPanels,
     lat,
     lng,

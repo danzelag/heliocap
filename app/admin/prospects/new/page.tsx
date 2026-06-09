@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { GoogleEarthTarget } from "./GoogleEarthTarget";
+import { GoogleEarthTarget, type EarthTargetStatus } from "./GoogleEarthTarget";
 
 type PlaceSuggestion = {
   placeId: string;
@@ -48,6 +48,8 @@ type BrowserMapsConfig = {
   apiKey: string;
   earthEnabled: boolean;
 };
+
+type VerificationMode = "target" | "solar";
 
 export default function NewProspectPage() {
   const router = useRouter();
@@ -173,7 +175,15 @@ export default function NewProspectPage() {
 function TargetVerification({ place }: { place: SelectedPlace }) {
   const [preview, setPreview] = useState<SolarPreview | null>(null);
   const [mapsConfig, setMapsConfig] = useState<BrowserMapsConfig | null>(null);
+  const [mode, setMode] = useState<VerificationMode>("target");
+  const [earthStatus, setEarthStatus] = useState<EarthTargetStatus>({
+    source: "loading",
+    warning: null,
+  });
   const [loading, setLoading] = useState(true);
+  const handleEarthStatus = useCallback((status: EarthTargetStatus) => {
+    setEarthStatus(status);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -230,11 +240,18 @@ function TargetVerification({ place }: { place: SelectedPlace }) {
 
   const targetImage = preview?.target.imageUrl ?? `/api/maps/static?lat=${place.lat}&lng=${place.lng}&zoom=18&size=640x400&maptype=satellite`;
   const analysisImage = preview?.solar.analysisImageUrl;
+  const solarStatus =
+    loading ? "Solar API loading" : preview?.solar.ok ? "Modeled solar output ready" : "Solar analysis pending";
+  const modeNote =
+    mode === "target"
+      ? earthStatus.warning ?? "Earth-style target view is active when available. Maps satellite stays as the verified fallback."
+      : preview?.solar.dataLayerWarning ??
+        "Solar overlay shows modeled production-side roof planes from Google Solar API panel data. Actual owner electricity usage is not connected yet.";
 
   return (
     <div className="border border-white/[0.07] bg-[#101014]">
       <div className="border-b border-white/[0.07] px-5 py-4">
-        <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div className="text-[10px] uppercase tracking-[0.22em] text-[#d8a866]">Proposal verification</div>
             <div className="mt-2 font-serif text-[26px] leading-none text-[#ece9e3] sm:text-[32px]">Target + solar confidence check</div>
@@ -242,70 +259,98 @@ function TargetVerification({ place }: { place: SelectedPlace }) {
               Confirm the real property target in Earth-style imagery, then review the premium solar zone overlay before sending the building into proposal video generation.
             </p>
           </div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500">
-            {place.lat.toFixed(4)} N · {Math.abs(place.lng).toFixed(4)} W
+          <div className="flex flex-col gap-3 lg:items-end">
+            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500">
+              {place.lat.toFixed(4)} N · {Math.abs(place.lng).toFixed(4)} W
+            </div>
+            <div className="grid grid-cols-2 border border-white/[0.08] bg-[#101014] p-1">
+              <button
+                type="button"
+                onClick={() => setMode("target")}
+                className={`px-3 py-2 text-[10px] uppercase tracking-[0.14em] transition ${
+                  mode === "target" ? "bg-[#c08a4b] text-[#131316]" : "text-stone-400 hover:text-[#d8a866]"
+                }`}
+              >
+                Target
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("solar")}
+                className={`px-3 py-2 text-[10px] uppercase tracking-[0.14em] transition ${
+                  mode === "solar" ? "bg-[#c08a4b] text-[#131316]" : "text-stone-400 hover:text-[#d8a866]"
+                }`}
+              >
+                Solar overlay
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-px bg-white/[0.07] 2xl:grid-cols-[minmax(0,1.04fr)_minmax(0,1fr)]">
-        <div className="bg-[#17171b] p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-[#d8a866]">Solar target</div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500">
-              {mapsConfig?.earthEnabled ? "Google Earth 3D + Maps fallback" : "Maps fallback only"}
-            </div>
+      <div className="bg-[#17171b] p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="text-[10px] uppercase tracking-[0.2em] text-[#d8a866]">
+            {mode === "target" ? "Solar target" : "Solar overlay"}
           </div>
-          <GoogleEarthTarget
-            address={place.streetAddress}
-            apiKey={mapsConfig?.earthEnabled ? mapsConfig.apiKey : null}
-            fallbackImageUrl={targetImage}
-            lat={place.lat}
-            lng={place.lng}
-          />
+          <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500">
+            {mode === "target"
+              ? mapsConfig?.earthEnabled
+                ? "Google Earth 3D + Maps fallback"
+                : "Maps fallback only"
+              : solarStatus}
+          </div>
         </div>
 
-        <div className="bg-[#17171b] p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div className="text-[10px] uppercase tracking-[0.2em] text-[#d8a866]">Solar heat map</div>
-            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-stone-500">
-              {loading ? "Solar API · loading" : preview?.solar.ok ? "Solar API · verified" : "Solar API · pending"}
-            </div>
+        <div className="relative aspect-[16/10] min-h-[430px] overflow-hidden border border-white/[0.08] bg-black lg:min-h-[620px]">
+          <div className={mode === "target" ? "absolute inset-0" : "hidden"}>
+            <GoogleEarthTarget
+              address={place.streetAddress}
+              apiKey={mapsConfig?.earthEnabled ? mapsConfig.apiKey : null}
+              fallbackImageUrl={targetImage}
+              lat={place.lat}
+              lng={place.lng}
+              onStatusChange={handleEarthStatus}
+            />
           </div>
-          <div className="relative aspect-[16/10] min-h-[340px] overflow-hidden border border-white/[0.08] bg-black lg:min-h-[520px]">
+          <div className={mode === "solar" ? "absolute inset-0" : "hidden"}>
             {analysisImage ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img src={analysisImage} alt={`${place.streetAddress} premium solar analysis`} className="h-full w-full object-cover" />
             ) : (
               <div className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-stone-500">
-                {loading ? "Generating solar heat map..." : preview?.solar.error ?? "Solar heat map will appear after address verification."}
+                {loading ? "Generating solar overlay..." : preview?.solar.error ?? "Solar overlay will appear after address verification."}
               </div>
             )}
             <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,.08)_0%,rgba(0,0,0,0)_28%,rgba(0,0,0,0)_72%,rgba(0,0,0,.34)_100%)]" />
             <div className="absolute bottom-3 left-3 border border-[#d8a866]/40 bg-black/70 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#d8a866]">
-              {preview?.solar.analysisSource === "proposal_cluster_overlay" ? "Proposal solar zone overlay" : "Panel-cluster fallback analysis"}
+              {preview?.solar.analysisSource === "proposal_cluster_overlay" ? "Roof-plane solar overlay" : "Panel fallback analysis"}
             </div>
           </div>
-
-          <p className="mt-3 border border-white/[0.08] bg-[#111116] px-3 py-2 text-xs leading-5 text-stone-400">
-            Strongest commercial solar zones only. The roof stays dark and clean so you can validate target quality without the noisy full-roof flood fill.
-          </p>
-
-          <div className="mt-4 grid grid-cols-2 border border-white/[0.07] bg-white/[0.07] sm:grid-cols-4">
-            <Readout label="Panels" value={preview?.solar.panelCount ? preview.solar.panelCount.toLocaleString() : "Pending"} />
-            <Readout label="System" value={preview?.solar.systemKw ? `${preview.solar.systemKw.toLocaleString()} kW` : "Pending"} />
-            <Readout label="Annual" value={preview?.solar.yearlyKwh ? `${Math.round(preview.solar.yearlyKwh / 1000).toLocaleString()} MWh` : "Pending"} />
-            <Readout label="Savings" value={preview?.solar.yearlySavings ? `$${preview.solar.yearlySavings.toLocaleString()}` : "Pending"} />
-          </div>
-
-          {preview?.solar.dataLayerWarning ? (
-            <p className="mt-3 border border-[#c08a4b]/20 bg-[#c08a4b]/8 px-3 py-2 text-xs leading-5 text-stone-400">{preview.solar.dataLayerWarning}</p>
-          ) : preview?.solar.annualFluxUrl ? (
-            <p className="mt-3 border border-white/[0.08] bg-[#111116] px-3 py-2 text-xs leading-5 text-stone-400">
-              Annual flux, RGB imagery, and roof mask were retrieved from Solar API for this analysis pass.
-            </p>
-          ) : null}
         </div>
+
+        <div className="mt-4 grid gap-px border border-white/[0.07] bg-white/[0.07] xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)]">
+          <div className="bg-[#111116] p-4">
+            <div className="text-[9px] uppercase tracking-[0.16em] text-stone-500">Current view</div>
+            <div className="mt-2 text-sm text-[#ece9e3]">{mode === "target" ? "Verified property target" : "Modeled roof-plane solar overlay"}</div>
+            <p className="mt-2 text-xs leading-5 text-stone-400">{modeNote}</p>
+          </div>
+          <div className="grid grid-cols-2 bg-white/[0.07] sm:grid-cols-4">
+            <Readout label="Modeled panels" value={preview?.solar.panelCount ? preview.solar.panelCount.toLocaleString() : "Pending"} />
+            <Readout label="Modeled system" value={preview?.solar.systemKw ? `${preview.solar.systemKw.toLocaleString()} kW` : "Pending"} />
+            <Readout label="Modeled annual" value={preview?.solar.yearlyKwh ? `${Math.round(preview.solar.yearlyKwh / 1000).toLocaleString()} MWh` : "Pending"} />
+            <Readout label="Est. savings" value={preview?.solar.yearlySavings ? `$${preview.solar.yearlySavings.toLocaleString()}` : "Pending"} />
+          </div>
+        </div>
+
+        <p className="mt-3 border border-white/[0.08] bg-[#111116] px-3 py-2 text-xs leading-5 text-stone-400">
+          Modeled solar output only. Actual owner electricity usage is not connected yet.
+        </p>
+
+        {preview?.solar.annualFluxUrl || preview?.solar.maskUrl ? (
+          <p className="mt-3 border border-white/[0.08] bg-[#111116] px-3 py-2 text-xs leading-5 text-stone-400">
+            Solar API returned production layer context. The overlay is drawn from the highest-output roof planes inferred from panel placement and roof segment orientation.
+          </p>
+        ) : null}
       </div>
     </div>
   );
