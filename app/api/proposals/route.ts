@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildProposalUrl, getProposalStage } from "@/lib/proposals";
+import { fetchSatelliteImage } from "@/lib/pipeline/satellite";
 import { getProspectsByIds, listProposals, updateProspect } from "@/lib/supabase";
+import type { Prospect } from "@/lib/types";
 
 export async function GET() {
   const proposals = await listProposals(150);
@@ -27,12 +29,22 @@ export async function POST(req: NextRequest) {
   }
 
   const created = await Promise.all(
-    eligible.map((prospect) =>
-      updateProspect(prospect.id, {
+    eligible.map(async (prospect) => {
+      const updates: Partial<Prospect> = {
         microsite_url: buildProposalUrl(prospect.slug),
         stage: getProposalStage(prospect),
-      })
-    )
+      };
+
+      // the microsite hero needs the building visual; backfill it on publish
+      if (!prospect.satellite_image_url && prospect.lat != null && prospect.lng != null) {
+        const sat = await fetchSatelliteImage(prospect.lat, prospect.lng, prospect.sqft ?? 50_000, prospect.id);
+        if (sat.ok && sat.data) {
+          updates.satellite_image_url = sat.data.imageUrl;
+        }
+      }
+
+      return updateProspect(prospect.id, updates);
+    })
   );
 
   return NextResponse.json({

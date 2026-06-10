@@ -9,6 +9,7 @@ import styles from "./ProposalExperience.module.css";
 type ProposalExperienceProps = {
   prospect: Prospect;
   bookingUrl: string | null;
+  contactEmail: string | null;
 };
 
 type ProposalModel = {
@@ -39,6 +40,16 @@ type ProposalModel = {
   satelliteImageUrl: string | null;
   panelSvgUrl: string | null;
   mailto: string;
+  estimates: {
+    sqft: boolean;
+    systemKw: boolean;
+    yearlyKwh: boolean;
+    yearlySavings: boolean;
+    savings25yr: boolean;
+    incentiveAmount: boolean;
+    payback: boolean;
+  };
+  hasEstimates: boolean;
 };
 
 const SCENES = [
@@ -56,8 +67,8 @@ const ROWS = 13;
 const COLS = 22;
 const MAX_DIAG = ROWS + COLS - 2;
 
-export function ProposalExperience({ prospect, bookingUrl }: ProposalExperienceProps) {
-  const p = useMemo(() => toProposalModel(prospect), [prospect]);
+export function ProposalExperience({ prospect, bookingUrl, contactEmail }: ProposalExperienceProps) {
+  const p = useMemo(() => toProposalModel(prospect, contactEmail), [prospect, contactEmail]);
   const progressRef = useRef<HTMLDivElement>(null);
   const heroMediaRef = useRef<HTMLDivElement>(null);
   const heroCopyRef = useRef<HTMLDivElement>(null);
@@ -168,11 +179,14 @@ export function ProposalExperience({ prospect, bookingUrl }: ProposalExperienceP
           </Reveal>
         </div>
         <div className={styles.heroResults}>
-          <ResultMetric value={p.systemKw} format={(n) => `${fmtInt(n)} kW`} label="System size" />
-          <ResultMetric value={p.yearlySavings} format={fmtMoney} label="Saved every year" />
-          <ResultMetric value={p.savings25yr} format={fmtMoneyM} label="25-year net" />
-          <ResultMetric value={p.incentiveAmount} format={fmtMoneyK} label="Incentive stack" />
+          <ResultMetric value={p.systemKw} format={(n) => `${fmtInt(n)} kW`} label="System size" estimated={p.estimates.systemKw} />
+          <ResultMetric value={p.yearlySavings} format={fmtMoney} label="Saved every year" estimated={p.estimates.yearlySavings} />
+          <ResultMetric value={p.savings25yr} format={fmtMoneyM} label="25-year net" estimated={p.estimates.savings25yr} />
+          <ResultMetric value={p.incentiveAmount} format={fmtMoneyK} label="Incentive stack" estimated={p.estimates.incentiveAmount} />
         </div>
+        {p.hasEstimates ? (
+          <div className={styles.estimateNote}>* Modelled estimate — confirmed during engineering review</div>
+        ) : null}
         <div className={styles.scrollCue}>
           Scroll
           <span />
@@ -191,10 +205,10 @@ export function ProposalExperience({ prospect, bookingUrl }: ProposalExperienceP
             <span>{splitAddress(p.address).street}</span>
           </Reveal>
           <Reveal className={styles.addressMeta} distance={28}>
-            <MetaCell value={fmtInt(p.sqft)} unit="sqft" label="Gross roof" />
+            <MetaCell value={fmtInt(p.sqft)} unit="sqft" label={p.estimates.sqft ? "Gross roof *" : "Gross roof"} />
             <MetaCell value={p.yearBuilt?.toString() ?? "Verified"} label="Year built" />
             <MetaCell value={p.city} label="Location" />
-            <MetaCell value={`${Math.round(p.usableRoofPct * 100)}%`} label="Usable plane" />
+            <MetaCell value={`${Math.round(p.usableRoofPct * 100)}%`} label="Usable plane *" />
           </Reveal>
         </div>
       </section>
@@ -226,11 +240,11 @@ export function ProposalExperience({ prospect, bookingUrl }: ProposalExperienceP
 
       <BigStat
         id="scene-3"
-        sceneIndex
         kicker="What it saves"
         value={p.yearlySavings}
         format={fmtMoney}
         suffix="saved, every single year"
+        estimated={p.estimates.yearlySavings}
         sub={`At the modelled blended rate, the array offsets about ${Math.round(p.offsetPct * 100)}% of the building's grid electricity.`}
       />
 
@@ -240,6 +254,7 @@ export function ProposalExperience({ prospect, bookingUrl }: ProposalExperienceP
         value={p.paybackYears}
         format={(n) => n.toFixed(1)}
         suffix="years, then the power is owned"
+        estimated={p.estimates.payback}
         sub={`Net of the ${fmtMoneyK(p.incentiveAmount)} incentive stack currently modelled for this roof.`}
       />
 
@@ -312,9 +327,9 @@ export function ProposalExperience({ prospect, bookingUrl }: ProposalExperienceP
           </div>
           <p>
             <b>Methodology.</b> Roof geometry and project economics are generated from OpenClaw pipeline data, satellite
-            imagery, solar layout assumptions, and market-rate economics. This is an indicative proposal, not a binding
-            quote or guarantee of yield, eligibility, or construction pricing. Every figure is confirmed during
-            engineering review.
+            imagery, solar layout assumptions, and market-rate economics. Figures marked * are modelled estimates. This
+            is an indicative proposal, not a binding quote or guarantee of yield, eligibility, or construction pricing.
+            Every figure is confirmed during engineering review.
           </p>
         </div>
       </footer>
@@ -454,14 +469,15 @@ function BigStat({
   value,
   format,
   suffix,
+  estimated,
   sub,
 }: {
   id: string;
-  sceneIndex?: boolean;
   kicker: string;
   value: number;
   format: (value: number) => string;
   suffix: string;
+  estimated?: boolean;
   sub: string;
 }) {
   return (
@@ -473,10 +489,11 @@ function BigStat({
         </Reveal>
         <div className={styles.statNumber}>
           <ScrollNumber value={value} format={format} />
+          {estimated ? <sup className={styles.estimateMark}>*</sup> : null}
         </div>
         <Reveal className={styles.statSuffix}>{suffix}</Reveal>
         <Reveal as="p" className={styles.statSub}>
-          {sub}
+          {estimated ? `${sub} Figures marked * are modelled estimates.` : sub}
         </Reveal>
       </div>
     </section>
@@ -594,11 +611,22 @@ function ScrollNumber({
   return <span ref={ref}>{format(seen ? value : 0)}</span>;
 }
 
-function ResultMetric({ value, format, label }: { value: number; format: (value: number) => string; label: string }) {
+function ResultMetric({
+  value,
+  format,
+  label,
+  estimated,
+}: {
+  value: number;
+  format: (value: number) => string;
+  label: string;
+  estimated?: boolean;
+}) {
   return (
     <div>
       <div className={styles.resultValue}>
         <ScrollNumber value={value} format={format} />
+        {estimated ? <sup className={styles.estimateMark}>*</sup> : null}
       </div>
       <div className={styles.resultLabel}>{label}</div>
     </div>
@@ -656,7 +684,7 @@ function Signature({ label, name, role, contact }: { label: string; name: string
   );
 }
 
-function toProposalModel(prospect: Prospect): ProposalModel {
+function toProposalModel(prospect: Prospect, contactEmail: string | null): ProposalModel {
   const currentYear = new Date().getFullYear();
   const sqft = prospect.sqft ?? 142_500;
   const roofAge = prospect.roof_age ?? (prospect.year_built ? currentYear - prospect.year_built : 22);
@@ -668,8 +696,24 @@ function toProposalModel(prospect: Prospect): ProposalModel {
   const systemCost = prospect.system_cost ?? Math.round(systemKw * 1800);
   const incentiveAmount = prospect.incentive_amount ?? Math.round(systemCost * 0.3);
   const savings25yr = prospect.savings_25yr ?? Math.round(yearlySavings * 25 * 1.03);
-  const netCost = Math.max(systemCost - incentiveAmount, yearlySavings * 4.8);
-  const paybackYears = clamp(netCost / Math.max(yearlySavings, 1), 4.2, 8.9);
+  const netCost = Math.max(systemCost - incentiveAmount, 1);
+  const paybackYears = clamp(netCost / Math.max(yearlySavings, 1), 0.5, 30);
+
+  const estimates = {
+    sqft: prospect.sqft == null,
+    systemKw: prospect.system_kw == null,
+    yearlyKwh: prospect.yearly_kwh == null,
+    yearlySavings: prospect.yearly_savings == null,
+    savings25yr: prospect.savings_25yr == null,
+    incentiveAmount: prospect.incentive_amount == null,
+    payback: prospect.system_cost == null || prospect.yearly_savings == null || prospect.incentive_amount == null,
+  };
+
+  const satelliteImageUrl =
+    prospect.satellite_image_url ??
+    (prospect.lat != null && prospect.lng != null
+      ? `/api/maps/static?lat=${prospect.lat}&lng=${prospect.lng}&zoom=${sqft >= 200_000 ? 17 : 18}&size=1280x720`
+      : null);
 
   return {
     id: prospect.id,
@@ -696,9 +740,15 @@ function toProposalModel(prospect: Prospect): ProposalModel {
     lng: prospect.lng,
     videoUrl: prospect.video_url,
     videoThumbnailUrl: prospect.video_thumbnail_url,
-    satelliteImageUrl: prospect.satellite_image_url,
+    satelliteImageUrl,
     panelSvgUrl: prospect.panel_svg_url,
-    mailto: `mailto:${prospect.owner_email ?? ""}?subject=${encodeURIComponent(`Solar proposal - ${prospect.address}`)}`,
+    mailto: `mailto:${contactEmail ?? ""}?subject=${encodeURIComponent(
+      `Walkthrough request - ${prospect.address}`
+    )}&body=${encodeURIComponent(
+      `Hi,\n\nI'd like to discuss the solar proposal for ${prospect.address}, ${prospect.city}.\n\n${prospect.owner_name ?? ""}`
+    )}`,
+    estimates,
+    hasEstimates: Object.values(estimates).some(Boolean),
   };
 }
 

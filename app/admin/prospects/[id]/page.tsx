@@ -1,10 +1,9 @@
 import Link from "next/link";
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getProspect } from "@/lib/supabase";
 import { buildProposalPath } from "@/lib/proposals";
 import type { Prospect, ProspectStage } from "@/lib/types";
-import { PipelineActions } from "./PipelineActions";
+import { ProposalVideoPanel } from "./ProposalVideoPanel";
 import { ProspectSolarWorkspace } from "./ProspectSolarWorkspace";
 
 const CAD = new Intl.NumberFormat("en-CA", {
@@ -53,8 +52,8 @@ export default async function ProspectDetailPage({
           </div>
         </header>
 
-        <main className="grid items-start gap-8 pt-8 xl:grid-cols-[minmax(0,1fr)_390px]">
-          <section className="min-w-0 border border-white/[0.07] bg-gradient-to-b from-[#1a1a1f] to-[#131316] px-5 pb-[30px] pt-7 sm:px-[30px]">
+        <main className="pt-8">
+          <section className="border border-white/[0.07] bg-gradient-to-b from-[#1a1a1f] to-[#131316] px-5 pb-[30px] pt-7 sm:px-[30px]">
             <div className="mb-6 border-b border-white/[0.07] pb-[22px]">
               <div className="mb-[14px] flex flex-wrap items-center gap-[14px]">
                 <StagePill stage={stage} label={labelForStage(prospect.stage)} />
@@ -96,72 +95,14 @@ export default async function ProspectDetailPage({
               <Section label="Savings & incentive math">
                 <SavingsLedger model={model} />
               </Section>
+              <Section label="Proposal video">
+                <ProposalVideoPanel prospect={prospect} />
+              </Section>
             </div>
           </section>
-
-          <aside className="space-y-5 xl:sticky xl:top-5">
-            <SelectedVideoPanel prospect={prospect} />
-            <PipelineActions prospect={prospect} />
-          </aside>
         </main>
       </div>
     </div>
-  );
-}
-
-function SelectedVideoPanel({ prospect }: { prospect: Prospect }) {
-  const ready = Boolean(prospect.video_url);
-
-  return (
-    <section className="border border-white/[0.07] bg-[#1a1a1f]">
-      <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] px-4 py-4">
-        <div className="min-w-0">
-          <div className="text-xs uppercase tracking-[0.16em] text-[#ece9e3]">Proposal video</div>
-          <div className="mt-2 truncate text-sm font-medium text-stone-200">{prospect.address || prospect.company_name}</div>
-          <div className="mt-1 truncate text-[10.5px] text-stone-500">{prospect.company_name}</div>
-        </div>
-        <span className={`shrink-0 border px-2 py-1 text-[9.5px] uppercase tracking-[0.14em] ${ready ? "border-[#c08a4b]/50 text-[#d8a866]" : "border-white/12 text-stone-500"}`}>
-          {ready ? "Ready" : "Queued"}
-        </span>
-      </div>
-      <div className="p-4">
-        <div className="relative aspect-video overflow-hidden border border-white/12 bg-[#070809]">
-          {prospect.video_thumbnail_url || prospect.satellite_image_url ? (
-            <Image
-              src={prospect.video_thumbnail_url ?? prospect.satellite_image_url ?? ""}
-              alt=""
-              fill
-              unoptimized
-              sizes="380px"
-              className="absolute inset-0 h-full w-full object-cover opacity-60"
-            />
-          ) : (
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(192,138,75,0.12),transparent_30%),linear-gradient(135deg,#141414,#050505)]" />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-b from-[#070809]/60 via-transparent to-[#070809]/80" />
-          {ready ? (
-            <video
-              key={prospect.video_url}
-              src={prospect.video_url ?? undefined}
-              poster={prospect.video_thumbnail_url ?? prospect.satellite_image_url ?? undefined}
-              controls
-              preload="metadata"
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-          ) : (
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[11px] uppercase tracking-[0.16em] text-stone-500">
-              Video render queued
-            </div>
-          )}
-          <div className="pointer-events-none absolute left-4 right-4 top-3 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.18em]">
-            <span className="text-stone-100/85">CINEMATIC FLYOVER</span>
-            <span className={`border px-2 py-1 ${ready ? "border-[#c08a4b]/50 text-[#d8a866]" : "border-white/12 text-stone-500"}`}>
-              {ready ? "READY" : "NOT RENDERED"}
-            </span>
-          </div>
-        </div>
-      </div>
-    </section>
   );
 }
 

@@ -2,6 +2,7 @@ import { geocodeAddress, qualifyProspect } from "./geocode";
 import { fetchSatelliteImage } from "./satellite";
 import { fetchSolarInsights, calculateEconomics, generatePanelSvg } from "./solar";
 import { fetchCurrentIncentiveRate } from "./outreach";
+import { generateProposalVideo } from "./video";
 import { updateProspect, supabaseAdmin } from "../supabase";
 import { buildProposalUrl } from "../proposals";
 import type { Prospect } from "../types";
@@ -83,6 +84,19 @@ export async function runPipeline(prospect: Prospect): Promise<{
   });
 
   stages.economics = true;
+
+  // step 4 — cinematic flyover (non-fatal: skipped until a video provider is configured)
+  const video = await generateProposalVideo({ ...prospect, satellite_image_url: sat.data.imageUrl });
+  if (video.ok && video.data) {
+    await updateProspect(prospect.id, {
+      video_url: video.data.videoUrl,
+      video_thumbnail_url: video.data.thumbnailUrl,
+      stage: "video_done",
+    });
+    stages.video = true;
+  } else {
+    stages.video = false;
+  }
 
   // stamp microsite URL so the dashboard "View Site" link lights up
   await updateProspect(prospect.id, {

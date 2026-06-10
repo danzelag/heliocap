@@ -1284,12 +1284,17 @@ function LayerState({ label, active }: { label: string; active: boolean }) {
   );
 }
 
+function normalizeAzimuthToOrientation(azimuth: number): 0 | 90 {
+  const a = ((azimuth % 360) + 360) % 360;
+  return (a >= 45 && a < 135) || (a >= 225 && a < 315) ? 90 : 0;
+}
+
 function panelOverlayToDesignPanel(panel: PanelOverlayPoint): SolarDesignPanel {
   return {
     id: `api-${panel.id}`,
     x: panel.x,
     y: panel.y,
-    azimuthDegrees: panel.azimuthDegrees,
+    azimuthDegrees: normalizeAzimuthToOrientation(panel.azimuthDegrees),
     yearlyEnergyDcKwh: panel.yearlyEnergyDcKwh,
     segmentIndex: panel.segmentIndex,
     source: "api",

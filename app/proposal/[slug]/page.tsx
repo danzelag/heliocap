@@ -20,6 +20,7 @@ export async function generateMetadata({
   return {
     title: `Solar Proposal for ${prospect.company_name}`,
     description: `A private OpenClaw solar proposal for ${prospect.address}, ${prospect.city}.`,
+    robots: { index: false, follow: false },
     openGraph: {
       title: `Solar Proposal for ${prospect.company_name}`,
       description: `A private OpenClaw solar proposal for ${prospect.address}, ${prospect.city}.`,
@@ -44,6 +45,7 @@ export default async function ProposalPage({
     <ProposalExperience
       prospect={prospect}
       bookingUrl={process.env.NEXT_PUBLIC_CAL_URL?.trim() || null}
+      contactEmail={process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim() || null}
     />
   );
 }

@@ -1,8 +1,41 @@
-import type { PipelineResult } from "../types";
+import type { PipelineResult, Prospect } from "../types";
 
 export interface VideoResult {
   videoUrl: string;
-  thumbnailUrl: string;
+  thumbnailUrl: string | null;
+}
+
+export type VideoProvider = "gemini-omni" | "higgsfield";
+
+export function resolveVideoProvider(): VideoProvider | null {
+  // Gemini Omni is the planned primary provider; it has no API key or
+  // integration yet, so only Higgsfield can actually render today.
+  if (process.env.HIGGSFIELD_API_KEY) return "higgsfield";
+  return null;
+}
+
+export async function generateProposalVideo(
+  prospect: Prospect
+): Promise<PipelineResult<VideoResult>> {
+  if (!prospect.satellite_image_url) {
+    return { ok: false, error: "Satellite image required before a flyover can render." };
+  }
+
+  const provider = resolveVideoProvider();
+  if (provider === "higgsfield") {
+    const res = await generateHiggsfield(prospect.satellite_image_url, prospect.city);
+    if (!res.ok || !res.data) return { ok: false, error: res.error };
+    return {
+      ok: true,
+      data: { videoUrl: res.data.rawVideoUrl, thumbnailUrl: prospect.satellite_image_url },
+    };
+  }
+
+  return {
+    ok: false,
+    error:
+      "No video provider configured. Gemini Omni integration is pending — set HIGGSFIELD_API_KEY or attach a rendered video URL manually.",
+  };
 }
 
 const MOTION_PRESETS = {

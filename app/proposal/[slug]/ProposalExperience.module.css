@@ -370,6 +370,26 @@
   text-transform: uppercase;
 }
 
+.estimateMark {
+  margin-left: 4px;
+  color: var(--gold-deep);
+  font-family: var(--font-dm-mono), ui-monospace, monospace;
+  font-size: 0.34em;
+  vertical-align: super;
+}
+
+.estimateNote {
+  position: relative;
+  z-index: 6;
+  width: min(100% - 88px, var(--maxw));
+  margin: 10px auto 0;
+  color: var(--ink-3);
+  font-family: var(--font-dm-mono), ui-monospace, monospace;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
 .scrollCue {
   position: absolute;
   right: 42px;
@@ -1068,6 +1088,7 @@
   .wrap,
   .heroCopy,
   .heroResults,
+  .estimateNote,
   .flyoverHead {
     width: calc(100% - 44px);
     padding-left: 0;
@@ -1086,7 +1107,9 @@
   }
 
   .hero {
+    height: auto;
     min-height: 820px;
+    padding-bottom: 34px;
   }
 
   .heroCopy {
