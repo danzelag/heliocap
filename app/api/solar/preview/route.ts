@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchSolarInsights, calculateEconomics, latLngToPixel } from "@/lib/pipeline/solar";
+import { fetchSolarInsights, calculateEconomics, latLngToPixel, panelRotationDegrees } from "@/lib/pipeline/solar";
 import { DEFAULT_ANALYSIS_ZOOM, PREVIEW_HEIGHT, PREVIEW_WIDTH, buildPreviewMapImageUrl, fetchSolarDataLayers } from "@/lib/solarPreview";
 
 export async function GET(req: NextRequest) {
@@ -105,11 +105,6 @@ function buildPanelOverlayPayload(
   lng: number,
   zoom: number
 ) {
-  const segmentAzimuths = new Map<number, number>();
-  insights.roofSegments.forEach((segment, index) => {
-    segmentAzimuths.set(index, segment.azimuthDegrees);
-  });
-
   return panels.map((panel, index) => {
     const point = latLngToPixel(panel.center.latitude, panel.center.longitude, lat, lng, zoom, PREVIEW_WIDTH, PREVIEW_HEIGHT);
 
@@ -117,7 +112,7 @@ function buildPanelOverlayPayload(
       id: index,
       x: Math.round(point.x * 10) / 10,
       y: Math.round(point.y * 10) / 10,
-      azimuthDegrees: Math.round(segmentAzimuths.get(panel.segmentIndex) ?? panel.orientationDegrees ?? 180),
+      azimuthDegrees: Math.round(panelRotationDegrees(panel, insights)),
       yearlyEnergyDcKwh: Math.round(panel.yearlyEnergyDcKwh),
       segmentIndex: panel.segmentIndex,
     };

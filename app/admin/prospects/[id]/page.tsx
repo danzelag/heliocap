@@ -116,9 +116,15 @@ function OwnerCard({ prospect }: { prospect: Prospect }) {
             {prospect.owner_title ?? "Facilities contact"} · {prospect.company_name}
           </div>
         </div>
-        <span className="shrink-0 border border-[#86a06f]/45 px-2 py-1 text-[8.5px] uppercase tracking-[0.14em] text-[#a4ba8d]">
-          OWNER VERIFIED
-        </span>
+        {prospect.owner_name && (prospect.owner_email || prospect.owner_mobile) ? (
+          <span className="shrink-0 border border-[#86a06f]/45 px-2 py-1 text-[8.5px] uppercase tracking-[0.14em] text-[#a4ba8d]">
+            OWNER VERIFIED
+          </span>
+        ) : (
+          <span className="shrink-0 border border-white/12 px-2 py-1 text-[8.5px] uppercase tracking-[0.14em] text-stone-500">
+            OWNER PENDING
+          </span>
+        )}
       </div>
       <div className="grid sm:grid-cols-2">
         <Contact label="Direct" value={prospect.owner_mobile ?? "Pending"} />
@@ -132,12 +138,12 @@ function SpecsGrid({ prospect, model }: { prospect: Prospect; model: ProspectMod
   const specs = [
     ["Gross floor area", model.sqftLabel],
     ["Year built", prospect.year_built?.toString() ?? "Pending"],
-    ["Stories", "1"],
+    ["Roof age", prospect.roof_age != null ? `${prospect.roof_age} yrs` : "Pending"],
     ["Roof assembly", model.roofType],
-    ["Roof slope", "Low-slope"],
-    ["Array azimuth", model.azimuth],
+    ["Industry", prospect.industry ?? "Commercial"],
+    ["Modules placed", model.panelsLabel],
     ["Usable roof", model.usableRoofPctLabel],
-    ["Parcel ID", prospect.slug || prospect.id.slice(0, 8)],
+    ["Record ID", prospect.slug || prospect.id.slice(0, 8)],
   ];
 
   return (

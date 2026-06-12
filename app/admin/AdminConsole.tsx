@@ -8,10 +8,9 @@ import type { Prospect, ProspectStage } from "@/lib/types";
 
 type StageKey = "sourced" | "qualified" | "rendered" | "published" | "sent" | "replied" | "booked";
 
+// the console only lists published proposals (listProposals), so the funnel
+// starts at Published — earlier stages live in the prospect CRM
 const STAGE_FLOW: { key: StageKey; label: string; stages: ProspectStage[] }[] = [
-  { key: "sourced", label: "Sourced", stages: ["sourced", "geocoded"] },
-  { key: "qualified", label: "Qualified", stages: ["qualified"] },
-  { key: "rendered", label: "Rendered", stages: ["satellite_done", "solar_done", "video_done"] },
   { key: "published", label: "Published", stages: ["microsite_live"] },
   { key: "sent", label: "Sent", stages: ["emailed", "followed_up"] },
   { key: "replied", label: "Replied", stages: ["replied"] },
@@ -78,10 +77,10 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
     [prospects]
   );
 
-  const activeProspects = prospects.filter((prospect) => !["skipped", "dead"].includes(prospect.stage));
-  const renderedCount = prospects.filter((prospect) => ["satellite_done", "solar_done", "video_done"].includes(prospect.stage)).length;
-  const publishedCount = prospects.filter((prospect) => Boolean(prospect.microsite_url)).length;
-  const incentiveTotal = activeProspects.reduce((sum, prospect) => sum + (prospect.incentive_amount ?? 0), 0);
+  const flyoverCount = prospects.filter((prospect) => Boolean(prospect.video_url)).length;
+  const awaitingOutreach = prospects.filter((prospect) => prospect.stage === "microsite_live").length;
+  const bookedCount = prospects.filter((prospect) => prospect.stage === "booked").length;
+  const incentiveTotal = prospects.reduce((sum, prospect) => sum + (prospect.incentive_amount ?? 0), 0);
 
   const shownProspects = stageFilter
     ? prospects.filter((prospect) => stagesFor(stageFilter).includes(prospect.stage))
@@ -136,9 +135,10 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
 
         <OperatorMenu
           metrics={[
-            { label: "Proposals published", value: prospects.length },
-            { label: "Flyovers generated", value: renderedCount },
-            { label: "Proposal pages live", value: publishedCount },
+            { label: "Proposal pages live", value: prospects.length },
+            { label: "Flyovers ready", value: flyoverCount },
+            { label: "Awaiting outreach", value: awaitingOutreach },
+            { label: "Calls booked", value: bookedCount },
             {
               label: "Incentive dollars flagged",
               value: incentiveTotal / 1_000_000,
@@ -224,9 +224,15 @@ function ProspectPreview({ prospect }: { prospect: Prospect }) {
             {prospect.owner_title ?? "Facilities contact"} · {prospect.company_name}
           </span>
         </div>
-        <span className="shrink-0 border border-[#86a06f]/45 px-2 py-1 text-[8.5px] uppercase tracking-[0.14em] text-[#a4ba8d]">
-          OWNER VERIFIED
-        </span>
+        {prospect.owner_name && (prospect.owner_email || prospect.owner_mobile) ? (
+          <span className="shrink-0 border border-[#86a06f]/45 px-2 py-1 text-[8.5px] uppercase tracking-[0.14em] text-[#a4ba8d]">
+            OWNER VERIFIED
+          </span>
+        ) : (
+          <span className="shrink-0 border border-white/12 px-2 py-1 text-[8.5px] uppercase tracking-[0.14em] text-stone-500">
+            OWNER PENDING
+          </span>
+        )}
       </div>
 
       <FlyoverPanel prospect={prospect} />
@@ -251,7 +257,6 @@ function ProspectPreview({ prospect }: { prospect: Prospect }) {
 
 function FlyoverPanel({ prospect }: { prospect: Prospect }) {
   const ready = Boolean(prospect.video_url);
-  const duration = "0:48";
 
   return (
     <div className="relative aspect-[2.75/1] overflow-hidden border border-white/12 bg-[#070809]">
@@ -281,7 +286,7 @@ function FlyoverPanel({ prospect }: { prospect: Prospect }) {
       <div className="pointer-events-none absolute left-4 right-4 top-3 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.18em]">
         <span className="text-stone-100/85">CINEMATIC FLYOVER</span>
         <span className={`border px-2 py-1 ${ready ? "border-[#c08a4b]/50 text-[#d8a866]" : "border-white/12 text-stone-500"}`}>
-          {ready ? `READY · ${duration}` : "NOT RENDERED"}
+          {ready ? "READY" : "NOT RENDERED"}
         </span>
       </div>
       {!ready ? (
@@ -297,12 +302,12 @@ function SpecsGrid({ prospect, model }: { prospect: Prospect; model: ProspectMod
   const specs = [
     ["Gross floor area", model.sqftLabel],
     ["Year built", prospect.year_built?.toString() ?? "Pending"],
-    ["Stories", "1"],
+    ["Roof age", model.roofAgeLabel],
     ["Roof assembly", model.roofType],
-    ["Roof slope", "Low-slope"],
-    ["Array azimuth", model.azimuth],
+    ["Industry", prospect.industry ?? "Commercial"],
+    ["Modules placed", model.panelsLabel],
     ["Usable roof", model.usableRoofPctLabel],
-    ["Parcel ID", prospect.slug || prospect.id.slice(0, 8)],
+    ["Record ID", prospect.slug || prospect.id.slice(0, 8)],
   ];
 
   return (
@@ -325,7 +330,7 @@ function SavingsLedger({ model }: { model: ProspectModel }) {
     ["Specific yield", model.yieldLabel],
     ["Annual generation", model.annualKwhLabel],
     ["Grid offset", model.offsetLabel],
-    ["Blended rate", "$0.147 /kWh"],
+    ["Blended rate", "$0.130 /kWh (modelled)"],
   ];
 
   return (
@@ -389,7 +394,7 @@ function ProposalList({
             {STAGE_META[filter].label} x
           </button>
         ) : (
-          <span className="text-[9.5px] uppercase tracking-[0.14em] text-stone-500">{totalCount} live · GTA West</span>
+          <span className="text-[9.5px] uppercase tracking-[0.14em] text-stone-500">{totalCount} proposals live</span>
         )}
       </div>
 
@@ -421,12 +426,14 @@ function ProposalList({
                 </div>
               </button>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Link
-                  href={buildProposalPath(prospect.slug)}
-                  className="inline-flex border border-[#c08a4b]/45 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[#d8a866] transition hover:bg-[#c08a4b]/10"
-                >
-                  View page
-                </Link>
+                {prospect.microsite_url ? (
+                  <Link
+                    href={buildProposalPath(prospect.slug)}
+                    className="inline-flex border border-[#c08a4b]/45 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-[#d8a866] transition hover:bg-[#c08a4b]/10"
+                  >
+                    View page
+                  </Link>
+                ) : null}
                 <Link
                   href={`/admin/prospects/${prospect.id}`}
                   className="inline-flex border border-white/12 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-stone-300 transition hover:bg-[#212128]"
@@ -542,7 +549,7 @@ function OperatorMenu({
             </div>
           ))}
         </div>
-        <span className="ml-auto flex items-center pr-0 text-[10px] uppercase tracking-[0.22em] text-stone-600">Today</span>
+        <span className="ml-auto flex items-center pr-0 text-[10px] uppercase tracking-[0.22em] text-stone-600">Live</span>
       </div>
       <div className="flex flex-wrap items-stretch">
         <span className="flex items-center border-r border-white/[0.07] pr-[18px] text-[10px] uppercase tracking-[0.2em] text-stone-600">
@@ -667,8 +674,11 @@ function getProspectModel(prospect: Prospect) {
     lifetimeSavings,
     incentive,
     yieldLabel: systemKw && annualKwh ? `${formatNumber(Math.round(annualKwh / systemKw))} kWh/kW` : "Pending",
-    offsetLabel: systemKw ? "82%" : "Pending",
-    paybackLabel: annualSavings ? `${Math.max(4.8, Math.min(8.6, lifetimeSavings / Math.max(annualSavings, 1) / 4.3)).toFixed(1)} yr` : "Pending",
+    offsetLabel: systemKw ? "82% (modelled)" : "Pending",
+    paybackLabel:
+      prospect.system_cost && annualSavings
+        ? `${(Math.max(prospect.system_cost - incentive, 0) / annualSavings).toFixed(1)} yr`
+        : "Pending",
     roofAgeLabel: roofAge == null ? "Pending" : `${roofAge} yrs / 25 typical`,
     roofAgeShort: roofAge == null ? "Pending" : `${roofAge} yrs`,
     roofScore,
@@ -704,77 +714,51 @@ function labelForStage(stage: ProspectStage) {
   return STAGE_META[stageFor(stage)].label;
 }
 
+// checkpoints derived from real record evidence only — no invented events or
+// timestamps, so an operator (or agent) can trust each line as actual state
 function buildProspectHistory(prospect: Prospect): ProspectHistoryItem[] {
   const model = getProspectModel(prospect);
-  const currentStage = stageFor(prospect.stage);
-  const stageIndex = STAGE_FLOW.findIndex((item) => item.key === currentStage);
-  const target = prospect.address || prospect.company_name;
-  const city = prospect.city || "Ontario";
-  const owner = prospect.owner_name ?? prospect.company_name;
-  const events: Array<{ kind: ActivityKind; text: string }> = [
+  const events: ProspectHistoryItem[] = [
     {
+      time: shortDate(prospect.created_at),
       kind: "source",
-      text: `Sourced - record matched in ${city} · ${model.sqftLabel}`,
+      text: `Sourced - ${prospect.city || "Ontario"} · ${model.sqftLabel}`,
     },
   ];
 
-  if (stageIndex >= 1) {
-    events.push({
-      kind: "qualify",
-      text: `Qualified - roof age ${model.roofAgeShort}, owner contact confirmed`,
-    });
+  if (prospect.lat != null && prospect.lng != null) {
+    events.push({ time: "—", kind: "qualify", text: "Address verified and geocoded" });
   }
-
-  if (stageIndex >= 2) {
-    events.push(
-      {
-        kind: "panel",
-        text: `Panel layout solved - ${model.panelsLabel}, ${model.offsetLabel} offset`,
-      },
-      {
-        kind: "render",
-        text: `Flyover rendered - ${prospect.video_url ? "runtime 0:48" : "queued for final pass"}`,
-      },
-      {
-        kind: "incentive",
-        text: `Incentive stack flagged - ${formatMoneyCompact(model.incentive)}`,
-      }
-    );
+  if (prospect.satellite_image_url) {
+    events.push({ time: "—", kind: "render", text: "Satellite imagery captured" });
   }
-
-  if (stageIndex >= 3) {
-    events.push({
-      kind: "publish",
-      text: `Proposal page published - ${buildProposalPath(prospect.slug)}`,
-    });
+  if (prospect.panel_count) {
+    events.push({ time: "—", kind: "panel", text: `Solar layout solved - ${model.panelsLabel}, ${model.systemLabel}` });
   }
-
-  if (stageIndex >= 4) {
+  if (prospect.incentive_amount) {
+    events.push({ time: "—", kind: "incentive", text: `Incentive stack flagged - ${formatMoneyCompact(model.incentive)}` });
+  }
+  if (prospect.video_url) {
+    events.push({ time: "—", kind: "render", text: "Cinematic flyover attached" });
+  }
+  if (prospect.microsite_url) {
+    events.push({ time: "—", kind: "publish", text: `Proposal page published - ${buildProposalPath(prospect.slug)}` });
+  }
+  if (prospect.email_sent_at) {
     events.push({
+      time: shortDate(prospect.email_sent_at),
       kind: "send",
-      text: `Proposal delivered to ${owner}`,
+      text: `Proposal emailed to ${prospect.owner_name ?? prospect.company_name}`,
     });
   }
-
-  if (stageIndex >= 5) {
-    events.push({
-      kind: "reply",
-      text: `Owner replied - booking link sent for ${target}`,
-    });
+  if (prospect.reply_classification) {
+    events.push({ time: "—", kind: "reply", text: `Owner replied - ${prospect.reply_classification.replace(/_/g, " ")}` });
+  }
+  if (prospect.stage === "booked") {
+    events.push({ time: "—", kind: "reply", text: "Discovery call booked" });
   }
 
-  if (stageIndex >= 6) {
-    events.push({
-      kind: "reply",
-      text: "Discovery call booked",
-    });
-  }
-
-  const times = ["just now", "26 min", "2 h", "5 h", "yesterday", "2 d", "4 d", "6 d", "9 d"];
-  return events.reverse().map((event, index) => ({
-    ...event,
-    time: times[index] ?? `${index + 2} d`,
-  }));
+  return events.reverse();
 }
 
 function lastTouch(prospect: Prospect) {

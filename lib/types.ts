@@ -61,7 +61,8 @@ export interface Prospect {
 
 export interface SolarPanel {
   center: { latitude: number; longitude: number };
-  orientationDegrees: number;
+  // long edge parallel (PORTRAIT) or perpendicular (LANDSCAPE) to the segment azimuth
+  orientation?: "SOLAR_PANEL_ORIENTATION_UNSPECIFIED" | "LANDSCAPE" | "PORTRAIT";
   yearlyEnergyDcKwh: number;
   segmentIndex: number;
 }

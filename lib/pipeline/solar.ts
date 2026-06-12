@@ -66,15 +66,58 @@ export async function fetchSolarInsights(
   };
 }
 
+// Google orders solarPanels so that solarPanelConfigs[i] is exactly the first
+// panelsCount panels of the list — the list itself is the canonical buildout.
+// Re-sorting by per-panel energy and slicing cherry-picks bright spots across
+// the whole roof, which renders as scattered "solar acne" instead of arrays.
+// Instead: keep Google's order, deploy whole roof segments, and drop the tiny
+// clusters (HVAC wells, canopy slivers, penthouse edges) that cause freckles.
+const MIN_SEGMENT_PANELS = 4;
+const MIN_SEGMENT_SHARE = 0.02;
+
+export function selectDeployedPanels(insights: SolarInsights): SolarPanel[] {
+  const panels = insights.panels;
+  if (!panels.length) return [];
+
+  const bySegment = new Map<number, number>();
+  for (const panel of panels) {
+    bySegment.set(panel.segmentIndex, (bySegment.get(panel.segmentIndex) ?? 0) + 1);
+  }
+
+  const minPanels = Math.max(MIN_SEGMENT_PANELS, Math.ceil(panels.length * MIN_SEGMENT_SHARE));
+  const kept = new Set<number>();
+  for (const [segmentIndex, count] of bySegment) {
+    if (count >= minPanels) kept.add(segmentIndex);
+  }
+
+  // small buildings: never filter the whole roof away
+  if (!kept.size) return panels;
+  return panels.filter((panel) => kept.has(panel.segmentIndex));
+}
+
+// For "flat" segments (pitch near 0) the API defines azimuth arbitrarily as 0,
+// so rotating by it is meaningless; draw those panels axis-aligned. LANDSCAPE
+// panels sit with their long edge perpendicular to the segment azimuth.
+const FLAT_PITCH_DEGREES = 7;
+
+export function panelRotationDegrees(panel: SolarPanel, insights: SolarInsights): number {
+  const segment = insights.roofSegments[panel.segmentIndex];
+  const pitch = segment?.pitchDegrees ?? 0;
+  const azimuth = pitch < FLAT_PITCH_DEGREES ? 0 : segment?.azimuthDegrees ?? 0;
+  const landscape = panel.orientation === "LANDSCAPE" ? 90 : 0;
+  return (azimuth + landscape) % 180;
+}
+
+export function metersPerPixel(lat: number, zoom: number) {
+  return (156543.03392 * Math.cos((lat * Math.PI) / 180)) / Math.pow(2, zoom);
+}
+
 export function calculateEconomics(
   insights: SolarInsights,
   yearBuilt: number,
   incentiveRate = 0.2
 ): SolarEconomics {
-  const sorted = [...insights.panels].sort(
-    (a, b) => b.yearlyEnergyDcKwh - a.yearlyEnergyDcKwh
-  );
-  const deployedPanels = sorted.slice(0, Math.floor(sorted.length * 0.7));
+  const deployedPanels = selectDeployedPanels(insights);
 
   const panelCount = deployedPanels.length;
   const panelWatts = insights.panelCapacityWatts || WATTS_PER_PANEL;
@@ -148,10 +191,10 @@ export function generatePanelSvg(
   w = 1280,
   h = 720
 ): string {
-  const segmentAzimuths: Record<number, number> = {};
-  insights.roofSegments.forEach((seg, i) => {
-    segmentAzimuths[i] = seg.azimuthDegrees;
-  });
+  // true panel footprint at this zoom, with a hairline gap between modules
+  const mpp = metersPerPixel(centerLat, zoom);
+  const pw = ((insights.panelWidthMeters || 1.045) / mpp) * 0.94;
+  const ph = ((insights.panelHeightMeters || 1.879) / mpp) * 0.94;
 
   const rects = panels
     .map((panel) => {
@@ -164,11 +207,8 @@ export function generatePanelSvg(
         w,
         h
       );
-      const azimuth = segmentAzimuths[panel.segmentIndex] ?? 0;
-      // panel dims in pixels: 1.045m × 1.879m at ~40cm/px at zoom 18
-      const pw = 3;
-      const ph = 5.4;
-      return `<rect x="${(x - pw / 2).toFixed(1)}" y="${(y - ph / 2).toFixed(1)}" width="${pw}" height="${ph}" rx="0.4" fill="#3B82F6" fill-opacity="0.75" stroke="#60A5FA" stroke-width="0.3" transform="rotate(${azimuth}, ${x.toFixed(1)}, ${y.toFixed(1)})" />`;
+      const rotation = panelRotationDegrees(panel, insights);
+      return `<rect x="${(x - pw / 2).toFixed(1)}" y="${(y - ph / 2).toFixed(1)}" width="${pw.toFixed(2)}" height="${ph.toFixed(2)}" rx="0.4" fill="#3B82F6" fill-opacity="0.75" stroke="#60A5FA" stroke-width="0.3" transform="rotate(${rotation}, ${x.toFixed(1)}, ${y.toFixed(1)})" />`;
     })
     .join("\n");
 

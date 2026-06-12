@@ -1,6 +1,6 @@
 import sharp from "sharp";
 import type { SolarInsights, SolarPanel } from "./types";
-import { latLngToPixel } from "./pipeline/solar";
+import { latLngToPixel, panelRotationDegrees } from "./pipeline/solar";
 
 export const PREVIEW_WIDTH = 1280;
 export const PREVIEW_HEIGHT = 800;
@@ -230,7 +230,7 @@ async function buildPanelDesignOverlay({
   const groups = groupPanelsBySegment(panels, lat, lng, zoom, segmentAzimuths);
   const selected = selectStrongestRoofPlanes(groups);
   const planeMarkup = buildRoofPlaneContextMarkup(selected);
-  const panelMarkup = buildPanelMarkup(panels, lat, lng, zoom, segmentAzimuths);
+  const panelMarkup = buildPanelMarkup(panels, lat, lng, zoom, insights);
 
   const svg = Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${PREVIEW_WIDTH}" height="${PREVIEW_HEIGHT}" viewBox="0 0 ${PREVIEW_WIDTH} ${PREVIEW_HEIGHT}">
@@ -281,7 +281,7 @@ function buildPanelMarkup(
   centerLat: number,
   centerLng: number,
   zoom: number,
-  segmentAzimuths: Record<number, number>
+  insights: SolarInsights
 ) {
   const scale = Math.pow(2, zoom - PANEL_BASE_ZOOM);
   const width = PANEL_BASE_WIDTH * scale;
@@ -290,7 +290,7 @@ function buildPanelMarkup(
 
   const rects = panels.map((panel) => {
     const point = latLngToPixel(panel.center.latitude, panel.center.longitude, centerLat, centerLng, zoom, PREVIEW_WIDTH, PREVIEW_HEIGHT);
-    const azimuth = segmentAzimuths[panel.segmentIndex] ?? panel.orientationDegrees ?? 180;
+    const azimuth = panelRotationDegrees(panel, insights);
     const energyScore = clamp(panel.yearlyEnergyDcKwh / maxEnergy, 0.28, 1);
     const fillOpacity = (0.54 + energyScore * 0.32).toFixed(3);
 
