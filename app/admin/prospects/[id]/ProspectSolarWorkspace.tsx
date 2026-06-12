@@ -138,6 +138,7 @@ export function ProspectSolarWorkspace({ prospect, model }: ProspectSolarWorkspa
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("satellite");
   const [overlayMode, setOverlayMode] = useState<OverlayMode>("panels");
+  const [mapHeading, setMapHeading] = useState(0);
   const [imageScale, setImageScale] = useState(1);
   const [overlayScale, setOverlayScale] = useState(1);
   const [overlayRotate, setOverlayRotate] = useState(0);
@@ -370,7 +371,7 @@ export function ProspectSolarWorkspace({ prospect, model }: ProspectSolarWorkspa
       if (viewMode === "earth") return;
 
       if (editTool === "add") {
-        addPanelAt(eventToCanvasPoint(event.currentTarget, event));
+        addPanelAt(unrotateDesignPoint(eventToCanvasPoint(event.currentTarget, event), mapHeading));
         return;
       }
 
@@ -439,8 +440,9 @@ export function ProspectSolarWorkspace({ prospect, model }: ProspectSolarWorkspa
         const rect = canvasRef.current?.getBoundingClientRect();
         if (!rect) return;
 
-        const dx = ((event.clientX - panelDrag.clientX) / rect.width) * SOLAR_DESIGN_WIDTH / Math.max(overlayScale, 0.1);
-        const dy = ((event.clientY - panelDrag.clientY) / rect.height) * SOLAR_DESIGN_HEIGHT / Math.max(overlayScale, 0.1);
+        const screenDelta = unrotateDelta(event.clientX - panelDrag.clientX, event.clientY - panelDrag.clientY, mapHeading);
+        const dx = (screenDelta.dx / rect.width) * SOLAR_DESIGN_WIDTH / Math.max(overlayScale, 0.1);
+        const dy = (screenDelta.dy / rect.height) * SOLAR_DESIGN_HEIGHT / Math.max(overlayScale, 0.1);
         const starts = new Map(panelDrag.panelStarts.map((panel) => [panel.id, panel]));
 
         setDesignPanels((current) =>
@@ -466,11 +468,12 @@ export function ProspectSolarWorkspace({ prospect, model }: ProspectSolarWorkspa
       const panDrag = panDragRef.current;
       if (!panDrag || panDrag.pointerId !== event.pointerId) return;
 
-      setOverlayX(panDrag.overlayX + event.clientX - panDrag.clientX);
-      setOverlayY(panDrag.overlayY + event.clientY - panDrag.clientY);
+      const panDelta = unrotateDelta(event.clientX - panDrag.clientX, event.clientY - panDrag.clientY, mapHeading);
+      setOverlayX(panDrag.overlayX + panDelta.dx);
+      setOverlayY(panDrag.overlayY + panDelta.dy);
       markDesignDirty();
     },
-    [markDesignDirty, overlayScale, snapToGrid]
+    [mapHeading, markDesignDirty, overlayScale, snapToGrid]
   );
 
   const endDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
@@ -484,6 +487,7 @@ export function ProspectSolarWorkspace({ prospect, model }: ProspectSolarWorkspa
   }, []);
 
   function resetView() {
+    setMapHeading(0);
     setImageScale(1);
     setOverlayScale(1);
     setOverlayRotate(0);
@@ -697,6 +701,32 @@ export function ProspectSolarWorkspace({ prospect, model }: ProspectSolarWorkspa
             />
           </ToolGroup>
 
+          <ToolGroup label="Rotate">
+            <ModeButton
+              active={false}
+              label="↺ 90°"
+              title="Rotate map counter-clockwise 90°"
+              disabled={viewMode === "earth"}
+              onClick={() => setMapHeading((h) => ((h - 90) + 360) % 360)}
+            />
+            <ModeButton
+              active={false}
+              label="↻ 90°"
+              title="Rotate map clockwise 90°"
+              disabled={viewMode === "earth"}
+              onClick={() => setMapHeading((h) => (h + 90) % 360)}
+            />
+            {mapHeading !== 0 ? (
+              <ModeButton
+                active={false}
+                label="N↑"
+                title="Reset map to north-up"
+                disabled={viewMode === "earth"}
+                onClick={() => setMapHeading(0)}
+              />
+            ) : null}
+          </ToolGroup>
+
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -762,46 +792,53 @@ export function ProspectSolarWorkspace({ prospect, model }: ProspectSolarWorkspa
                 lng={lng ?? 0}
                 onStatusChange={setEarthStatus}
               />
-            ) : baseImageUrl ? (
-              <>
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    transform: `scale(${imageScale})`,
-                    transformOrigin: "center",
-                  }}
-                >
-                  <Image
-                    src={baseImageUrl}
-                    alt={`Solar roof view for ${prospect.address}`}
-                    fill
-                    unoptimized
-                    sizes="(min-width: 1280px) 1200px, 100vw"
-                    className="object-cover"
-                  />
-                </div>
-                {showPanelOverlay ? (
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      opacity: overlayOpacity,
-                      transform: `translate(${overlayX}px, ${overlayY}px) scale(${overlayScale}) rotate(${overlayRotate}deg)`,
-                      transformOrigin: "center",
-                    }}
-                  >
-                    <PanelPlacementOverlay
-                      editTool={editTool}
-                      panelHeight={panelHeight}
-                      panels={designPanels}
-                      panelWidth={panelWidth}
-                      selectedIds={selectedPanelIds}
-                      onPanelPointerDown={handlePanelPointerDown}
-                    />
-                  </div>
-                ) : null}
-              </>
             ) : (
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_25%,rgba(192,138,75,0.14),transparent_28%),linear-gradient(135deg,#101318,#070809)]" />
+              <div
+                className="absolute inset-0"
+                style={{ transform: `rotate(${mapHeading}deg)`, transformOrigin: "center" }}
+              >
+                {baseImageUrl ? (
+                  <>
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        transform: `scale(${imageScale})`,
+                        transformOrigin: "center",
+                      }}
+                    >
+                      <Image
+                        src={baseImageUrl}
+                        alt={`Solar roof view for ${prospect.address}`}
+                        fill
+                        unoptimized
+                        sizes="(min-width: 1280px) 1200px, 100vw"
+                        className="object-cover"
+                      />
+                    </div>
+                    {showPanelOverlay ? (
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          opacity: overlayOpacity,
+                          transform: `translate(${overlayX}px, ${overlayY}px) scale(${overlayScale}) rotate(${overlayRotate}deg)`,
+                          transformOrigin: "center",
+                        }}
+                      >
+                        <PanelPlacementOverlay
+                          editTool={editTool}
+                          panelHeight={panelHeight}
+                          panels={designPanels}
+                          panelWidth={panelWidth}
+                          selectedIds={selectedPanelIds}
+                          onPanelPointerDown={handlePanelPointerDown}
+                        />
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_35%_25%,rgba(192,138,75,0.14),transparent_28%),linear-gradient(135deg,#101318,#070809)]" />
+                )}
+              </div>
             )}
 
             {viewMode !== "earth" ? (
@@ -810,6 +847,7 @@ export function ProspectSolarWorkspace({ prospect, model }: ProspectSolarWorkspa
                 <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(0,0,0,.06)_0%,rgba(0,0,0,0)_18%,rgba(0,0,0,0)_76%,rgba(0,0,0,.28)_100%)]" />
                 <div className="absolute bottom-3 left-3 flex flex-wrap gap-2">
                   <ImageBadge label={viewLabel(viewMode)} tone="gold" />
+                  {mapHeading !== 0 ? <ImageBadge label={`${mapHeading}°`} tone="neutral" /> : null}
                   {designPanels.length ? <ImageBadge label={`${designPanels.length} panels`} tone="blue" /> : null}
                   {selectedCount ? <ImageBadge label={`${selectedCount} selected`} tone="neutral" /> : null}
                   {loading ? <ImageBadge label="Loading" tone="neutral" /> : null}
@@ -1311,6 +1349,26 @@ function eventToCanvasPoint(element: HTMLElement, event: React.PointerEvent) {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+function unrotateDesignPoint(point: { x: number; y: number }, headingDeg: number) {
+  if (headingDeg === 0) return point;
+  const cx = SOLAR_DESIGN_WIDTH / 2;
+  const cy = SOLAR_DESIGN_HEIGHT / 2;
+  const rad = (-headingDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = point.x - cx;
+  const dy = point.y - cy;
+  return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+}
+
+function unrotateDelta(dx: number, dy: number, headingDeg: number) {
+  if (headingDeg === 0) return { dx, dy };
+  const rad = (-headingDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  return { dx: dx * cos - dy * sin, dy: dx * sin + dy * cos };
 }
 
 function layerUrlForMode(

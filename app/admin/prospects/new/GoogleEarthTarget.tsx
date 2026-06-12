@@ -31,7 +31,9 @@ declare global {
 
 type CesiumGlobal = {
   Viewer: new (container: Element, options: Record<string, unknown>) => CesiumViewer;
-  Cesium3DTileset: new (options: Record<string, unknown>) => CesiumTileset;
+  Cesium3DTileset: {
+    fromUrl: (url: string, options?: Record<string, unknown>) => Promise<CesiumTileset>;
+  };
   Cartesian3: {
     fromDegrees: (lng: number, lat: number, height?: number) => unknown;
   };
@@ -60,9 +62,7 @@ type CesiumViewer = {
   isDestroyed: () => boolean;
 };
 
-type CesiumTileset = {
-  readyPromise?: Promise<unknown>;
-};
+type CesiumTileset = object;
 
 export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng, onStatusChange }: GoogleEarthTargetProps) {
   const [source, setSource] = useState<EarthSource>(apiKey ? "loading" : "google_maps_satellite_fallback");
@@ -303,18 +303,16 @@ function createViewer(Cesium: CesiumGlobal, container: Element) {
 }
 
 async function attachTileset(Cesium: CesiumGlobal, viewer: CesiumViewer, apiKey: string, lat: number, lng: number) {
-  const tileset = viewer.scene.primitives.add(
-    new Cesium.Cesium3DTileset({
-      url: `https://tile.googleapis.com/v1/3dtiles/root.json?key=${encodeURIComponent(apiKey)}`,
+  const tileset = await Cesium.Cesium3DTileset.fromUrl(
+    `https://tile.googleapis.com/v1/3dtiles/root.json?key=${encodeURIComponent(apiKey)}`,
+    {
       showCreditsOnScreen: true,
       maximumScreenSpaceError: 1.5,
       maximumCacheOverflowBytes: 256 * 1024 * 1024,
-    })
+    }
   );
 
-  if (tileset.readyPromise) {
-    await tileset.readyPromise;
-  }
+  viewer.scene.primitives.add(tileset);
 
   viewer.camera.setView({
     destination: Cesium.Cartesian3.fromDegrees(lng, lat, 430),
