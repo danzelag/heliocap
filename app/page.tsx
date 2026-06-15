@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import PublicHomePage from "./PublicHomePage";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "AmberField Energy — Your Property. Your Power.",
@@ -8,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
-  return <PublicHomePage />;
+  redirect("/amberfield-offline.html");
 }
