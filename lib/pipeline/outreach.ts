@@ -23,7 +23,7 @@ export async function generateEmailCopy(prospect: Prospect): Promise<{
       {
         role: "user",
         content: `Write a cold email for:
-Company: ${prospect.company_name}
+Company: ${displayName(prospect)}
 Address: ${prospect.address}, ${prospect.city}
 Owner: ${prospect.owner_name ?? "the owner"}
 Roof age: ${roofAge} years
@@ -70,6 +70,10 @@ export async function classifyReply(
   return valid.includes(label as ReplyClassification)
     ? (label as ReplyClassification)
     : "question";
+}
+
+function displayName(prospect: Prospect) {
+  return prospect.company_name ?? prospect.contact_name ?? prospect.owner_name ?? prospect.address;
 }
 
 export async function fetchCurrentIncentiveRate(): Promise<number> {

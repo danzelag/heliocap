@@ -34,7 +34,7 @@ export async function GET(
   return NextResponse.json({
     prospect: {
       id: prospect.id,
-      companyName: prospect.company_name,
+      companyName: prospect.company_name ?? prospect.contact_name ?? prospect.owner_name ?? prospect.address,
       address: prospect.address,
       city: prospect.city,
       coordinates: { lat, lng },

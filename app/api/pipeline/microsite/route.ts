@@ -7,8 +7,14 @@ export async function POST(req: NextRequest) {
   const prospect = await getProspect(id);
 
   if (!prospect) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (!prospect.panel_count) {
+  if (prospect.include_solar && !prospect.panel_count) {
     return NextResponse.json({ error: "Run solar analysis first" }, { status: 400 });
+  }
+  if (prospect.include_solar && !prospect.video_url) {
+    return NextResponse.json({ error: "Attach the solar video before generating the microsite." }, { status: 400 });
+  }
+  if (prospect.proposal_type === "commercial" && prospect.include_ev && !prospect.ev_video_url) {
+    return NextResponse.json({ error: "Attach the EV video before generating the microsite." }, { status: 400 });
   }
 
   const updated = await updateProspect(prospect.id, {

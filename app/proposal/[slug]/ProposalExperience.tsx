@@ -717,7 +717,7 @@ function toProposalModel(prospect: Prospect, contactEmail: string | null): Propo
 
   return {
     id: prospect.id,
-    company: prospect.company_name,
+    company: prospect.company_name ?? prospect.contact_name ?? prospect.address,
     owner: prospect.owner_name ?? "the ownership team",
     ownerTitle: prospect.owner_title ?? "Property owner",
     address: prospect.address,

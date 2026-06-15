@@ -22,8 +22,21 @@ type DeleteProspectsResult = {
   deletedIds: string[];
 };
 
-export function ProspectRoster({ prospects }: { prospects: Prospect[] }) {
-  const [rows, setRows] = useState(prospects);
+type RosterType = "residential" | "commercial";
+
+export function ProspectRoster({
+  residentialProspects,
+  commercialProspects,
+  initialRosterType = "commercial",
+}: {
+  residentialProspects: Prospect[];
+  commercialProspects: Prospect[];
+  initialRosterType?: RosterType;
+}) {
+  const [rosterType, setRosterType] = useState<RosterType>(initialRosterType);
+  const [rows, setRows] = useState(() =>
+    initialRosterType === "commercial" ? commercialProspects : residentialProspects
+  );
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [running, setRunning] = useState<"mailer" | "proposal" | "delete" | null>(null);
   const [message, setMessage] = useState("");
@@ -37,6 +50,14 @@ export function ProspectRoster({ prospects }: { prospects: Prospect[] }) {
 
   function toggleOne(id: string) {
     setSelectedIds((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));
+  }
+
+  function switchRoster(nextType: RosterType) {
+    setRosterType(nextType);
+    setRows(nextType === "commercial" ? commercialProspects : residentialProspects);
+    setSelectedIds([]);
+    setMessage("");
+    setError("");
   }
 
   async function runMailerCheck() {
@@ -138,9 +159,25 @@ export function ProspectRoster({ prospects }: { prospects: Prospect[] }) {
 
   return (
     <section className="border border-white/[0.07] bg-[#1a1a1f]">
+      <div className="grid gap-1 border-b border-white/[0.07] bg-[#131316] p-1 sm:grid-cols-2">
+        <RosterTab
+          active={rosterType === "commercial"}
+          label="Commercial Proposals"
+          count={commercialProspects.length}
+          onClick={() => switchRoster("commercial")}
+        />
+        <RosterTab
+          active={rosterType === "residential"}
+          label="Residential Proposals"
+          count={residentialProspects.length}
+          onClick={() => switchRoster("residential")}
+        />
+      </div>
       <div className="flex flex-col gap-4 border-b border-white/[0.07] px-5 py-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <div className="text-xs uppercase tracking-[0.16em] text-[#ece9e3]">Prospect CRM</div>
+          <div className="text-xs uppercase tracking-[0.16em] text-[#ece9e3]">
+            {rosterType === "commercial" ? "Commercial CRM" : "Residential CRM"}
+          </div>
           <div className="mt-2 text-sm text-stone-400">
             Select prospects, run outreach readiness, and publish proposal pages.
           </div>
@@ -183,7 +220,7 @@ export function ProspectRoster({ prospects }: { prospects: Prospect[] }) {
       <div className="flex flex-wrap items-center gap-4 border-b border-white/[0.07] px-5 py-3 text-[11px] uppercase tracking-[0.14em] text-stone-500">
         <span>{selectedIds.length} selected</span>
         <span>{rows.length} total prospects</span>
-        <span>Video generation next pass</span>
+        <span>{rosterType === "commercial" ? "Outbound journey" : "Inbound journey"}</span>
       </div>
 
       {message ? <p className="mx-5 mt-4 border border-[#86a06f]/35 bg-[#86a06f]/10 px-4 py-3 text-sm text-[#a4ba8d]">{message}</p> : null}
@@ -225,7 +262,7 @@ export function ProspectRoster({ prospects }: { prospects: Prospect[] }) {
                   </td>
                   <td className="px-4 py-4">
                     <div className="min-w-[220px]">
-                      <div className="text-sm font-semibold text-[#ece9e3]">{prospect.company_name}</div>
+                      <div className="text-sm font-semibold text-[#ece9e3]">{displayName(prospect)}</div>
                       <div className="mt-1 text-sm text-stone-400">{prospect.address}</div>
                       <div className="mt-1 text-[12px] text-stone-600">{prospect.city}</div>
                     </div>
@@ -284,7 +321,7 @@ export function ProspectRoster({ prospects }: { prospects: Prospect[] }) {
                         href={`/admin/prospects/${prospect.id}`}
                         className="inline-flex border border-white/12 px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-stone-300 transition hover:bg-[#212128]"
                       >
-                        Solar workspace
+                        Proposal editor
                       </Link>
                       {published ? (
                         <Link
@@ -304,6 +341,34 @@ export function ProspectRoster({ prospects }: { prospects: Prospect[] }) {
       </div>
     </section>
   );
+}
+
+function RosterTab({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-4 py-3 text-left text-[11px] uppercase tracking-[0.14em] transition ${
+        active ? "bg-[#c08a4b] text-[#131316]" : "text-stone-400 hover:text-[#d8a866]"
+      }`}
+    >
+      {label} <span className="font-mono">{count}</span>
+    </button>
+  );
+}
+
+function displayName(prospect: Prospect) {
+  return prospect.company_name ?? prospect.contact_name ?? prospect.owner_name ?? prospect.address;
 }
 
 function formatStage(stage: Prospect["stage"]) {

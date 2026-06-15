@@ -22,10 +22,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No prospects found" }, { status: 404 });
   }
 
-  const eligible = prospects.filter((prospect) => !["dead", "skipped"].includes(prospect.stage));
+  const eligible = prospects.filter((prospect) => !["dead", "skipped"].includes(prospect.stage) && validateForPublish(prospect).length === 0);
   const blocked = prospects.length - eligible.length;
   if (!eligible.length) {
-    return NextResponse.json({ error: "Selected prospects are blocked from proposal publishing" }, { status: 400 });
+    const reasons = prospects.flatMap(validateForPublish);
+    return NextResponse.json(
+      { error: reasons[0] ?? "Selected prospects are blocked from proposal publishing" },
+      { status: 400 }
+    );
   }
 
   const created = await Promise.all(
@@ -52,4 +56,18 @@ export async function POST(req: NextRequest) {
     blocked,
     proposals: created.filter((prospect): prospect is NonNullable<typeof prospect> => Boolean(prospect)),
   });
+}
+
+function validateForPublish(prospect: Prospect) {
+  const errors: string[] = [];
+  if (["dead", "skipped"].includes(prospect.stage)) errors.push("Selected prospects are blocked from proposal publishing.");
+  if (prospect.proposal_type === "commercial" && !prospect.company_name) errors.push("Company name is required.");
+  if (prospect.proposal_type === "residential" && !prospect.contact_name && !prospect.owner_name) {
+    errors.push("Homeowner name is required.");
+  }
+  if (prospect.include_solar && !prospect.video_url) errors.push("Solar video is required before publishing.");
+  if (prospect.proposal_type === "commercial" && prospect.include_ev && !prospect.ev_video_url) {
+    errors.push("EV video is required before publishing a commercial EV section.");
+  }
+  return errors;
 }

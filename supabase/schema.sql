@@ -27,12 +27,21 @@ create type reply_classification as enum (
   'question'
 );
 
+create type proposal_type as enum (
+  'residential',
+  'commercial'
+);
+
 create table prospects (
   id uuid primary key default uuid_generate_v4(),
   slug text unique not null,
 
+  -- journey discriminator
+  proposal_type proposal_type not null default 'commercial',
+
   -- building
-  company_name text not null,
+  company_name text,
+  contact_name text,
   address text not null,
   city text not null,
   lat numeric(10, 7),
@@ -54,6 +63,25 @@ create table prospects (
   -- pipeline state
   stage prospect_stage not null default 'sourced',
 
+  -- proposal scope
+  include_solar boolean not null default true,
+  include_ev boolean not null default false,
+  include_heat_pump boolean not null default false,
+
+  -- residential inputs
+  monthly_energy_bill integer,
+  interested_solar boolean,
+  interested_heat_pump boolean,
+  interested_ev boolean,
+  heat_pump_annual_savings integer,
+  insurance_quote_consent boolean,
+  insurance_consent_at timestamptz,
+
+  -- commercial / shared EV inputs
+  ev_charger_count integer,
+  ev_charger_annual_value integer,
+  ev_charger_notes text,
+
   -- solar outputs
   panel_count integer,
   system_kw numeric(8, 1),
@@ -68,6 +96,8 @@ create table prospects (
   panel_svg_url text,
   video_url text,
   video_thumbnail_url text,
+  ev_video_url text,
+  ev_video_thumbnail_url text,
   microsite_url text,
 
   -- outreach
@@ -96,6 +126,7 @@ for each row execute function update_updated_at();
 
 -- indexes
 create index prospects_stage_idx on prospects(stage);
+create index prospects_proposal_type_idx on prospects(proposal_type);
 create index prospects_city_idx on prospects(city);
 create index prospects_created_at_idx on prospects(created_at desc);
 create index prospects_slug_idx on prospects(slug);

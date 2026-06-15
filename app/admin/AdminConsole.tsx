@@ -53,6 +53,7 @@ type OperatorMetric = {
   unit?: string;
   decimals?: number;
 };
+type ConsoleType = "residential" | "commercial";
 
 const CAD = new Intl.NumberFormat("en-CA", {
   style: "currency",
@@ -62,7 +63,15 @@ const CAD = new Intl.NumberFormat("en-CA", {
 
 const NUMBER = new Intl.NumberFormat("en-CA");
 
-export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
+export function AdminConsole({
+  residentialProspects,
+  commercialProspects,
+}: {
+  residentialProspects: Prospect[];
+  commercialProspects: Prospect[];
+}) {
+  const [consoleType, setConsoleType] = useState<ConsoleType>("commercial");
+  const prospects = consoleType === "commercial" ? commercialProspects : residentialProspects;
   const [selectedId, setSelectedId] = useState(prospects[0]?.id ?? "");
   const [stageFilter, setStageFilter] = useState<StageKey | null>(null);
 
@@ -97,6 +106,13 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
     setSelectedId(id);
   }
 
+  function switchConsole(nextType: ConsoleType) {
+    setConsoleType(nextType);
+    setStageFilter(null);
+    const nextProspects = nextType === "commercial" ? commercialProspects : residentialProspects;
+    setSelectedId(nextProspects[0]?.id ?? "");
+  }
+
   return (
     <div className="min-h-screen bg-[#131316] text-[#ece9e3] selection:bg-[#c08a4b]/30">
       <div className="mx-auto max-w-[1660px] px-5 pb-20 pt-6 sm:px-8">
@@ -108,7 +124,7 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
                 OPEN<span className="text-[#c08a4b]">CLAW</span>
               </div>
               <div className="mt-1 text-[10.5px] uppercase tracking-[0.28em] text-stone-500">
-                Proposal console · final products
+                Proposal console · {consoleType} funnel
               </div>
             </div>
           </div>
@@ -132,6 +148,21 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
             </Link>
           </div>
         </header>
+
+        <div className="mt-5 grid gap-2 border border-white/[0.07] bg-[#1a1a1f] p-1 sm:inline-grid sm:grid-cols-2">
+          <ConsoleTab
+            active={consoleType === "commercial"}
+            label="Commercial Proposals"
+            count={commercialProspects.length}
+            onClick={() => switchConsole("commercial")}
+          />
+          <ConsoleTab
+            active={consoleType === "residential"}
+            label="Residential Proposals"
+            count={residentialProspects.length}
+            onClick={() => switchConsole("residential")}
+          />
+        </div>
 
         <OperatorMenu
           metrics={[
@@ -172,6 +203,30 @@ export function AdminConsole({ prospects }: { prospects: Prospect[] }) {
   );
 }
 
+function ConsoleTab({
+  active,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-2 text-left text-[11px] uppercase tracking-[0.14em] transition ${
+        active ? "bg-[#c08a4b] text-[#131316]" : "text-stone-400 hover:text-[#d8a866]"
+      }`}
+    >
+      {label} <span className="font-mono">{count}</span>
+    </button>
+  );
+}
+
 function ProspectPreview({ prospect }: { prospect: Prospect }) {
   const model = getProspectModel(prospect);
   const stage = stageFor(prospect.stage);
@@ -200,7 +255,7 @@ function ProspectPreview({ prospect }: { prospect: Prospect }) {
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:gap-[30px]">
           <div className="min-w-0">
             <h1 className="font-serif text-[34px] font-semibold leading-none tracking-normal text-[#ece9e3] sm:text-[36px]">
-              {prospect.address || prospect.company_name}
+              {prospect.address || displayName(prospect)}
             </h1>
             <p className="mt-[11px] text-[12.5px] tracking-[0.01em] text-stone-400">
               {formatProspectSubline(prospect, model)}
@@ -221,7 +276,7 @@ function ProspectPreview({ prospect }: { prospect: Prospect }) {
             {prospect.owner_name ?? "Owner research pending"}
           </span>
           <span className="truncate text-[12.5px] text-stone-400">
-            {prospect.owner_title ?? "Facilities contact"} · {prospect.company_name}
+            {prospect.owner_title ?? "Facilities contact"} · {displayName(prospect)}
           </span>
         </div>
         {prospect.owner_name && (prospect.owner_email || prospect.owner_mobile) ? (
@@ -412,7 +467,7 @@ function ProposalList({
               <button type="button" onClick={() => onSelect(prospect.id)} className="block w-full text-left">
                 <div className="flex items-center justify-between gap-3">
                   <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-[#ece9e3]">
-                    {prospect.address || prospect.company_name}
+                    {prospect.address || displayName(prospect)}
                   </span>
                   <StagePill stage={stage} label={labelForStage(prospect.stage)} />
                 </div>
@@ -748,7 +803,7 @@ function buildProspectHistory(prospect: Prospect): ProspectHistoryItem[] {
     events.push({
       time: shortDate(prospect.email_sent_at),
       kind: "send",
-      text: `Proposal emailed to ${prospect.owner_name ?? prospect.company_name}`,
+      text: `Proposal emailed to ${prospect.owner_name ?? displayName(prospect)}`,
     });
   }
   if (prospect.reply_classification) {
@@ -818,4 +873,8 @@ function formatProspectSubline(prospect: Prospect, model: ProspectModel) {
         : "commercial roof";
 
   return `${place} · ${model.sqftLabel} ${buildingType}`;
+}
+
+function displayName(prospect: Prospect) {
+  return prospect.company_name ?? prospect.contact_name ?? prospect.owner_name ?? prospect.address;
 }

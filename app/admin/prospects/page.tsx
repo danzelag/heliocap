@@ -4,8 +4,19 @@ import { ProspectRoster } from "./ProspectRoster";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProspectRosterPage() {
-  const prospects = await listActiveProspects(250);
+type ProspectRosterPageProps = {
+  searchParams?: Promise<{ type?: string | string[] | undefined }>;
+};
+
+export default async function ProspectRosterPage({ searchParams }: ProspectRosterPageProps) {
+  const query = await searchParams;
+  const requestedType = Array.isArray(query?.type) ? query?.type[0] : query?.type;
+  const initialRosterType = requestedType === "residential" ? "residential" : "commercial";
+  const [residentialProspects, commercialProspects] = await Promise.all([
+    listActiveProspects(250, "residential"),
+    listActiveProspects(250, "commercial"),
+  ]);
+  const activeCount = residentialProspects.length + commercialProspects.length;
 
   return (
     <div className="min-h-screen bg-[#131316] text-[#ece9e3] selection:bg-[#c08a4b]/30">
@@ -46,12 +57,16 @@ export default async function ProspectRosterPage() {
               </div>
             </div>
             <div className="grid grid-cols-2 border border-white/[0.07] bg-white/[0.07]">
-              <Readout label="Active prospects" value={String(prospects.length)} />
+              <Readout label="Active prospects" value={String(activeCount)} />
               <Readout label="Proposal flow" value="/proposal/[slug]" />
             </div>
           </div>
 
-          <ProspectRoster prospects={prospects} />
+          <ProspectRoster
+            residentialProspects={residentialProspects}
+            commercialProspects={commercialProspects}
+            initialRosterType={initialRosterType}
+          />
         </main>
       </div>
     </div>

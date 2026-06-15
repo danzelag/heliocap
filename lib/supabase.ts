@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import type { Prospect } from "./types";
+import { prospectJourney } from "./prospectJourney";
+import type { ProposalType, Prospect } from "./types";
 
 export const supabase = () =>
   createClient(
@@ -69,7 +70,8 @@ export async function updateProspect(
 
 export async function listProspects(
   stage?: string,
-  limit = 50
+  limit = 50,
+  proposalType?: ProposalType
 ): Promise<Prospect[]> {
   let q = supabaseAdmin()
     .from("prospects")
@@ -77,29 +79,73 @@ export async function listProspects(
     .order("created_at", { ascending: false })
     .limit(limit);
   if (stage) q = q.eq("stage", stage);
-  const { data } = await q;
+  if (proposalType) q = q.eq("proposal_type", proposalType);
+  const { data, error } = await q;
+  if (error && proposalType && isMissingProposalTypeColumn(error)) {
+    let fallback = supabaseAdmin()
+      .from("prospects")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (stage) fallback = fallback.eq("stage", stage);
+    const { data: fallbackData } = await fallback;
+    return (fallbackData ?? []).filter((prospect) => prospectJourney(prospect) === proposalType);
+  }
   return data ?? [];
 }
 
-export async function listActiveProspects(limit = 200): Promise<Prospect[]> {
-  const { data } = await supabaseAdmin()
+export async function listActiveProspects(
+  limit = 200,
+  proposalType?: ProposalType
+): Promise<Prospect[]> {
+  let q = supabaseAdmin()
     .from("prospects")
     .select("*")
     .neq("stage", "dead")
     .order("created_at", { ascending: false })
     .limit(limit);
+  if (proposalType) q = q.eq("proposal_type", proposalType);
 
+  const { data, error } = await q;
+  if (error && proposalType && isMissingProposalTypeColumn(error)) {
+    const { data: fallbackData } = await supabaseAdmin()
+      .from("prospects")
+      .select("*")
+      .neq("stage", "dead")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    return (fallbackData ?? []).filter((prospect) => prospectJourney(prospect) === proposalType);
+  }
   return data ?? [];
 }
 
-export async function listProposals(limit = 100): Promise<Prospect[]> {
-  const { data } = await supabaseAdmin()
+export async function listProposals(
+  limit = 100,
+  proposalType?: ProposalType
+): Promise<Prospect[]> {
+  let q = supabaseAdmin()
     .from("prospects")
     .select("*")
     .not("microsite_url", "is", null)
     .neq("stage", "dead")
     .order("created_at", { ascending: false })
     .limit(limit);
+  if (proposalType) q = q.eq("proposal_type", proposalType);
 
+  const { data, error } = await q;
+  if (error && proposalType && isMissingProposalTypeColumn(error)) {
+    const { data: fallbackData } = await supabaseAdmin()
+      .from("prospects")
+      .select("*")
+      .not("microsite_url", "is", null)
+      .neq("stage", "dead")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    return (fallbackData ?? []).filter((prospect) => prospectJourney(prospect) === proposalType);
+  }
   return data ?? [];
+}
+
+function isMissingProposalTypeColumn(error: { code?: string; message?: string }) {
+  return error.code === "42703" || error.message?.includes("proposal_type") || false;
 }

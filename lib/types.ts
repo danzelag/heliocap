@@ -20,10 +20,14 @@ export type ReplyClassification =
   | "unsubscribe"
   | "question";
 
+export type ProposalType = "residential" | "commercial";
+
 export interface Prospect {
   id: string;
   slug: string;
-  company_name: string;
+  proposal_type: ProposalType;
+  company_name: string | null;
+  contact_name: string | null;
   address: string;
   city: string;
   lat: number | null;
@@ -38,6 +42,22 @@ export interface Prospect {
   owner_mobile: string | null;
   enrichment_confidence: number | null;
   stage: ProspectStage;
+  // proposal scope
+  include_solar: boolean;
+  include_ev: boolean;
+  include_heat_pump: boolean;
+  // residential inputs
+  monthly_energy_bill: number | null;
+  interested_solar: boolean | null;
+  interested_heat_pump: boolean | null;
+  interested_ev: boolean | null;
+  heat_pump_annual_savings: number | null;
+  insurance_quote_consent: boolean | null;
+  insurance_consent_at: string | null;
+  // EV inputs
+  ev_charger_count: number | null;
+  ev_charger_annual_value: number | null;
+  ev_charger_notes: string | null;
   // solar outputs
   panel_count: number | null;
   system_kw: number | null;
@@ -51,6 +71,8 @@ export interface Prospect {
   panel_svg_url: string | null;
   video_url: string | null;
   video_thumbnail_url: string | null;
+  ev_video_url: string | null;
+  ev_video_thumbnail_url: string | null;
   microsite_url: string | null;
   // outreach
   email_sent_at: string | null;

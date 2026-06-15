@@ -4,7 +4,10 @@ import { AdminConsole } from "./AdminConsole";
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const prospects = await listProposals(100);
+  const [residentialProspects, commercialProspects] = await Promise.all([
+    listProposals(100, "residential"),
+    listProposals(100, "commercial"),
+  ]);
 
-  return <AdminConsole prospects={prospects} />;
+  return <AdminConsole residentialProspects={residentialProspects} commercialProspects={commercialProspects} />;
 }

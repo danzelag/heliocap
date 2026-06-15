@@ -785,7 +785,7 @@ export function ProspectSolarWorkspace({ prospect, model }: ProspectSolarWorkspa
           >
             {viewMode === "earth" && canUseEarth ? (
               <GoogleEarthTarget
-                address={prospect.address || prospect.company_name}
+                address={prospect.address || prospect.company_name || prospect.contact_name || "Proposal address"}
                 apiKey={mapsConfig?.apiKey ?? null}
                 fallbackImageUrl={targetImageUrl ?? ""}
                 lat={lat ?? 0}

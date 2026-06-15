@@ -1,17 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin, listProspects } from "@/lib/supabase";
 import { getPlaceDetails } from "@/lib/googlePlaces";
-import type { Prospect } from "@/lib/types";
+import type { ProposalType, Prospect } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
   const stage = req.nextUrl.searchParams.get("stage") ?? undefined;
+  const proposalType = parseProposalType(req.nextUrl.searchParams.get("proposal_type"));
   const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "50");
-  const prospects = await listProspects(stage, limit);
+  const prospects = await listProspects(stage, limit, proposalType);
   return NextResponse.json(prospects);
 }
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+  const proposalType = parseProposalType(body.proposal_type) ?? "commercial";
+
+  if (proposalType === "residential") {
+    return createResidentialProspect(body);
+  }
+
+  return createCommercialProspect(body);
+}
+
+async function createCommercialProspect(body: Record<string, unknown>) {
   const googlePlaceId = typeof body.google_place_id === "string" ? body.google_place_id : "";
   const sessionToken = typeof body.places_session_token === "string" ? body.places_session_token : undefined;
 
@@ -47,7 +58,9 @@ export async function POST(req: NextRequest) {
   }
 
   const insert: Partial<Prospect> = {
+    proposal_type: "commercial",
     company_name: stringValue(body.company_name),
+    contact_name: nullableString(body.contact_name),
     address: place.streetAddress,
     city: place.city,
     lat: place.lat,
@@ -59,6 +72,12 @@ export async function POST(req: NextRequest) {
     owner_title: nullableString(body.owner_title),
     owner_email: nullableString(body.owner_email),
     owner_mobile: nullableString(body.owner_mobile),
+    include_solar: booleanValue(body.include_solar, true),
+    include_ev: booleanValue(body.include_ev, false),
+    include_heat_pump: false,
+    ev_charger_count: numberValue(body.ev_charger_count),
+    ev_charger_annual_value: numberValue(body.ev_charger_annual_value),
+    ev_charger_notes: nullableString(body.ev_charger_notes),
   };
 
   if (!insert.company_name || !insert.address || !insert.city) {
@@ -81,6 +100,136 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  return NextResponse.json(data, { status: 201 });
+}
+
+async function insertLegacyResidentialProspect({
+  contactName,
+  address,
+  city,
+  email,
+  mobile,
+  monthlyBill,
+  interestedSolar,
+  interestedHeatPump,
+  interestedEv,
+  insuranceConsent,
+}: {
+  contactName: string;
+  address: string;
+  city: string;
+  email: string | null;
+  mobile: string | null;
+  monthlyBill: number | null;
+  interestedSolar: boolean;
+  interestedHeatPump: boolean;
+  interestedEv: boolean;
+  insuranceConsent: boolean;
+}) {
+  const interests = [
+    interestedSolar ? "solar" : null,
+    interestedHeatPump ? "heat pump" : null,
+    interestedEv ? "EV charger" : null,
+  ].filter(Boolean);
+
+  const { data, error } = await supabaseAdmin()
+    .from("prospects")
+    .insert({
+      slug: generateSlug(contactName, city),
+      stage: "sourced",
+      company_name: contactName,
+      address,
+      city,
+      owner_name: contactName,
+      owner_title: "Residential lead",
+      owner_email: email,
+      owner_mobile: mobile,
+      industry: [
+        "Residential",
+        interests.length ? `Interests: ${interests.join(", ")}` : null,
+        monthlyBill ? `Monthly bill: $${monthlyBill}` : null,
+        `Insurance consent: ${insuranceConsent ? "yes" : "no"}`,
+      ]
+        .filter(Boolean)
+        .join(" | "),
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  return NextResponse.json(data, { status: 201 });
+}
+
+async function createResidentialProspect(body: Record<string, unknown>) {
+  const contactName = stringValue(body.contact_name);
+  const address = stringValue(body.address);
+  const city = stringValue(body.city) || "Ontario";
+
+  if (!contactName || !address) {
+    return NextResponse.json(
+      { error: "Homeowner name and address are required." },
+      { status: 400 }
+    );
+  }
+
+  const interestedSolar = booleanValue(body.interested_solar, true);
+  const interestedHeatPump = booleanValue(body.interested_heat_pump, false);
+  const interestedEv = booleanValue(body.interested_ev, false);
+  const insuranceConsent = booleanValue(body.insurance_quote_consent, false);
+
+  const insert: Partial<Prospect> = {
+    proposal_type: "residential",
+    company_name: null,
+    contact_name: contactName,
+    address,
+    city,
+    owner_name: contactName,
+    owner_email: nullableString(body.owner_email),
+    owner_mobile: nullableString(body.owner_mobile),
+    monthly_energy_bill: numberValue(body.monthly_energy_bill),
+    interested_solar: interestedSolar,
+    interested_heat_pump: interestedHeatPump,
+    interested_ev: interestedEv,
+    include_solar: booleanValue(body.include_solar, interestedSolar),
+    include_heat_pump: booleanValue(body.include_heat_pump, interestedHeatPump),
+    include_ev: booleanValue(body.include_ev, interestedEv),
+    insurance_quote_consent: insuranceConsent,
+    insurance_consent_at: insuranceConsent ? new Date().toISOString() : null,
+  };
+
+  const slug = generateSlug(contactName, city);
+
+  const { data, error } = await supabaseAdmin()
+    .from("prospects")
+    .insert({
+      ...insert,
+      slug,
+      stage: "sourced",
+    })
+    .select()
+    .single();
+
+  if (error) {
+    if (isMissingRestructureColumn(error)) {
+      return insertLegacyResidentialProspect({
+        contactName,
+        address,
+        city,
+        email: nullableString(body.owner_email),
+        mobile: nullableString(body.owner_mobile),
+        monthlyBill: numberValue(body.monthly_energy_bill),
+        interestedSolar,
+        interestedHeatPump,
+        interestedEv,
+        insuranceConsent,
+      });
+    }
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
@@ -136,4 +285,21 @@ function numberValue(value: unknown): number | null {
   if (typeof value !== "string" || !value.trim()) return null;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function booleanValue(value: unknown, fallback = false): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    if (["true", "on", "1", "yes"].includes(value.toLowerCase())) return true;
+    if (["false", "off", "0", "no"].includes(value.toLowerCase())) return false;
+  }
+  return fallback;
+}
+
+function parseProposalType(value: unknown): ProposalType | undefined {
+  return value === "residential" || value === "commercial" ? value : undefined;
+}
+
+function isMissingRestructureColumn(error: { code?: string; message?: string }) {
+  return error.code === "42703" || error.message?.includes("proposal_type") || error.message?.includes("schema cache") || false;
 }

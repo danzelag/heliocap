@@ -50,16 +50,18 @@ type BrowserMapsConfig = {
 };
 
 type VerificationMode = "target" | "solar";
+type ProposalType = "residential" | "commercial";
 
 export default function NewProspectPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [proposalType, setProposalType] = useState<ProposalType>("commercial");
   const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!selectedPlace) {
+    if (proposalType === "commercial" && !selectedPlace) {
       setError("Select a real address from Google Places before saving.");
       return;
     }
@@ -68,18 +70,46 @@ export default function NewProspectPage() {
     setError("");
 
     const form = new FormData(e.currentTarget);
-    const data = {
-      company_name: form.get("company_name"),
-      google_place_id: form.get("google_place_id"),
-      places_session_token: form.get("places_session_token"),
-      sqft: form.get("sqft") ? parseInt(form.get("sqft") as string) : null,
-      year_built: form.get("year_built") ? parseInt(form.get("year_built") as string) : null,
-      industry: form.get("industry") || null,
-      owner_name: form.get("owner_name") || null,
-      owner_title: form.get("owner_title") || null,
-      owner_email: form.get("owner_email") || null,
-      owner_mobile: form.get("owner_mobile") || null,
-    };
+    const data =
+      proposalType === "commercial"
+        ? {
+            proposal_type: "commercial",
+            company_name: form.get("company_name"),
+            google_place_id: form.get("google_place_id"),
+            places_session_token: form.get("places_session_token"),
+            sqft: form.get("sqft") ? parseInt(form.get("sqft") as string) : null,
+            year_built: form.get("year_built") ? parseInt(form.get("year_built") as string) : null,
+            industry: form.get("industry") || null,
+            owner_name: form.get("owner_name") || null,
+            owner_title: form.get("owner_title") || null,
+            owner_email: form.get("owner_email") || null,
+            owner_mobile: form.get("owner_mobile") || null,
+            include_solar: form.get("include_solar") === "on",
+            include_ev: form.get("include_ev") === "on",
+            ev_charger_count: form.get("ev_charger_count") ? parseInt(form.get("ev_charger_count") as string) : null,
+            ev_charger_annual_value: form.get("ev_charger_annual_value")
+              ? parseInt(form.get("ev_charger_annual_value") as string)
+              : null,
+            ev_charger_notes: form.get("ev_charger_notes") || null,
+          }
+        : {
+            proposal_type: "residential",
+            contact_name: form.get("contact_name"),
+            address: form.get("address"),
+            city: form.get("city") || null,
+            owner_email: form.get("owner_email") || null,
+            owner_mobile: form.get("owner_mobile") || null,
+            monthly_energy_bill: form.get("monthly_energy_bill")
+              ? parseInt(form.get("monthly_energy_bill") as string)
+              : null,
+            interested_solar: form.get("interested_solar") === "on",
+            interested_heat_pump: form.get("interested_heat_pump") === "on",
+            interested_ev: form.get("interested_ev") === "on",
+            include_solar: form.get("interested_solar") === "on",
+            include_heat_pump: form.get("interested_heat_pump") === "on",
+            include_ev: form.get("interested_ev") === "on",
+            insurance_quote_consent: form.get("insurance_quote_consent") === "on",
+          };
 
     const res = await fetch("/api/prospects", {
       method: "POST",
@@ -127,36 +157,99 @@ export default function NewProspectPage() {
               <div className="max-w-3xl">
                 <div className="font-serif text-3xl font-semibold leading-none">Add prospect</div>
                 <p className="mt-4 text-sm leading-6 text-stone-400">
-                  Intake a commercial roof, owner contact, and building profile for the OpenClaw pipeline.
+                  Choose the proposal journey first. Commercial uses verified Google Places intake; residential captures a homeowner lead for follow-up.
                 </p>
               </div>
               <div className="grid w-full grid-cols-2 border border-white/[0.07] bg-white/[0.07] sm:w-[320px]">
                 <Readout label="Region" value="GTA West" />
-                <Readout label="Mode" value="Places" />
+                <Readout label="Mode" value={proposalType === "commercial" ? "Places" : "Lead"} />
               </div>
             </div>
           </section>
 
           <form onSubmit={handleSubmit} className="border border-white/[0.07] bg-gradient-to-b from-[#1a1a1f] to-[#131316] p-5 sm:p-7">
-            <Section title="Building">
-              <Field label="Company Name" name="company_name" required />
-              <AddressAutocomplete selectedPlace={selectedPlace} onSelect={setSelectedPlace} />
-              {selectedPlace ? <TargetVerification key={selectedPlace.placeId} place={selectedPlace} /> : null}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Building Sqft" name="sqft" type="number" />
-                <Field label="Year Built" name="year_built" type="number" />
+            <Section title="Journey">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ChoiceCard
+                  active={proposalType === "commercial"}
+                  title="Commercial"
+                  text="Outbound proposal for a business or property owner."
+                  onClick={() => {
+                    setProposalType("commercial");
+                    setError("");
+                  }}
+                />
+                <ChoiceCard
+                  active={proposalType === "residential"}
+                  title="Residential"
+                  text="Homeowner inquiry from ads, referrals, or direct intake."
+                  onClick={() => {
+                    setProposalType("residential");
+                    setSelectedPlace(null);
+                    setError("");
+                  }}
+                />
               </div>
-              <Field label="Industry" name="industry" placeholder="Warehouse, manufacturing, cold storage" />
             </Section>
 
-            <Section title="Owner Contact">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Owner Name" name="owner_name" />
-                <Field label="Title" name="owner_title" placeholder="President, CEO, Facilities Director" />
-              </div>
-              <Field label="Email" name="owner_email" type="email" />
-              <Field label="Mobile" name="owner_mobile" type="tel" />
-            </Section>
+            {proposalType === "commercial" ? (
+              <>
+                <Section title="Building">
+                  <Field label="Company Name" name="company_name" required />
+                  <AddressAutocomplete selectedPlace={selectedPlace} onSelect={setSelectedPlace} />
+                  {selectedPlace ? <TargetVerification key={selectedPlace.placeId} place={selectedPlace} /> : null}
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Building Sqft" name="sqft" type="number" />
+                    <Field label="Year Built" name="year_built" type="number" />
+                  </div>
+                  <Field label="Industry" name="industry" placeholder="Warehouse, manufacturing, cold storage" />
+                </Section>
+
+                <Section title="Owner Contact">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Owner Name" name="owner_name" />
+                    <Field label="Title" name="owner_title" placeholder="President, CEO, Facilities Director" />
+                  </div>
+                  <Field label="Email" name="owner_email" type="email" />
+                  <Field label="Mobile" name="owner_mobile" type="tel" />
+                </Section>
+
+                <Section title="Commercial offer">
+                  <Checkbox label="Include solar proposal" name="include_solar" defaultChecked />
+                  <Checkbox label="Include EV charger proposal" name="include_ev" />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="EV charger count" name="ev_charger_count" type="number" />
+                    <Field label="EV annual value" name="ev_charger_annual_value" type="number" />
+                  </div>
+                  <Field label="EV notes" name="ev_charger_notes" placeholder="Fleet, tenant amenity, public charging, pending assessment" />
+                </Section>
+              </>
+            ) : (
+              <>
+                <Section title="Homeowner">
+                  <Field label="Homeowner Name" name="contact_name" required />
+                  <Field label="Address" name="address" required placeholder="Street address" />
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="City" name="city" placeholder="Mississauga" />
+                    <Field label="Monthly Energy Bill" name="monthly_energy_bill" type="number" />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Email" name="owner_email" type="email" />
+                    <Field label="Mobile" name="owner_mobile" type="tel" />
+                  </div>
+                </Section>
+
+                <Section title="Interests">
+                  <Checkbox label="Solar" name="interested_solar" defaultChecked />
+                  <Checkbox label="Heat pump" name="interested_heat_pump" />
+                  <Checkbox label="EV charger" name="interested_ev" />
+                  <Checkbox
+                    label="I consent to being contacted about a home insurance quote."
+                    name="insurance_quote_consent"
+                  />
+                </Section>
+              </>
+            )}
 
             {error ? (
               <p className="border border-[#c8704a]/40 bg-[#c8704a]/10 px-4 py-3 text-sm text-[#c8704a]">{error}</p>
@@ -164,15 +257,46 @@ export default function NewProspectPage() {
 
             <button
               type="submit"
-              disabled={loading || !selectedPlace}
+              disabled={loading || (proposalType === "commercial" && !selectedPlace)}
               className="mt-7 w-full border border-[#c08a4b] bg-[#c08a4b] px-4 py-3 text-sm font-semibold text-[#131316] transition hover:bg-[#d8a866] disabled:cursor-wait disabled:opacity-60"
             >
-              {loading ? "Saving prospect..." : selectedPlace ? "Save Prospect" : "Select a verified address"}
+              {loading
+                ? "Saving prospect..."
+                : proposalType === "commercial" && !selectedPlace
+                  ? "Select a verified address"
+                  : "Save Prospect"}
             </button>
           </form>
         </main>
       </div>
     </div>
+  );
+}
+
+function ChoiceCard({
+  active,
+  title,
+  text,
+  onClick,
+}: {
+  active: boolean;
+  title: string;
+  text: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`border p-4 text-left transition ${
+        active
+          ? "border-[#c08a4b]/70 bg-[#c08a4b]/10"
+          : "border-white/12 bg-[#131316] hover:border-[#c08a4b]/35"
+      }`}
+    >
+      <span className="block text-sm font-semibold text-[#ece9e3]">{title}</span>
+      <span className="mt-2 block text-xs leading-5 text-stone-400">{text}</span>
+    </button>
   );
 }
 
@@ -541,6 +665,20 @@ function Field({
         className="w-full border border-white/12 bg-[#131316] px-3 py-2.5 text-sm text-[#ece9e3] outline-none transition placeholder:text-stone-700 focus:border-[#c08a4b]/70 focus:bg-[#17171b]"
       />
     </div>
+  );
+}
+
+function Checkbox({ label, name, defaultChecked }: { label: string; name: string; defaultChecked?: boolean }) {
+  return (
+    <label className="flex items-start gap-3 border border-white/[0.07] bg-[#131316] px-3 py-3 text-sm text-stone-300">
+      <input
+        type="checkbox"
+        name={name}
+        defaultChecked={defaultChecked}
+        className="mt-0.5 h-4 w-4 border-white/15 bg-[#1a1a1f] accent-[#c08a4b]"
+      />
+      <span>{label}</span>
+    </label>
   );
 }
 

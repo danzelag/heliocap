@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { ProposalExperience } from "./ProposalExperience";
+import { CommercialMicrosite } from "./CommercialMicrosite";
+import { ResidentialMicrosite } from "./ResidentialMicrosite";
+import { prospectJourney } from "@/lib/prospectJourney";
 import { getProspectBySlug } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -15,15 +17,16 @@ export async function generateMetadata({
 
   if (!prospect) return {};
 
-  const ogImage = prospect.video_thumbnail_url ?? prospect.satellite_image_url;
+  const displayName = prospect.company_name ?? prospect.contact_name ?? prospect.owner_name ?? prospect.address;
+  const ogImage = prospect.video_thumbnail_url ?? prospect.ev_video_thumbnail_url ?? prospect.satellite_image_url;
 
   return {
-    title: `Solar Proposal for ${prospect.company_name}`,
-    description: `A private OpenClaw solar proposal for ${prospect.address}, ${prospect.city}.`,
+    title: `Energy Proposal for ${displayName}`,
+    description: `A private OpenClaw energy proposal for ${prospect.address}, ${prospect.city}.`,
     robots: { index: false, follow: false },
     openGraph: {
-      title: `Solar Proposal for ${prospect.company_name}`,
-      description: `A private OpenClaw solar proposal for ${prospect.address}, ${prospect.city}.`,
+      title: `Energy Proposal for ${displayName}`,
+      description: `A private OpenClaw energy proposal for ${prospect.address}, ${prospect.city}.`,
       images: ogImage ? [ogImage] : [],
     },
   };
@@ -41,11 +44,15 @@ export default async function ProposalPage({
     notFound();
   }
 
-  return (
-    <ProposalExperience
-      prospect={prospect}
-      bookingUrl={process.env.NEXT_PUBLIC_CAL_URL?.trim() || null}
-      contactEmail={process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim() || null}
-    />
+  const props = {
+    prospect,
+    bookingUrl: process.env.NEXT_PUBLIC_CAL_URL?.trim() || null,
+    contactEmail: process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim() || null,
+  };
+
+  return prospectJourney(prospect) === "residential" ? (
+    <ResidentialMicrosite {...props} />
+  ) : (
+    <CommercialMicrosite {...props} />
   );
 }

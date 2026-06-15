@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getProspect } from "@/lib/supabase";
 import { buildProposalPath } from "@/lib/proposals";
 import type { Prospect, ProspectStage } from "@/lib/types";
-import { ProposalVideoPanel } from "./ProposalVideoPanel";
+import { ProposalDataEditor } from "./ProposalDataEditor";
 import { ProspectSolarWorkspace } from "./ProspectSolarWorkspace";
 
 const CAD = new Intl.NumberFormat("en-CA", {
@@ -70,7 +70,7 @@ export default async function ProspectDetailPage({
               <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:gap-[30px]">
                 <div className="min-w-0">
                   <h1 className="font-serif text-[34px] font-semibold leading-none tracking-normal text-[#ece9e3] sm:text-[40px]">
-                    {prospect.address || prospect.company_name}
+                    {prospect.address || displayName(prospect)}
                   </h1>
                   <p className="mt-[11px] text-[12.5px] tracking-[0.01em] text-stone-400">
                     {formatProspectSubline(prospect, model)}
@@ -83,7 +83,16 @@ export default async function ProspectDetailPage({
               </div>
             </div>
 
-            <ProspectSolarWorkspace prospect={prospect} model={model} />
+            <ProposalDataEditor prospect={prospect} />
+
+            <details className="mt-7 border-t border-white/[0.07] pt-7">
+              <summary className="cursor-pointer border border-white/[0.07] bg-[#1a1a1f] px-4 py-3 text-[11px] uppercase tracking-[0.16em] text-[#d8a866]">
+                Solar layout (advanced)
+              </summary>
+              <div className="mt-5">
+                <ProspectSolarWorkspace prospect={prospect} model={model} />
+              </div>
+            </details>
 
             <div className="mt-7 grid gap-7 border-t border-white/[0.07] pt-7 lg:grid-cols-2">
               <Section label="Owner & contact">
@@ -94,9 +103,6 @@ export default async function ProspectDetailPage({
               </Section>
               <Section label="Savings & incentive math">
                 <SavingsLedger model={model} />
-              </Section>
-              <Section label="Proposal video">
-                <ProposalVideoPanel prospect={prospect} />
               </Section>
             </div>
           </section>
@@ -113,7 +119,7 @@ function OwnerCard({ prospect }: { prospect: Prospect }) {
         <div className="min-w-0">
           <div className="font-serif text-[19px] font-semibold leading-[1.1]">{prospect.owner_name ?? "Owner research pending"}</div>
           <div className="mt-1 text-xs text-stone-400">
-            {prospect.owner_title ?? "Facilities contact"} · {prospect.company_name}
+            {prospect.owner_title ?? "Facilities contact"} · {displayName(prospect)}
           </div>
         </div>
         {prospect.owner_name && (prospect.owner_email || prospect.owner_mobile) ? (
@@ -297,6 +303,10 @@ function formatProspectSubline(prospect: Prospect, model: ProspectModel) {
         : "commercial roof";
 
   return `${place} · ${model.sqftLabel} ${buildingType}`;
+}
+
+function displayName(prospect: Prospect) {
+  return prospect.company_name ?? prospect.contact_name ?? prospect.owner_name ?? prospect.address;
 }
 
 function shortDate(value: string) {
