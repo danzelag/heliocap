@@ -11,7 +11,8 @@ type LoginPageProps = {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const query = await searchParams;
   const next = firstValue(query?.next) || "/admin";
-  const hasError = Boolean(firstValue(query?.error));
+  const errorCode = firstValue(query?.error);
+  const errorMessage = errorText(errorCode);
 
   if (await hasAdminSession()) {
     redirect(safeNext(next));
@@ -36,13 +37,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           {!adminAuthConfigured() ? (
             <div className="border border-[#c8704a]/35 bg-[#c8704a]/10 p-4 text-sm leading-6 text-[#d99a82]">
               Staff sign-in is not configured. Add <code className="font-mono">ADMIN_EMAIL</code> and{" "}
-              <code className="font-mono">ADMIN_SESSION_SECRET</code> in Vercel, then create that same email as a
-              user in Supabase Auth.
+              <code className="font-mono">ADMIN_SESSION_SECRET</code> in Vercel, plus either{" "}
+              <code className="font-mono">ADMIN_PASSWORD</code> for a single-account login or a matching user in
+              Supabase Auth.
             </div>
           ) : (
             <form action="/api/admin/session" method="post" className="space-y-5">
               <p className="text-sm leading-6 text-stone-400">
-                Use the staff email and password stored in Supabase Auth.
+                Use your staff email with either the Vercel admin password or the matching Supabase Auth password.
               </p>
               <input type="hidden" name="next" value={safeNext(next)} />
               <label className="block">
@@ -70,9 +72,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   className="w-full border border-white/12 bg-[#131316] px-3 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-[#c08a4b]/70"
                 />
               </label>
-              {hasError ? (
+              {errorMessage ? (
                 <p className="border border-[#c8704a]/35 bg-[#c8704a]/10 px-3 py-2 text-xs text-[#d99a82]">
-                  Invalid staff credentials. Try again.
+                  {errorMessage}
                 </p>
               ) : null}
               <button
@@ -95,4 +97,19 @@ function firstValue(value: string | string[] | undefined) {
 
 function safeNext(value: string) {
   return value.startsWith("/") && !value.startsWith("//") ? value : "/admin";
+}
+
+function errorText(code: string | undefined) {
+  switch (code) {
+    case "invalid_credentials":
+      return "That email/password combination did not match the staff login.";
+    case "supabase_auth_unavailable":
+      return "Supabase Auth is not configured for password sign-in on this deployment.";
+    case "supabase_auth_failed":
+      return "Supabase rejected that password. If you only want one account, set ADMIN_PASSWORD in Vercel and redeploy.";
+    case "not_configured":
+      return "Staff sign-in is not configured on this deployment yet.";
+    default:
+      return "";
+  }
 }

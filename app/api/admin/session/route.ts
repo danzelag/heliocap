@@ -12,8 +12,16 @@ export async function POST(req: NextRequest) {
   const password = stringValue(form.get("password"));
   const next = safeNext(stringValue(form.get("next")) || "/admin");
 
-  if (!adminAuthConfigured() || !(await verifyAdminCredentials(email, password))) {
-    return NextResponse.redirect(new URL(`/login?error=1&next=${encodeURIComponent(next)}`, req.url), 303);
+  if (!adminAuthConfigured()) {
+    return NextResponse.redirect(new URL(`/login?error=not_configured&next=${encodeURIComponent(next)}`, req.url), 303);
+  }
+
+  const result = await verifyAdminCredentials(email, password);
+  if (!result.ok) {
+    return NextResponse.redirect(
+      new URL(`/login?error=${encodeURIComponent(result.reason)}&next=${encodeURIComponent(next)}`, req.url),
+      303
+    );
   }
 
   const res = NextResponse.redirect(new URL(next, req.url), 303);

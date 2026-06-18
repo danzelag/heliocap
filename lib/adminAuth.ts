@@ -10,8 +10,9 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 export function adminAuthConfigured() {
   return Boolean(
     adminEmail() &&
-      process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() &&
+      (adminPassword() ||
+        (process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim())) &&
       sessionSecret()
   );
 }
@@ -39,15 +40,24 @@ export function requireAdminApi(req: NextRequest) {
   return null;
 }
 
-export async function verifyAdminCredentials(email: string, password: string) {
+export type AdminCredentialCheck =
+  | { ok: true; provider: "env" | "supabase" }
+  | { ok: false; reason: "invalid_credentials" | "supabase_auth_unavailable" | "supabase_auth_failed" };
+
+export async function verifyAdminCredentials(email: string, password: string): Promise<AdminCredentialCheck> {
   const normalizedEmail = email.trim().toLowerCase();
   const expectedEmail = adminEmail();
-  if (!expectedEmail || !password || !safeEqual(normalizedEmail, expectedEmail)) return false;
+  if (!expectedEmail || !password || !safeEqual(normalizedEmail, expectedEmail)) {
+    return { ok: false, reason: "invalid_credentials" };
+  }
 
-  // Temporary backward-compatible fallback for older env-based deployments.
   const legacyPassword = adminPassword();
   if (legacyPassword && safeEqual(password, legacyPassword)) {
-    return true;
+    return { ok: true, provider: "env" };
+  }
+
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()) {
+    return { ok: false, reason: "supabase_auth_unavailable" };
   }
 
   const { data, error } = await supabase().auth.signInWithPassword({
@@ -55,8 +65,15 @@ export async function verifyAdminCredentials(email: string, password: string) {
     password,
   });
 
-  if (error || !data.user?.email) return false;
-  return safeEqual(data.user.email.trim().toLowerCase(), expectedEmail);
+  if (error || !data.user?.email) {
+    return { ok: false, reason: "supabase_auth_failed" };
+  }
+
+  if (!safeEqual(data.user.email.trim().toLowerCase(), expectedEmail)) {
+    return { ok: false, reason: "invalid_credentials" };
+  }
+
+  return { ok: true, provider: "supabase" };
 }
 
 export function createAdminSessionCookie() {
