@@ -2,12 +2,18 @@ import crypto from "crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { NextRequest, NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
 
 const ADMIN_COOKIE = "amberfield_admin";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 export function adminAuthConfigured() {
-  return Boolean(adminEmail() && adminPassword() && sessionSecret());
+  return Boolean(
+    adminEmail() &&
+      process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() &&
+      sessionSecret()
+  );
 }
 
 export async function hasAdminSession() {
@@ -33,10 +39,24 @@ export function requireAdminApi(req: NextRequest) {
   return null;
 }
 
-export function verifyAdminCredentials(email: string, password: string) {
+export async function verifyAdminCredentials(email: string, password: string) {
+  const normalizedEmail = email.trim().toLowerCase();
   const expectedEmail = adminEmail();
-  const expected = adminPassword();
-  return Boolean(expectedEmail && expected) && safeEqual(email.trim().toLowerCase(), expectedEmail) && safeEqual(password, expected);
+  if (!expectedEmail || !password || !safeEqual(normalizedEmail, expectedEmail)) return false;
+
+  // Temporary backward-compatible fallback for older env-based deployments.
+  const legacyPassword = adminPassword();
+  if (legacyPassword && safeEqual(password, legacyPassword)) {
+    return true;
+  }
+
+  const { data, error } = await supabase().auth.signInWithPassword({
+    email: normalizedEmail,
+    password,
+  });
+
+  if (error || !data.user?.email) return false;
+  return safeEqual(data.user.email.trim().toLowerCase(), expectedEmail);
 }
 
 export function createAdminSessionCookie() {

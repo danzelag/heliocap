@@ -35,12 +35,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
           {!adminAuthConfigured() ? (
             <div className="border border-[#c8704a]/35 bg-[#c8704a]/10 p-4 text-sm leading-6 text-[#d99a82]">
-              Admin login is not configured. Add <code className="font-mono">ADMIN_EMAIL</code>,{" "}
-              <code className="font-mono">ADMIN_PASSWORD</code>, and{" "}
-              <code className="font-mono">ADMIN_SESSION_SECRET</code> in Vercel.
+              Staff sign-in is not configured. Add <code className="font-mono">ADMIN_EMAIL</code> and{" "}
+              <code className="font-mono">ADMIN_SESSION_SECRET</code> in Vercel, then create that same email as a
+              user in Supabase Auth.
             </div>
           ) : (
             <form action="/api/admin/session" method="post" className="space-y-5">
+              <p className="text-sm leading-6 text-stone-400">
+                Use the staff email and password stored in Supabase Auth.
+              </p>
               <input type="hidden" name="next" value={safeNext(next)} />
               <label className="block">
                 <span className="mb-2 block text-[11px] font-medium uppercase tracking-[0.14em] text-stone-500">
@@ -69,7 +72,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               </label>
               {hasError ? (
                 <p className="border border-[#c8704a]/35 bg-[#c8704a]/10 px-3 py-2 text-xs text-[#d99a82]">
-                  Wrong password. Try again.
+                  Invalid staff credentials. Try again.
                 </p>
               ) : null}
               <button

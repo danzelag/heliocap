@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   const password = stringValue(form.get("password"));
   const next = safeNext(stringValue(form.get("next")) || "/admin");
 
-  if (!adminAuthConfigured() || !verifyAdminCredentials(email, password)) {
+  if (!adminAuthConfigured() || !(await verifyAdminCredentials(email, password))) {
     return NextResponse.redirect(new URL(`/login?error=1&next=${encodeURIComponent(next)}`, req.url), 303);
   }
 
