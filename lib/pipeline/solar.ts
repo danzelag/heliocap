@@ -1,4 +1,5 @@
 import type { PipelineResult, SolarInsights, SolarPanel } from "../types";
+import { googleApiError, requireGoogleSolarApiKey } from "../googleApi";
 
 const KWH_RATE = 0.13; // ontario commercial TOU mid-peak blend
 const WATTS_PER_PANEL = 400;
@@ -23,7 +24,7 @@ export async function fetchSolarInsights(
   lat: number,
   lng: number
 ): Promise<PipelineResult<SolarInsights>> {
-  const key = process.env.GOOGLE_MAPS_API_KEY ?? process.env.GOOGLE_SOLAR_API_KEY;
+  const key = requireGoogleSolarApiKey();
   const url =
     `https://solar.googleapis.com/v1/buildingInsights:findClosest` +
     `?location.latitude=${lat}&location.longitude=${lng}&requiredQuality=HIGH&key=${key}`;
@@ -32,7 +33,7 @@ export async function fetchSolarInsights(
   if (!res.ok) {
     return {
       ok: false,
-      error: `Solar API error ${res.status}: ${await res.text()}`,
+      error: await googleApiError(res, "Solar API"),
     };
   }
 

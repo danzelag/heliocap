@@ -19,7 +19,16 @@ type GoogleEarthTargetProps = {
   fallbackImageUrl: string;
   lat: number;
   lng: number;
+  captureBusy?: boolean;
+  captureLabel?: string;
+  onCapture?: (capture: EarthCapture) => void;
   onStatusChange?: (status: EarthTargetStatus) => void;
+};
+
+export type EarthCapture = {
+  dataUrl: string;
+  source: EarthSource;
+  credits: string;
 };
 
 declare global {
@@ -64,12 +73,23 @@ type CesiumViewer = {
 
 type CesiumTileset = object;
 
-export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng, onStatusChange }: GoogleEarthTargetProps) {
+export function GoogleEarthTarget({
+  address,
+  apiKey,
+  fallbackImageUrl,
+  lat,
+  lng,
+  captureBusy,
+  captureLabel = "Save map image",
+  onCapture,
+  onStatusChange,
+}: GoogleEarthTargetProps) {
   const [source, setSource] = useState<EarthSource>(apiKey ? "loading" : "google_maps_satellite_fallback");
   const [captureUrl, setCaptureUrl] = useState<string | null>(null);
   const [credits, setCredits] = useState("3D Tiles");
   const [viewerOpen, setViewerOpen] = useState(false);
   const embeddedRef = useRef<HTMLDivElement>(null);
+  const embeddedViewerRef = useRef<CesiumViewer | null>(null);
 
   const setTargetStatus = useCallback((nextSource: EarthSource, nextWarning: string | null) => {
     setSource(nextSource);
@@ -92,6 +112,7 @@ export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng,
         if (cancelled || !embeddedRef.current) return;
 
         viewer = createViewer(Cesium, embeddedRef.current);
+        embeddedViewerRef.current = viewer;
         await attachTileset(Cesium, viewer, browserKey, lat, lng);
 
         if (cancelled || !embeddedRef.current) return;
@@ -106,7 +127,7 @@ export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng,
         }
 
         try {
-          const dataUrl = viewer.scene.canvas.toDataURL("image/jpeg", 0.92);
+          const dataUrl = captureViewerCanvas(viewer);
           if (!cancelled) setCaptureUrl(dataUrl);
         } catch {
           if (!cancelled) setCaptureUrl(null);
@@ -130,10 +151,29 @@ export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng,
       if (viewer && !viewer.isDestroyed()) {
         viewer.destroy();
       }
+      if (embeddedViewerRef.current === viewer) {
+        embeddedViewerRef.current = null;
+      }
     };
   }, [apiKey, lat, lng, setTargetStatus]);
 
   const usesEarth = source === "earth_capture" || source === "earth_live";
+
+  function captureCurrentView() {
+    if (!onCapture) return;
+
+    const viewer = embeddedViewerRef.current;
+    if (viewer && !viewer.isDestroyed()) {
+      const dataUrl = captureViewerCanvas(viewer);
+      setCaptureUrl(dataUrl);
+      onCapture({ dataUrl, source: "earth_live", credits });
+      return;
+    }
+
+    if (captureUrl) {
+      onCapture({ dataUrl: captureUrl, source, credits });
+    }
+  }
 
   return (
     <>
@@ -179,19 +219,41 @@ export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng,
                   : "Maps fallback"}
           </span>
           {usesEarth ? (
-            <button
-              type="button"
-              onClick={() => setViewerOpen(true)}
-              className="border border-white/12 bg-black/60 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-stone-200 transition hover:border-[#d8a866]/45 hover:text-[#d8a866]"
-            >
-              Open 3D inspect
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setViewerOpen(true)}
+                className="border border-white/12 bg-black/60 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-stone-200 transition hover:border-[#d8a866]/45 hover:text-[#d8a866]"
+              >
+                Open 3D inspect
+              </button>
+              {onCapture ? (
+                <button
+                  type="button"
+                  onClick={captureCurrentView}
+                  disabled={captureBusy}
+                  className="border border-[#d8a866]/45 bg-[#d8a866]/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-[#d8a866] transition hover:bg-[#d8a866]/18 disabled:cursor-wait disabled:opacity-45"
+                >
+                  {captureBusy ? "Saving..." : captureLabel}
+                </button>
+              ) : null}
+            </>
           ) : null}
         </div>
       </div>
 
       {viewerOpen && apiKey ? (
-        <EarthInspectModal address={address} apiKey={apiKey} lat={lat} lng={lng} onClose={() => setViewerOpen(false)} />
+        <EarthInspectModal
+          address={address}
+          apiKey={apiKey}
+          captureBusy={captureBusy}
+          captureLabel={captureLabel}
+          credits={credits}
+          lat={lat}
+          lng={lng}
+          onCapture={onCapture}
+          onClose={() => setViewerOpen(false)}
+        />
       ) : null}
     </>
   );
@@ -200,17 +262,26 @@ export function GoogleEarthTarget({ address, apiKey, fallbackImageUrl, lat, lng,
 function EarthInspectModal({
   address,
   apiKey,
+  captureBusy,
+  captureLabel,
+  credits,
   lat,
   lng,
+  onCapture,
   onClose,
 }: {
   address: string;
   apiKey: string;
+  captureBusy?: boolean;
+  captureLabel: string;
+  credits: string;
   lat: number;
   lng: number;
+  onCapture?: (capture: EarthCapture) => void;
   onClose: () => void;
 }) {
   const viewerRef = useRef<HTMLDivElement>(null);
+  const cesiumViewerRef = useRef<CesiumViewer | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -222,6 +293,7 @@ function EarthInspectModal({
         const Cesium = await loadCesium();
         if (cancelled || !viewerRef.current) return;
         viewer = createViewer(Cesium, viewerRef.current);
+        cesiumViewerRef.current = viewer;
         await attachTileset(Cesium, viewer, apiKey, lat, lng);
       } catch (nextError) {
         if (!cancelled) {
@@ -237,8 +309,17 @@ function EarthInspectModal({
       if (viewer && !viewer.isDestroyed()) {
         viewer.destroy();
       }
+      if (cesiumViewerRef.current === viewer) {
+        cesiumViewerRef.current = null;
+      }
     };
   }, [apiKey, lat, lng]);
+
+  function captureInspectView() {
+    const viewer = cesiumViewerRef.current;
+    if (!viewer || viewer.isDestroyed() || !onCapture) return;
+    onCapture({ dataUrl: captureViewerCanvas(viewer), source: "earth_live", credits });
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/82 backdrop-blur-sm">
@@ -255,6 +336,16 @@ function EarthInspectModal({
           >
             Close
           </button>
+          {onCapture ? (
+            <button
+              type="button"
+              onClick={captureInspectView}
+              disabled={captureBusy || Boolean(error)}
+              className="border border-[#d8a866]/45 bg-[#d8a866]/10 px-3 py-2 text-[11px] uppercase tracking-[0.14em] text-[#d8a866] transition hover:bg-[#d8a866]/18 disabled:cursor-wait disabled:opacity-45"
+            >
+              {captureBusy ? "Saving..." : captureLabel}
+            </button>
+          ) : null}
         </div>
         <div className="relative min-h-0 flex-1 overflow-hidden border border-white/[0.08] bg-black">
           <div ref={viewerRef} className="absolute inset-0" />
@@ -291,6 +382,11 @@ function createViewer(Cesium: CesiumGlobal, container: Element) {
     selectionIndicator: false,
     requestRenderMode: false,
     shouldAnimate: true,
+    contextOptions: {
+      webgl: {
+        preserveDrawingBuffer: true,
+      },
+    },
   });
 
   viewer.scene.globe.show = false;
@@ -300,6 +396,11 @@ function createViewer(Cesium: CesiumGlobal, container: Element) {
   viewer.scene.screenSpaceCameraController.enableCollisionDetection = false;
 
   return viewer;
+}
+
+function captureViewerCanvas(viewer: CesiumViewer) {
+  viewer.scene.requestRender();
+  return viewer.scene.canvas.toDataURL("image/jpeg", 0.94);
 }
 
 async function attachTileset(Cesium: CesiumGlobal, viewer: CesiumViewer, apiKey: string, lat: number, lng: number) {

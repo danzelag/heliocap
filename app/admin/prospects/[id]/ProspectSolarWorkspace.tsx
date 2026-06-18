@@ -391,7 +391,7 @@ export function ProspectSolarWorkspace({ prospect, model }: ProspectSolarWorkspa
         setSelectedPanelIds([]);
       }
     },
-    [addPanelAt, editTool, overlayX, overlayY, showPanelOverlay, viewMode]
+    [addPanelAt, editTool, mapHeading, overlayX, overlayY, showPanelOverlay, viewMode]
   );
 
   const handlePanelPointerDown = useCallback(

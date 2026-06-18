@@ -1,4 +1,5 @@
 import type { PipelineResult } from "../types";
+import { googleApiError, requireGoogleMapsServerKey } from "../googleApi";
 
 export interface GeocodeResult {
   lat: number;
@@ -10,10 +11,13 @@ export async function geocodeAddress(
   address: string
 ): Promise<PipelineResult<GeocodeResult>> {
   const encoded = encodeURIComponent(address);
-  const key = process.env.GOOGLE_MAPS_API_KEY;
+  const key = requireGoogleMapsServerKey();
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encoded}&key=${key}`;
 
   const res = await fetch(url);
+  if (!res.ok) {
+    return { ok: false, error: await googleApiError(res, "Geocoding") };
+  }
   const json = await res.json();
 
   if (json.status !== "OK" || !json.results?.[0]) {

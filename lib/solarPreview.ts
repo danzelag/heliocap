@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import type { SolarInsights, SolarPanel } from "./types";
+import { googleApiError, googleMapsServerKey, googleSolarApiKey } from "./googleApi";
 import { latLngToPixel, panelRotationDegrees } from "./pipeline/solar";
 
 export const PREVIEW_WIDTH = 1280;
@@ -55,7 +56,7 @@ export function buildPreviewMapImageUrl(lat: number, lng: number, zoom: number) 
 }
 
 export async function fetchSolarDataLayers({ lat, lng }: DataLayersOptions): Promise<SolarDataLayers> {
-  const key = process.env.GOOGLE_MAPS_API_KEY;
+  const key = googleSolarApiKey();
   if (!key) {
     return {
       dsmUrl: null,
@@ -67,7 +68,7 @@ export async function fetchSolarDataLayers({ lat, lng }: DataLayersOptions): Pro
       imageryQuality: null,
       imageryDate: null,
       imageryProcessedDate: null,
-      warning: "GOOGLE_MAPS_API_KEY is not configured.",
+      warning: "GOOGLE_SOLAR_API_KEY, GOOGLE_MAPS_SERVER_API_KEY, or GOOGLE_MAPS_API_KEY is not configured.",
     };
   }
 
@@ -84,6 +85,7 @@ export async function fetchSolarDataLayers({ lat, lng }: DataLayersOptions): Pro
   try {
     const res = await fetch(`https://solar.googleapis.com/v1/dataLayers:get?${params.toString()}`);
     if (!res.ok) {
+      const warning = await googleApiError(res, "Solar data layers");
       return {
         dsmUrl: null,
         annualFluxUrl: null,
@@ -94,7 +96,7 @@ export async function fetchSolarDataLayers({ lat, lng }: DataLayersOptions): Pro
         imageryQuality: null,
         imageryDate: null,
         imageryProcessedDate: null,
-        warning: `Solar data layers unavailable: ${res.status}`,
+        warning,
       };
     }
     const json = await res.json();
@@ -170,9 +172,9 @@ export async function buildSolarAnalysisImage({
 }
 
 async function buildDarkBaseFromStaticMap({ lat, lng, zoom, size = "640x400", maptype = "satellite" }: StaticMapOptions) {
-  const key = process.env.GOOGLE_MAPS_API_KEY;
+  const key = googleMapsServerKey();
   if (!key) {
-    throw new Error("GOOGLE_MAPS_API_KEY is not configured.");
+    throw new Error("GOOGLE_MAPS_SERVER_API_KEY or GOOGLE_MAPS_API_KEY is not configured.");
   }
 
   const params = new URLSearchParams({
@@ -186,7 +188,7 @@ async function buildDarkBaseFromStaticMap({ lat, lng, zoom, size = "640x400", ma
 
   const res = await fetch(`https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`);
   if (!res.ok) {
-    throw new Error(`Static Maps failed: ${res.status}`);
+    throw new Error(await googleApiError(res, "Static Maps"));
   }
 
   const buffer = Buffer.from(await res.arrayBuffer());

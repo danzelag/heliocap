@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { buildProposalPath } from "@/lib/proposals";
 import type { Prospect } from "@/lib/types";
+import { ProspectMapCapturePanel } from "./ProspectMapCapturePanel";
 import { ProposalVideoPanel } from "./ProposalVideoPanel";
 
 type SaveState = "idle" | "saving" | "publishing";
@@ -234,6 +235,7 @@ export function ProposalDataEditor({ prospect }: { prospect: Prospect }) {
             </div>
           )}
         </div>
+        <ProspectMapCapturePanel prospect={prospect} />
         <ProposalVideoPanel prospect={prospect} product="solar" />
         {!isResidential && prospect.include_ev ? <ProposalVideoPanel prospect={prospect} product="ev" /> : null}
       </aside>

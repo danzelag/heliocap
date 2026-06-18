@@ -1,3 +1,5 @@
+import { googleApiError, requireGoogleMapsServerKey } from "./googleApi";
+
 export interface PlaceSuggestion {
   placeId: string;
   text: string;
@@ -40,11 +42,7 @@ type PlacePrediction = NonNullable<NonNullable<AutocompleteResponse["suggestions
 const PLACES_BASE_URL = "https://places.googleapis.com/v1";
 
 function getGoogleMapsApiKey() {
-  const key = process.env.GOOGLE_MAPS_API_KEY;
-  if (!key) {
-    throw new Error("GOOGLE_MAPS_API_KEY is not configured");
-  }
-  return key;
+  return requireGoogleMapsServerKey();
 }
 
 export async function autocompletePlaces(
@@ -71,7 +69,7 @@ export async function autocompletePlaces(
   });
 
   if (!res.ok) {
-    throw new Error(`Places autocomplete failed: ${res.status}`);
+    throw new Error(await googleApiError(res, "Places autocomplete"));
   }
 
   const json = (await res.json()) as AutocompleteResponse;
@@ -106,7 +104,7 @@ export async function getPlaceDetails(
   });
 
   if (!res.ok) {
-    throw new Error(`Place details failed: ${res.status}`);
+    throw new Error(await googleApiError(res, "Place details"));
   }
 
   const json = await res.json();

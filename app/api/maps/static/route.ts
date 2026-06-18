@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/adminAuth";
+import { googleApiError, googleMapsServerKey } from "@/lib/googleApi";
 
 export async function GET(req: NextRequest) {
   const auth = requireAdminApi(req);
@@ -10,10 +11,10 @@ export async function GET(req: NextRequest) {
   const zoom = Number(req.nextUrl.searchParams.get("zoom") ?? "18");
   const size = req.nextUrl.searchParams.get("size") ?? "960x540";
   const maptype = req.nextUrl.searchParams.get("maptype") ?? "satellite";
-  const key = process.env.GOOGLE_MAPS_API_KEY;
+  const key = googleMapsServerKey();
 
   if (!key) {
-    return NextResponse.json({ error: "GOOGLE_MAPS_API_KEY is not configured" }, { status: 500 });
+    return NextResponse.json({ error: "GOOGLE_MAPS_SERVER_API_KEY or GOOGLE_MAPS_API_KEY is not configured" }, { status: 500 });
   }
 
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
 
   const res = await fetch(`https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`);
   if (!res.ok) {
-    return NextResponse.json({ error: `Static Maps failed: ${res.status}` }, { status: 502 });
+    return NextResponse.json({ error: await googleApiError(res, "Static Maps") }, { status: 502 });
   }
 
   return new NextResponse(await res.arrayBuffer(), {

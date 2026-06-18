@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/adminAuth";
+import { googleMapsBrowserKey } from "@/lib/googleApi";
 
 export async function GET(req: NextRequest) {
   const auth = requireAdminApi(req);
   if (auth) return auth;
 
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY ?? "";
+  const apiKey = googleMapsBrowserKey();
 
   return NextResponse.json(
     {

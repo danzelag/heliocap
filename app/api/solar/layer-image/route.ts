@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as geotiff from "geotiff";
 import sharp from "sharp";
 import { requireAdminApi } from "@/lib/adminAuth";
+import { googleApiError, googleSolarApiKey } from "@/lib/googleApi";
 import { PREVIEW_HEIGHT, PREVIEW_WIDTH, fetchSolarDataLayers } from "@/lib/solarPreview";
 
 type LayerKind = "rgb" | "mask" | "annual_flux" | "monthly_flux" | "hourly_shade" | "dsm";
@@ -27,9 +28,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: `${layer} layer is unavailable for this location.` }, { status: 404 });
   }
 
-  const key = process.env.GOOGLE_MAPS_API_KEY;
+  const key = googleSolarApiKey();
   if (!key) {
-    return NextResponse.json({ error: "GOOGLE_MAPS_API_KEY is not configured." }, { status: 500 });
+    return NextResponse.json({ error: "GOOGLE_SOLAR_API_KEY, GOOGLE_MAPS_SERVER_API_KEY, or GOOGLE_MAPS_API_KEY is not configured." }, { status: 500 });
   }
 
   const buffer = await renderGeoTiffLayer(sourceUrl, key, layer, { month, day, hour });
@@ -50,7 +51,7 @@ async function renderGeoTiffLayer(
 ) {
   const res = await fetch(appendKey(sourceUrl, key));
   if (!res.ok) {
-    throw new Error(`GeoTIFF fetch failed: ${res.status}`);
+    throw new Error(await googleApiError(res, "GeoTIFF fetch"));
   }
 
   const tiff = await geotiff.fromArrayBuffer(await res.arrayBuffer());
