@@ -125,7 +125,7 @@ export default function PublicHomePage() {
               href="/estimate"
               className="shrink-0 bg-[#d29a55] px-5 py-3 text-sm font-semibold text-[#1d1a16] transition hover:-translate-y-0.5 hover:bg-[#b9783f] hover:text-white"
             >
-              Free estimate
+              Get an estimate
             </Link>
           </nav>
         </div>
@@ -149,7 +149,7 @@ export default function PublicHomePage() {
           </p>
           <div className="mt-9 flex flex-wrap gap-4">
             <Link href="/estimate" className="inline-flex items-center gap-3 bg-[#d29a55] px-8 py-4 font-semibold text-[#1d1a16] transition hover:-translate-y-0.5 hover:bg-[#b9783f] hover:text-white">
-              Get my free estimate <ArrowIcon />
+              Get an estimate <ArrowIcon />
             </Link>
             <a href="#calculator" className="inline-flex items-center border border-white/45 px-8 py-4 font-semibold text-white transition hover:bg-white/10">
               Estimate my savings
@@ -347,7 +347,7 @@ export default function PublicHomePage() {
             Find out what your property could be <em className="text-[#d29a55]">saving you.</em>
           </h2>
           <Link href="/estimate" className="mt-9 inline-flex items-center gap-3 bg-[#d29a55] px-8 py-4 font-semibold text-[#1d1a16] transition hover:bg-[#b9783f] hover:text-white">
-            Get my free estimate <ArrowIcon />
+            Get an estimate <ArrowIcon />
           </Link>
         </div>
       </section>
@@ -359,7 +359,7 @@ export default function PublicHomePage() {
             <p className="mt-4 font-serif text-xl italic text-white/80">Your property. Your power.</p>
           </div>
           <FooterLinks title="Solutions" links={["Solar panels", "Heat pumps", "EV charging", "Savings calculator"]} />
-          <FooterLinks title="Company" links={["Our partners", "Free estimate", "Estimate savings"]} />
+          <FooterLinks title="Company" links={["Our partners", "Get an estimate", "Estimate savings"]} />
           <p className="border-t border-white/10 pt-6 md:col-span-3">
             <b className="font-semibold text-white/70">About these numbers.</b> Savings and payment figures are illustrative estimates based on typical homes, local sun data, and current utility rates. Your personalized estimate is modeled on your specific property and bill. Installation services are delivered by independent partner companies. © 2026 AmberField Energy.
           </p>
@@ -423,7 +423,7 @@ function FooterLinks({ title, links }: { title: string; links: string[] }) {
     <div>
       <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-white/50">{title}</h3>
       {links.map((link) => (
-        <a key={link} href={link === "Free estimate" ? "/estimate" : "#solutions"} className="block py-1 text-white/60 transition hover:text-[#d29a55]">
+        <a key={link} href={link === "Get an estimate" ? "/estimate" : "#solutions"} className="block py-1 text-white/60 transition hover:text-[#d29a55]">
           {link}
         </a>
       ))}

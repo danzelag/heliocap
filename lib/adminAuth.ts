@@ -23,18 +23,24 @@ export async function hasAdminSession() {
 }
 
 export async function requireAdminPage() {
-  if (!adminAuthConfigured() || !(await hasAdminSession())) {
-    redirect("/login?next=/admin");
+  if (!adminAuthConfigured()) {
+    redirect("/login?error=not_configured&next=/admin");
+  }
+
+  const cookieStore = await cookies();
+  const session = cookieStore.get(ADMIN_COOKIE)?.value;
+  if (!isValidAdminSession(session)) {
+    redirect(session ? "/login?error=session_invalid&next=/admin" : "/login?next=/admin");
   }
 }
 
 export function requireAdminApi(req: NextRequest) {
   if (!adminAuthConfigured()) {
-    return NextResponse.json({ error: "Admin login is not configured." }, { status: 503 });
+    return NextResponse.json({ error: "Admin login is not configured.", code: "AUTH-NOT-CONFIGURED" }, { status: 503 });
   }
 
   if (!isValidAdminSession(req.cookies.get(ADMIN_COOKIE)?.value)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized", code: "AUTH-SESSION-MISSING" }, { status: 401 });
   }
 
   return null;

@@ -139,7 +139,7 @@ export default function ResidentialLandingPage() {
         <div className="border border-white/15 bg-[#211f1b]/70 p-6 shadow-[0_40px_90px_-40px_rgba(0,0,0,0.75)] backdrop-blur-xl sm:p-9">
           <form ref={formRef} onSubmit={submitLead} className={isSuccess ? "hidden" : "block"}>
             <div className="mb-3 flex items-baseline justify-between gap-4">
-              <h2 className="font-serif text-3xl font-light tracking-normal">Get my free estimate</h2>
+              <h2 className="font-serif text-3xl font-light tracking-normal">Get an estimate</h2>
               <span className="text-xs font-semibold uppercase tracking-[0.1em] text-[#d29a55]">2 min</span>
             </div>
             <p className="mb-6 text-sm leading-6 text-white/60">
@@ -211,7 +211,7 @@ export default function ResidentialLandingPage() {
               disabled={state === "submitting"}
               className="mt-6 w-full bg-[#d29a55] px-5 py-4 text-base font-semibold text-[#1c1a17] transition hover:-translate-y-0.5 hover:bg-[#b9783f] hover:text-white disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
             >
-              {state === "submitting" ? "Submitting..." : "Get my free estimate"}
+              {state === "submitting" ? "Submitting..." : "Get an estimate"}
             </button>
             <div className="mt-3 text-center text-[11px] text-white/40">
               We&apos;ll never share your details. Estimates are free.

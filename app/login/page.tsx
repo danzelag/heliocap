@@ -12,7 +12,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const query = await searchParams;
   const next = firstValue(query?.next) || "/admin";
   const errorCode = firstValue(query?.error);
-  const errorMessage = errorText(errorCode);
+  const error = errorState(errorCode);
 
   if (await hasAdminSession()) {
     redirect(safeNext(next));
@@ -43,9 +43,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             </div>
           ) : (
             <form action="/api/admin/session" method="post" className="space-y-5">
-              <p className="text-sm leading-6 text-stone-400">
-                Use your staff email with either the Vercel admin password or the matching Supabase Auth password.
-              </p>
               <input type="hidden" name="next" value={safeNext(next)} />
               <label className="block">
                 <span className="mb-2 block text-[11px] font-medium uppercase tracking-[0.14em] text-stone-500">
@@ -72,10 +69,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                   className="w-full border border-white/12 bg-[#131316] px-3 py-3 text-sm text-stone-100 outline-none transition placeholder:text-stone-600 focus:border-[#c08a4b]/70"
                 />
               </label>
-              {errorMessage ? (
-                <p className="border border-[#c8704a]/35 bg-[#c8704a]/10 px-3 py-2 text-xs text-[#d99a82]">
-                  {errorMessage}
-                </p>
+              {error ? (
+                <div className="border border-[#c8704a]/35 bg-[#c8704a]/10 px-3 py-2 text-xs leading-5 text-[#d99a82]">
+                  <p>{error.message}</p>
+                  <p className="mt-1 font-mono uppercase tracking-[0.14em] text-[#ffc0a8]">Code: {error.code}</p>
+                </div>
               ) : null}
               <button
                 type="submit"
@@ -99,17 +97,34 @@ function safeNext(value: string) {
   return value.startsWith("/") && !value.startsWith("//") ? value : "/admin";
 }
 
-function errorText(code: string | undefined) {
+function errorState(code: string | undefined) {
   switch (code) {
     case "invalid_credentials":
-      return "That email/password combination did not match the staff login.";
+      return {
+        code: "AUTH-BAD-CREDS",
+        message: "That email/password combination did not match the staff login.",
+      };
     case "supabase_auth_unavailable":
-      return "Supabase Auth is not configured for password sign-in on this deployment.";
+      return {
+        code: "AUTH-SB-MISSING",
+        message: "Supabase Auth is not configured for password sign-in on this deployment.",
+      };
     case "supabase_auth_failed":
-      return "Supabase rejected that password. If you only want one account, set ADMIN_PASSWORD in Vercel and redeploy.";
+      return {
+        code: "AUTH-SB-REJECTED",
+        message: "Supabase rejected that password. If you only want one account, set ADMIN_PASSWORD in Vercel and redeploy.",
+      };
     case "not_configured":
-      return "Staff sign-in is not configured on this deployment yet.";
+      return {
+        code: "AUTH-NOT-CONFIGURED",
+        message: "Staff sign-in is not configured on this deployment yet.",
+      };
+    case "session_invalid":
+      return {
+        code: "AUTH-SESSION-INVALID",
+        message: "The login cookie was rejected after sign-in. Try again; if it repeats, check that ADMIN_SESSION_SECRET is set and unchanged in Vercel.",
+      };
     default:
-      return "";
+      return null;
   }
 }
