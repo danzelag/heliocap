@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabaseBrowser } from "@/lib/supabase-browser";
 import type { Prospect } from "@/lib/types";
 
 type ProductVideo = "solar" | "ev";
@@ -14,6 +15,16 @@ type VideoFields = {
 const FIELDS: Record<ProductVideo, VideoFields> = {
   solar: { url: "video_url", thumbnail: "video_thumbnail_url" },
   ev: { url: "ev_video_url", thumbnail: "ev_video_thumbnail_url" },
+};
+
+const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
+const ALLOWED_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
+
+type SignedUploadResponse = {
+  path?: string;
+  token?: string;
+  publicUrl?: string;
+  error?: string;
 };
 
 export function ProposalVideoPanel({
@@ -77,7 +88,15 @@ export function ProposalVideoPanel({
   async function uploadSelectedFile() {
     const file = fileRef.current?.files?.[0];
     if (!file) {
-      setError("Choose an mp4 or webm file first.");
+      setError("Choose an mp4, webm, or mov file first.");
+      return;
+    }
+    if (!ALLOWED_VIDEO_TYPES.has(file.type)) {
+      setError("Upload an mp4, webm, or mov video.");
+      return;
+    }
+    if (file.size > MAX_VIDEO_BYTES) {
+      setError("Video must be 500MB or smaller.");
       return;
     }
 
@@ -85,26 +104,41 @@ export function ProposalVideoPanel({
     setError("");
     setMessage("");
 
-    const body = new FormData();
-    body.append("file", file);
-    body.append("prospect_id", prospect.id);
-    body.append("product", product);
-
-    const res = await fetch("/api/uploads/video", {
+    const signRes = await fetch("/api/uploads/video/sign", {
       method: "POST",
-      body,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prospect_id: prospect.id,
+        product,
+        file_type: file.type,
+        file_size: file.size,
+      }),
     });
-    const data = await res.json().catch(() => ({}));
+    const signed: SignedUploadResponse = await signRes.json().catch(() => ({}));
 
-    if (!res.ok) {
-      setError(data.error ?? "Upload failed.");
+    if (!signRes.ok || !signed.path || !signed.token || !signed.publicUrl) {
+      setError(signed.error ?? "Upload could not be prepared.");
       setRunning(null);
       return;
     }
 
-    setVideoUrl(data.url);
+    const { error: uploadError } = await supabaseBrowser()
+      .storage
+      .from("openclaw")
+      .uploadToSignedUrl(signed.path, signed.token, file, {
+        cacheControl: "3600",
+        contentType: file.type,
+      });
+
+    if (uploadError) {
+      setError(uploadError.message || "Upload failed.");
+      setRunning(null);
+      return;
+    }
+
+    setVideoUrl(signed.publicUrl);
     setRunning(null);
-    await saveVideo(data.url, thumbnailUrl);
+    await saveVideo(signed.publicUrl, thumbnailUrl);
   }
 
   return (
@@ -165,7 +199,7 @@ export function ProposalVideoPanel({
           <input
             ref={fileRef}
             type="file"
-            accept="video/mp4,video/webm"
+            accept="video/mp4,video/webm,video/quicktime,.mov"
             className="w-full border border-white/12 bg-[#131316] px-3 py-2 text-xs text-stone-300 file:mr-3 file:border-0 file:bg-[#c08a4b] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#131316]"
           />
           <div className="flex flex-wrap gap-2 pt-1">

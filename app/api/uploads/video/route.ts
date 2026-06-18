@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 
-const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
-const ALLOWED_TYPES = new Set(["video/mp4", "video/webm"]);
+const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
+const ALLOWED_TYPES: Record<string, string> = {
+  "video/mp4": "mp4",
+  "video/webm": "webm",
+  "video/quicktime": "mov",
+};
 
 export async function POST(req: NextRequest) {
   const form = await req.formData();
@@ -16,14 +20,14 @@ export async function POST(req: NextRequest) {
   if (!prospectId) {
     return NextResponse.json({ error: "prospect_id is required." }, { status: 400 });
   }
-  if (!ALLOWED_TYPES.has(file.type)) {
-    return NextResponse.json({ error: "Upload an mp4 or webm video." }, { status: 400 });
+  if (!ALLOWED_TYPES[file.type]) {
+    return NextResponse.json({ error: "Upload an mp4, webm, or mov video." }, { status: 400 });
   }
   if (file.size > MAX_VIDEO_BYTES) {
-    return NextResponse.json({ error: "Video must be 200MB or smaller." }, { status: 400 });
+    return NextResponse.json({ error: "Video must be 500MB or smaller." }, { status: 400 });
   }
 
-  const ext = file.type === "video/webm" ? "webm" : "mp4";
+  const ext = ALLOWED_TYPES[file.type];
   const safeProduct = product === "ev" ? "ev" : "solar";
   const path = `proposal-videos/${prospectId}/${safeProduct}-${Date.now()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
