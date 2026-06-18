@@ -29,7 +29,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               <h1 className="text-lg font-semibold tracking-[0.24em]">
                 AMBER<span className="text-[#c08a4b]">FIELD</span>
               </h1>
-              <p className="mt-1 text-[10px] uppercase tracking-[0.24em] text-stone-500">Command center login</p>
+              <p className="mt-1 text-[10px] uppercase tracking-[0.24em] text-stone-500">Staff sign in</p>
             </div>
           </div>
 

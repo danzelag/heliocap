@@ -114,7 +114,7 @@ export default function ResidentialLandingPage() {
           className="inline-flex shrink-0 items-center gap-2 text-xs font-medium text-white/65 transition hover:text-[#d29a55]"
         >
           <ArrowLeftIcon />
-          <span className="hidden sm:inline">Command center</span>
+          <span className="hidden sm:inline">Staff sign in</span>
         </Link>
       </header>
 
