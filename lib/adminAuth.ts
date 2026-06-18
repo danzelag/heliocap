@@ -111,7 +111,7 @@ export function clearAdminSessionCookie(res: NextResponse) {
 function isValidAdminSession(value: string | undefined) {
   if (!value) return false;
   const parts = value.split(".");
-  if (parts.length !== 5) return false;
+  if (parts.length !== 4) return false;
 
   const signature = parts.pop();
   const payload = parts.join(".");
