@@ -94,7 +94,6 @@ export default function ResidentialLandingPage() {
           loop
           playsInline
           preload="auto"
-          poster="/assets/logo-amberfield-on-dark.png"
           className="absolute inset-0 h-full w-full object-cover"
         >
           <source src="/assets/cinematic-home.mp4" type="video/mp4" />
@@ -105,7 +104,7 @@ export default function ResidentialLandingPage() {
       <header className="relative z-10 flex items-center justify-between px-5 py-5 sm:px-11 sm:py-6">
         <div className="flex min-w-0 items-center gap-3">
           <img
-            src="/assets/logo-amberfield-on-dark.png"
+            src="/assets/amberfield-logo-light.svg"
             alt="AmberField Energy"
             className="h-[30px] w-auto max-w-[210px] object-contain"
           />

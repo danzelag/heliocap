@@ -110,7 +110,7 @@ export default function PublicHomePage() {
         <div className="mx-auto flex max-w-[1180px] items-center justify-between gap-5">
           <a href="#top" aria-label="AmberField Energy home" className="min-w-0">
             <img
-              src="/assets/logo-amberfield-on-dark.png"
+              src="/assets/amberfield-logo-light.svg"
               alt="AmberField Energy"
               className="h-10 w-auto max-w-[210px] object-contain sm:h-12"
             />
@@ -355,7 +355,7 @@ export default function PublicHomePage() {
       <footer className="bg-[#1d1a16] px-5 py-14 text-xs leading-6 text-white/45 sm:px-10">
         <div className="mx-auto grid max-w-[1180px] gap-10 md:grid-cols-[1.2fr_1fr_1fr]">
           <div>
-            <img src="/assets/logo-amberfield-on-dark.png" alt="AmberField Energy" className="h-9 w-auto" />
+            <img src="/assets/amberfield-logo-light.svg" alt="AmberField Energy" className="h-9 w-auto" />
             <p className="mt-4 font-serif text-xl italic text-white/80">Your property. Your power.</p>
           </div>
           <FooterLinks title="Solutions" links={["Solar panels", "Heat pumps", "EV charging", "Savings calculator"]} />
