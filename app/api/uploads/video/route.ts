@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/adminAuth";
 import { supabaseAdmin } from "@/lib/supabase";
 
 const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
@@ -9,6 +10,9 @@ const ALLOWED_TYPES: Record<string, string> = {
 };
 
 export async function POST(req: NextRequest) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const form = await req.formData();
   const file = form.get("file");
   const prospectId = stringValue(form.get("prospect_id"));

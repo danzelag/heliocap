@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/adminAuth";
 import { getProspect, supabaseAdmin, updateProspect } from "@/lib/supabase";
 import {
   normalizeSolarDesign,
@@ -10,9 +11,12 @@ import {
 import type { ProspectStage } from "@/lib/types";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const { id } = await params;
   const prospect = await getProspect(id);
   if (!prospect) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -41,6 +45,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const { id } = await params;
   const prospect = await getProspect(id);
   if (!prospect) return NextResponse.json({ error: "Not found" }, { status: 404 });

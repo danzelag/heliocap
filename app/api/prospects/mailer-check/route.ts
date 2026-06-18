@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/adminAuth";
 import { getProspectsByIds } from "@/lib/supabase";
 
 export async function POST(req: NextRequest) {
+  const authError = requireAdminApi(req);
+  if (authError) return authError;
+
   const body = await req.json();
   const ids = Array.isArray(body.ids) ? body.ids.filter((value: unknown): value is string => typeof value === "string") : [];
 

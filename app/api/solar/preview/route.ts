@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/adminAuth";
 import { fetchSolarInsights, calculateEconomics, latLngToPixel, panelRotationDegrees } from "@/lib/pipeline/solar";
 import { DEFAULT_ANALYSIS_ZOOM, PREVIEW_HEIGHT, PREVIEW_WIDTH, buildPreviewMapImageUrl, fetchSolarDataLayers } from "@/lib/solarPreview";
 
 export async function GET(req: NextRequest) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const lat = Number(req.nextUrl.searchParams.get("lat"));
   const lng = Number(req.nextUrl.searchParams.get("lng"));
   const yearBuilt = Number(req.nextUrl.searchParams.get("year_built") ?? "2000");

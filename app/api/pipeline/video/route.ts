@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/adminAuth";
 import { getProspect, updateProspect } from "@/lib/supabase";
 import { generateProposalVideo } from "@/lib/pipeline/video";
 import type { ProspectStage } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const body = await req.json().catch(() => ({}));
   const id = typeof body.id === "string" ? body.id : "";
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });

@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as geotiff from "geotiff";
 import sharp from "sharp";
+import { requireAdminApi } from "@/lib/adminAuth";
 import { PREVIEW_HEIGHT, PREVIEW_WIDTH, fetchSolarDataLayers } from "@/lib/solarPreview";
 
 type LayerKind = "rgb" | "mask" | "annual_flux" | "monthly_flux" | "hourly_shade" | "dsm";
 
 export async function GET(req: NextRequest) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const lat = Number(req.nextUrl.searchParams.get("lat"));
   const lng = Number(req.nextUrl.searchParams.get("lng"));
   const layer = normalizeLayer(req.nextUrl.searchParams.get("layer"));

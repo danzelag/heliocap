@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/adminAuth";
 import { getProspect, updateProspect } from "@/lib/supabase";
 import {
   fetchSolarInsights,
@@ -9,6 +10,9 @@ import { fetchCurrentIncentiveRate } from "@/lib/pipeline/outreach";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export async function POST(req: NextRequest) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const { id } = await req.json();
   const prospect = await getProspect(id);
   if (!prospect?.lat || !prospect?.lng) {

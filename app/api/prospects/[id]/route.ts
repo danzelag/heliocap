@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/adminAuth";
 import { getProspect, updateProspect, supabaseAdmin } from "@/lib/supabase";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const { id } = await params;
   const prospect = await getProspect(id);
   if (!prospect) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -15,6 +19,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const { id } = await params;
   const body = await req.json();
   const updated = await updateProspect(id, body);
@@ -23,9 +30,12 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const { id } = await params;
   const { error } = await supabaseAdmin().from("prospects").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });

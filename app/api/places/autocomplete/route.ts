@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/adminAuth";
 import { autocompletePlaces } from "@/lib/googlePlaces";
 
 export async function POST(req: NextRequest) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const { input, sessionToken } = await req.json();
 
   if (typeof input !== "string" || typeof sessionToken !== "string") {

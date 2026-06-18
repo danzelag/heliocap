@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/adminAuth";
 import { supabaseAdmin, listProspects } from "@/lib/supabase";
 import { getPlaceDetails } from "@/lib/googlePlaces";
 import type { ProposalType, Prospect } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const stage = req.nextUrl.searchParams.get("stage") ?? undefined;
   const proposalType = parseProposalType(req.nextUrl.searchParams.get("proposal_type"));
   const limit = parseInt(req.nextUrl.searchParams.get("limit") ?? "50");
@@ -12,6 +16,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const body = await req.json();
   const proposalType = parseProposalType(body.proposal_type) ?? "commercial";
 
@@ -237,6 +244,9 @@ async function createResidentialProspect(body: Record<string, unknown>) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const body = await req.json().catch(() => ({}));
   const ids = Array.isArray(body.ids)
     ? body.ids.filter((id: unknown): id is string => typeof id === "string" && id.trim().length > 0)

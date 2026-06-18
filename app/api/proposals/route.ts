@@ -1,15 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminApi } from "@/lib/adminAuth";
 import { buildProposalUrl, getProposalStage } from "@/lib/proposals";
 import { fetchSatelliteImage } from "@/lib/pipeline/satellite";
 import { getProspectsByIds, listProposals, updateProspect } from "@/lib/supabase";
 import type { Prospect } from "@/lib/types";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const proposals = await listProposals(150);
   return NextResponse.json(proposals);
 }
 
 export async function POST(req: NextRequest) {
+  const auth = requireAdminApi(req);
+  if (auth) return auth;
+
   const body = await req.json();
   const ids = Array.isArray(body.ids) ? body.ids.filter((value: unknown): value is string => typeof value === "string") : [];
 
