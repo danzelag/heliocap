@@ -240,6 +240,7 @@ export function ProspectRoster({
               </th>
               <th className="border-b border-white/[0.07] px-4 py-3">Property</th>
               <th className="border-b border-white/[0.07] px-4 py-3">Owner</th>
+              <th className="border-b border-white/[0.07] px-4 py-3">Submitted</th>
               <th className="border-b border-white/[0.07] px-4 py-3">Stage</th>
               <th className="border-b border-white/[0.07] px-4 py-3">Contact</th>
               <th className="border-b border-white/[0.07] px-4 py-3">Proposal</th>
@@ -270,7 +271,14 @@ export function ProspectRoster({
                   <td className="px-4 py-4">
                     <div className="min-w-[180px]">
                       <div className="text-sm text-[#ece9e3]">{prospect.owner_name ?? "Owner pending"}</div>
-                      <div className="mt-1 text-[12px] text-stone-500">{prospect.owner_title ?? "Title pending"}</div>
+                      {prospect.owner_title ? (
+                        <div className="mt-1 text-[12px] text-stone-500">{prospect.owner_title}</div>
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="min-w-[160px] font-mono text-[11px] leading-5 text-stone-400">
+                      {formatDateTime(prospect.created_at)}
                     </div>
                   </td>
                   <td className="px-4 py-4">
@@ -373,4 +381,17 @@ function displayName(prospect: Prospect) {
 
 function formatStage(stage: Prospect["stage"]) {
   return stage.replace(/_/g, " ");
+}
+
+function formatDateTime(value: string) {
+  if (!value) return "Not recorded";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(new Date(value));
 }

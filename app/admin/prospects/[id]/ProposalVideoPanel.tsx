@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabaseBrowser } from "@/lib/supabase-browser";
 import type { Prospect } from "@/lib/types";
 
 type ProductVideo = "solar" | "ev";
@@ -20,10 +19,9 @@ const FIELDS: Record<ProductVideo, VideoFields> = {
 const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
 const ALLOWED_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 
-type SignedUploadResponse = {
+type UploadResponse = {
   path?: string;
-  token?: string;
-  publicUrl?: string;
+  url?: string;
   error?: string;
 };
 
@@ -104,41 +102,25 @@ export function ProposalVideoPanel({
     setError("");
     setMessage("");
 
-    const signRes = await fetch("/api/uploads/video/sign", {
+    const uploadBody = new FormData();
+    uploadBody.set("file", file);
+    uploadBody.set("prospect_id", prospect.id);
+    uploadBody.set("product", product);
+
+    const uploadRes = await fetch("/api/uploads/video", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        prospect_id: prospect.id,
-        product,
-        file_type: file.type,
-        file_size: file.size,
-      }),
+      body: uploadBody,
     });
-    const signed: SignedUploadResponse = await signRes.json().catch(() => ({}));
+    const uploaded: UploadResponse = await uploadRes.json().catch(() => ({}));
 
-    if (!signRes.ok || !signed.path || !signed.token || !signed.publicUrl) {
-      setError(signed.error ?? "Upload could not be prepared.");
+    if (!uploadRes.ok || !uploaded.url) {
+      setError(uploaded.error ?? "Upload failed.");
       setRunning(null);
       return;
     }
 
-    const { error: uploadError } = await supabaseBrowser()
-      .storage
-      .from("openclaw")
-      .uploadToSignedUrl(signed.path, signed.token, file, {
-        cacheControl: "3600",
-        contentType: file.type,
-      });
-
-    if (uploadError) {
-      setError(uploadError.message || "Upload failed.");
-      setRunning(null);
-      return;
-    }
-
-    setVideoUrl(signed.publicUrl);
-    setRunning(null);
-    await saveVideo(signed.publicUrl, thumbnailUrl);
+    setVideoUrl(uploaded.url);
+    await saveVideo(uploaded.url, thumbnailUrl);
   }
 
   return (

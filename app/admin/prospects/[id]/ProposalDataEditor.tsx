@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { buildProposalPath } from "@/lib/proposals";
 import type { Prospect } from "@/lib/types";
@@ -20,7 +20,7 @@ export function ProposalDataEditor({ prospect }: { prospect: Prospect }) {
   const displayName = prospect.company_name ?? prospect.contact_name ?? prospect.owner_name ?? prospect.address;
   const validation = useMemo(() => validateForPublish(prospect), [prospect]);
 
-  async function save(event: React.FormEvent<HTMLFormElement>) {
+  async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const updates = {
@@ -28,11 +28,11 @@ export function ProposalDataEditor({ prospect }: { prospect: Prospect }) {
       contact_name: nullable(form.get("contact_name")),
       address: stringValue(form.get("address")),
       city: stringValue(form.get("city")) || "Ontario",
-      industry: nullable(form.get("industry")),
-      sqft: numberValue(form.get("sqft")),
-      year_built: numberValue(form.get("year_built")),
+      industry: isResidential ? prospect.industry : nullable(form.get("industry")),
+      sqft: isResidential ? prospect.sqft : numberValue(form.get("sqft")),
+      year_built: isResidential ? prospect.year_built : numberValue(form.get("year_built")),
       owner_name: nullable(form.get("owner_name")),
-      owner_title: nullable(form.get("owner_title")),
+      owner_title: isResidential ? null : nullable(form.get("owner_title")),
       owner_email: nullable(form.get("owner_email")),
       owner_mobile: nullable(form.get("owner_mobile")),
       include_solar: form.get("include_solar") === "on",
@@ -122,73 +122,41 @@ export function ProposalDataEditor({ prospect }: { prospect: Prospect }) {
   return (
     <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_380px]">
       <form onSubmit={save} className="space-y-7">
-        <Section title="Proposal identity">
-          <div className="grid gap-4 sm:grid-cols-2">
-            {isResidential ? (
-              <Field label="Homeowner Name" name="contact_name" defaultValue={prospect.contact_name ?? prospect.owner_name ?? ""} required />
-            ) : (
-              <Field label="Company Name" name="company_name" defaultValue={prospect.company_name ?? ""} required />
-            )}
-            <Field label="City" name="city" defaultValue={prospect.city} required />
-          </div>
-          <Field label="Address" name="address" defaultValue={prospect.address} required />
-          {!isResidential ? <Field label="Industry" name="industry" defaultValue={prospect.industry ?? ""} /> : null}
-        </Section>
-
-        <Section title={isResidential ? "Homeowner contact" : "Owner contact"}>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label={isResidential ? "Contact Name" : "Owner Name"} name="owner_name" defaultValue={prospect.owner_name ?? ""} />
-            <Field label="Title" name="owner_title" defaultValue={prospect.owner_title ?? ""} disabled={isResidential} />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Email" name="owner_email" type="email" defaultValue={prospect.owner_email ?? ""} />
-            <Field label="Mobile" name="owner_mobile" type="tel" defaultValue={prospect.owner_mobile ?? ""} />
-          </div>
-        </Section>
-
-        <Section title="Included products">
-          <Checkbox label="Solar" name="include_solar" defaultChecked={prospect.include_solar} />
-          {isResidential ? <Checkbox label="Heat pump" name="include_heat_pump" defaultChecked={prospect.include_heat_pump} /> : null}
-          <Checkbox label={isResidential ? "EV charger add-on" : "EV chargers"} name="include_ev" defaultChecked={prospect.include_ev} />
-        </Section>
-
         {isResidential ? (
-          <Section title="Residential inputs">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Monthly energy bill" name="monthly_energy_bill" type="number" defaultValue={num(prospect.monthly_energy_bill)} />
-              <Field label="Heat pump annual savings" name="heat_pump_annual_savings" type="number" defaultValue={num(prospect.heat_pump_annual_savings)} />
-            </div>
-            <div className="border border-white/[0.07] bg-[#131316] px-3 py-3 text-xs text-stone-400">
-              Insurance consent: {prospect.insurance_quote_consent ? "Captured" : "Not captured"}
-            </div>
-          </Section>
-        ) : null}
+          <>
+            <ResidentialIntakeEditor prospect={prospect} />
+            <ResidentialResearchWorkspace prospect={prospect} />
+          </>
+        ) : (
+          <>
+            <Section title="Proposal identity">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Company Name" name="company_name" defaultValue={prospect.company_name ?? ""} required />
+                <Field label="City" name="city" defaultValue={prospect.city} required />
+              </div>
+              <Field label="Address" name="address" defaultValue={prospect.address} required />
+              <Field label="Industry" name="industry" defaultValue={prospect.industry ?? ""} />
+            </Section>
 
-        <Section title={isResidential ? "EV add-on values" : "EV charger values"}>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="EV charger count" name="ev_charger_count" type="number" defaultValue={num(prospect.ev_charger_count)} />
-            <Field label="EV annual value" name="ev_charger_annual_value" type="number" defaultValue={num(prospect.ev_charger_annual_value)} />
-          </div>
-          <Field label="EV notes" name="ev_charger_notes" defaultValue={prospect.ev_charger_notes ?? ""} />
-        </Section>
+            <Section title="Owner contact">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Owner Name" name="owner_name" defaultValue={prospect.owner_name ?? ""} />
+                <Field label="Title" name="owner_title" defaultValue={prospect.owner_title ?? ""} />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Email" name="owner_email" type="email" defaultValue={prospect.owner_email ?? ""} />
+                <Field label="Mobile" name="owner_mobile" type="tel" defaultValue={prospect.owner_mobile ?? ""} />
+              </div>
+            </Section>
 
-        <Section title="Solar economics">
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Panel count" name="panel_count" type="number" defaultValue={num(prospect.panel_count)} />
-            <Field label="System kW" name="system_kw" type="number" step="0.1" defaultValue={num(prospect.system_kw)} />
-            <Field label="Yearly kWh" name="yearly_kwh" type="number" defaultValue={num(prospect.yearly_kwh)} />
-            <Field label="Yearly savings" name="yearly_savings" type="number" defaultValue={num(prospect.yearly_savings)} />
-            <Field label="25-year savings" name="savings_25yr" type="number" defaultValue={num(prospect.savings_25yr)} />
-            <Field label="System cost" name="system_cost" type="number" defaultValue={num(prospect.system_cost)} />
-            <Field label="Incentive amount" name="incentive_amount" type="number" defaultValue={num(prospect.incentive_amount)} />
-            {!isResidential ? (
-              <>
-                <Field label="Building sqft" name="sqft" type="number" defaultValue={num(prospect.sqft)} />
-                <Field label="Year built" name="year_built" type="number" defaultValue={num(prospect.year_built)} />
-              </>
-            ) : null}
-          </div>
-        </Section>
+            <Section title="Included products">
+              <Checkbox label="Solar" name="include_solar" defaultChecked={prospect.include_solar} />
+              <Checkbox label="EV chargers" name="include_ev" defaultChecked={prospect.include_ev} />
+            </Section>
+
+            <CommercialResearchWorkspace prospect={prospect} />
+          </>
+        )}
 
         {message ? <p className="border border-[#86a06f]/35 bg-[#86a06f]/10 px-4 py-3 text-sm text-[#a4ba8d]">{message}</p> : null}
         {error ? <p className="border border-[#c8704a]/35 bg-[#c8704a]/10 px-4 py-3 text-sm text-[#d99a82]">{error}</p> : null}
@@ -237,7 +205,7 @@ export function ProposalDataEditor({ prospect }: { prospect: Prospect }) {
         </div>
         <ProspectMapCapturePanel prospect={prospect} />
         <ProposalVideoPanel prospect={prospect} product="solar" />
-        {!isResidential && prospect.include_ev ? <ProposalVideoPanel prospect={prospect} product="ev" /> : null}
+        {prospect.include_ev ? <ProposalVideoPanel prospect={prospect} product="ev" /> : null}
       </aside>
     </div>
   );
@@ -257,7 +225,133 @@ function validateForPublish(prospect: Prospect) {
   return errors;
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function ResidentialIntakeEditor({ prospect }: { prospect: Prospect }) {
+  return (
+    <Section title="Homeowner-submitted intake">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Homeowner Name" name="contact_name" defaultValue={prospect.contact_name ?? prospect.owner_name ?? ""} required />
+        <Field label="City" name="city" defaultValue={prospect.city} required />
+      </div>
+      <Field label="Address" name="address" defaultValue={prospect.address} required />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Contact Name" name="owner_name" defaultValue={prospect.owner_name ?? prospect.contact_name ?? ""} />
+        <Field label="Email" name="owner_email" type="email" defaultValue={prospect.owner_email ?? ""} />
+        <Field label="Mobile" name="owner_mobile" type="tel" defaultValue={prospect.owner_mobile ?? ""} />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Checkbox label="Solar" name="include_solar" defaultChecked={prospect.include_solar} />
+        <Checkbox label="Heat pump" name="include_heat_pump" defaultChecked={prospect.include_heat_pump} />
+        <Checkbox label="EV charger add-on" name="include_ev" defaultChecked={prospect.include_ev} />
+      </div>
+
+      <IntakeGrid
+        items={[
+          ["Property type", prospect.property_type],
+          ["Home size", prospect.home_size],
+          ["Current heating", prospect.current_heating_system],
+          ["Current cooling", prospect.current_cooling],
+          ["Ductwork", prospect.ductwork],
+          ["Goals", prospect.main_goal],
+          ["Gas bill", prospect.gas_bill_range],
+          ["Hydro bill", prospect.hydro_bill_range],
+          ["Timeline", prospect.timeline],
+          ["Rebates / financing", prospect.rebate_financing_interest],
+          ["Furnace / AC age", prospect.furnace_ac_age],
+          ["Comfort issue", prospect.comfort_issue],
+          ["Electrical panel", prospect.electrical_panel],
+          ["Own or rent", prospect.ownership_status],
+          ["Decision-maker", prospect.decision_maker],
+          ["Solar status", prospect.solar_status],
+          ["EVs now/planned", prospect.ev_charger_count != null ? `${prospect.ev_charger_count}` : null],
+          ["Full intake notes", prospect.industry],
+        ]}
+      />
+    </Section>
+  );
+}
+
+function ResidentialResearchWorkspace({ prospect }: { prospect: Prospect }) {
+  return (
+    <>
+      <Section title="Research and proposal workspace">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Monthly energy bill" name="monthly_energy_bill" type="number" defaultValue={num(prospect.monthly_energy_bill)} />
+          <Field label="Heat pump annual savings" name="heat_pump_annual_savings" type="number" defaultValue={num(prospect.heat_pump_annual_savings)} />
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="EV charger count" name="ev_charger_count" type="number" defaultValue={num(prospect.ev_charger_count)} />
+          <Field label="EV annual value" name="ev_charger_annual_value" type="number" defaultValue={num(prospect.ev_charger_annual_value)} />
+        </div>
+        <Field label="EV notes" name="ev_charger_notes" defaultValue={prospect.ev_charger_notes ?? ""} />
+        <div className="border border-white/[0.07] bg-[#131316] px-3 py-3 text-xs text-stone-400">
+          Insurance consent: {prospect.insurance_quote_consent ? "Captured" : "Not captured"}
+        </div>
+      </Section>
+
+      <SolarEconomicsSection prospect={prospect} />
+    </>
+  );
+}
+
+function CommercialResearchWorkspace({ prospect }: { prospect: Prospect }) {
+  return (
+    <>
+      <Section title="EV charger values">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="EV charger count" name="ev_charger_count" type="number" defaultValue={num(prospect.ev_charger_count)} />
+          <Field label="EV annual value" name="ev_charger_annual_value" type="number" defaultValue={num(prospect.ev_charger_annual_value)} />
+        </div>
+        <Field label="EV notes" name="ev_charger_notes" defaultValue={prospect.ev_charger_notes ?? ""} />
+      </Section>
+
+      <SolarEconomicsSection prospect={prospect} includeCommercialFields />
+    </>
+  );
+}
+
+function SolarEconomicsSection({
+  prospect,
+  includeCommercialFields = false,
+}: {
+  prospect: Prospect;
+  includeCommercialFields?: boolean;
+}) {
+  return (
+    <Section title="Solar economics">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="Panel count" name="panel_count" type="number" defaultValue={num(prospect.panel_count)} />
+        <Field label="System kW" name="system_kw" type="number" step="0.1" defaultValue={num(prospect.system_kw)} />
+        <Field label="Yearly kWh" name="yearly_kwh" type="number" defaultValue={num(prospect.yearly_kwh)} />
+        <Field label="Yearly savings" name="yearly_savings" type="number" defaultValue={num(prospect.yearly_savings)} />
+        <Field label="25-year savings" name="savings_25yr" type="number" defaultValue={num(prospect.savings_25yr)} />
+        <Field label="System cost" name="system_cost" type="number" defaultValue={num(prospect.system_cost)} />
+        <Field label="Incentive amount" name="incentive_amount" type="number" defaultValue={num(prospect.incentive_amount)} />
+        {includeCommercialFields ? (
+          <>
+            <Field label="Building sqft" name="sqft" type="number" defaultValue={num(prospect.sqft)} />
+            <Field label="Year built" name="year_built" type="number" defaultValue={num(prospect.year_built)} />
+          </>
+        ) : null}
+      </div>
+    </Section>
+  );
+}
+
+function IntakeGrid({ items }: { items: Array<[string, string | null]> }) {
+  return (
+    <div className="grid border border-white/[0.07] bg-white/[0.07] sm:grid-cols-2">
+      {items.map(([label, value]) => (
+        <div key={label} className="bg-[#131316] p-3">
+          <div className="text-[9px] uppercase tracking-[0.14em] text-stone-500">{label}</div>
+          <div className="mt-1 text-sm text-[#ece9e3]">{value || "Not provided"}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="border border-white/[0.07] bg-[#1a1a1f] p-5">
       <div className="mb-4 flex items-center gap-4 text-[10.5px] uppercase tracking-[0.26em] text-stone-500">

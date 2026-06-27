@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 export const metadata: Metadata = {
   title: "AmberField Energy — Your Property. Your Power.",
   description:
-    "AmberField Energy designs residential solar, heat pump, and EV charging plans with trusted Canadian specialist partners.",
+    "AmberField Energy designs residential solar, heat pump, and EV charging plans for your home energy upgrade.",
 };
 
 export default function HomePage() {

@@ -2,7 +2,8 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { getHeroScrollSvh, ScrollScrubVideo, useProposalScroll } from "./scrollScrub";
 import type { Prospect } from "@/lib/types";
 
 type Props = {
@@ -17,7 +18,9 @@ const RES_FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?auto=format&fit=crop&w=1800&q=80";
 
 export function ResidentialMicrosite({ prospect, bookingUrl, contactEmail }: Props) {
-  const { pageProgress, heroProgress } = useProposalScroll("residentialHero");
+  const [heroDuration, setHeroDuration] = useState<number | null>(null);
+  const heroScrollSvh = getHeroScrollSvh(heroDuration);
+  const { pageProgress, heroProgress } = useProposalScroll("residentialHero", heroScrollSvh);
   const includeSolar = prospect.include_solar !== false;
   const includeHeatPump = Boolean(prospect.include_heat_pump);
   const includeEv = Boolean(prospect.include_ev);
@@ -73,25 +76,26 @@ export function ResidentialMicrosite({ prospect, bookingUrl, contactEmail }: Pro
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#fbfaf6] text-[#332c25] [font-family:var(--font-instrument),ui-sans-serif,system-ui,sans-serif]">
+    <main className="min-h-screen overflow-x-clip bg-[#fbfaf6] text-[#332c25] [font-family:var(--font-instrument),ui-sans-serif,system-ui,sans-serif]">
+      <style>{`#residentialHero input[type="file"]{display:none!important;}`}</style>
       <div className="fixed left-0 top-0 z-[80] h-0.5 bg-[#d9a24e] transition-[width] duration-100" style={{ width: `${pageProgress * 100}%` }} />
       <div className="pointer-events-none fixed left-0 right-0 top-0 z-[70] flex items-center justify-between px-5 py-4 mix-blend-difference sm:px-10">
         <div className="pointer-events-auto flex items-center gap-3">
           <span className="h-3 w-3 rounded-full bg-[#d9a24e] shadow-[0_0_0_4px_rgba(217,162,78,.28)]" />
-          <span className="text-sm font-semibold uppercase tracking-[0.18em] text-white">Meridian Home Energy</span>
+          <span className="text-sm font-semibold uppercase tracking-[0.18em] text-white">AmberField Energy</span>
         </div>
         <span className="hidden text-[10px] uppercase tracking-[0.2em] text-white/70 sm:inline">Private proposal · Prepared Jun 2026</span>
       </div>
 
-      <section id="residentialHero" className="relative h-[320svh] bg-[#24221f]">
+      <section id="residentialHero" className="relative bg-[#24221f]" style={{ height: `${heroScrollSvh}svh` }}>
         <div className="sticky top-0 h-[100svh] overflow-hidden bg-[#24221f]">
           <div className="absolute inset-0">
-            <HeroMedia prospect={prospect} includeVideo={includeSolar} fallback={RES_FALLBACK_IMAGE} />
+            <HeroMedia prospect={prospect} includeVideo={includeSolar} fallback={RES_FALLBACK_IMAGE} progress={heroProgress} onDurationChange={setHeroDuration} />
             <div
               className="absolute inset-0"
               style={{ clipPath: `inset(${(100 - wipe * 100).toFixed(1)}% 0 0 0)` }}
             >
-              <HeroMedia prospect={prospect} includeVideo={includeSolar} fallback={RES_FALLBACK_IMAGE} after />
+              <div className="absolute inset-0 bg-[#d9a24e]/10 mix-blend-screen" />
               <div className="absolute left-[22%] top-[34%] grid h-[34%] w-[52%] origin-center [transform:perspective(900px)_rotateX(54deg)_rotateZ(-19deg)] grid-cols-8 gap-0.5">
                 {Array.from({ length: panelCount }).map((_, index) => (
                   <span
@@ -339,7 +343,7 @@ export function ResidentialMicrosite({ prospect, bookingUrl, contactEmail }: Pro
         <div className="mx-auto grid max-w-[1140px] gap-8 md:grid-cols-[1fr_2fr]">
           <div className="flex items-center gap-3">
             <span className="h-3 w-3 rounded-full bg-[#d9a24e]" />
-            <span className="font-semibold uppercase tracking-[0.18em] text-white/70">Meridian</span>
+            <span className="font-semibold uppercase tracking-[0.18em] text-white/70">AmberField</span>
           </div>
           <p>
             <b className="font-semibold text-white/70">About these numbers.</b> All savings, payback, and 25-year figures shown are modeled estimates based on roof, local sun data, current utility rates, and typical equipment performance. They are marked <span className="text-white/70">Est.</span> throughout and are not a quote or guarantee. Final figures are produced after site assessment.
@@ -350,26 +354,37 @@ export function ResidentialMicrosite({ prospect, bookingUrl, contactEmail }: Pro
   );
 }
 
-function HeroMedia({ prospect, includeVideo, fallback, after }: { prospect: Prospect; includeVideo: boolean; fallback: string; after?: boolean }) {
+function HeroMedia({
+  prospect,
+  includeVideo,
+  fallback,
+  progress,
+  onDurationChange,
+}: {
+  prospect: Prospect;
+  includeVideo: boolean;
+  fallback: string;
+  progress: number;
+  onDurationChange: (duration: number) => void;
+}) {
   if (includeVideo && prospect.video_url) {
+    const poster = prospect.video_thumbnail_url ?? prospect.satellite_image_url ?? fallback;
     return (
-      <video
+      <ScrollScrubVideo
         src={prospect.video_url}
-        poster={prospect.video_thumbnail_url ?? prospect.satellite_image_url ?? undefined}
-        autoPlay
-        muted
-        loop
-        playsInline
-        className={`absolute inset-0 h-full w-full object-cover ${after ? "brightness-110 saturate-110" : ""}`}
+        poster={poster}
+        progress={progress}
+        onDurationChange={onDurationChange}
+        className="absolute inset-0 h-full w-full object-cover"
       />
     );
   }
   if (prospect.satellite_image_url) {
-    return <img src={prospect.satellite_image_url} alt="" className={`absolute inset-0 h-full w-full object-cover ${after ? "brightness-110 saturate-110" : ""}`} />;
+    return <img src={prospect.satellite_image_url} alt="" className="absolute inset-0 h-full w-full object-cover" />;
   }
   return (
     <>
-      <img src={fallback} alt="" className={`absolute inset-0 h-full w-full object-cover ${after ? "brightness-110 saturate-110" : ""}`} />
+      <img src={fallback} alt="" className="absolute inset-0 h-full w-full object-cover" />
       <div className="absolute inset-0 bg-[radial-gradient(120%_80%_at_64%_26%,rgba(166,133,80,.45),transparent_60%),repeating-linear-gradient(125deg,rgba(255,255,255,.035)_0_2px,transparent_2px_13px)]" />
     </>
   );
@@ -506,40 +521,6 @@ function AssessmentPendingResidential({ prospect }: { prospect: Prospect }) {
       </div>
     </section>
   );
-}
-
-function useProposalScroll(heroId: string) {
-  const [pageProgress, setPageProgress] = useState(0);
-  const [heroProgress, setHeroProgress] = useState(0);
-
-  useEffect(() => {
-    let ticking = false;
-    function update() {
-      ticking = false;
-      const docTotal = Math.max(document.body.scrollHeight - window.innerHeight, 1);
-      setPageProgress(clamp(window.scrollY / docTotal));
-      const hero = document.getElementById(heroId);
-      if (!hero) return;
-      const rect = hero.getBoundingClientRect();
-      const total = Math.max(hero.offsetHeight - window.innerHeight, 1);
-      setHeroProgress(clamp(-rect.top / total));
-    }
-    function onScroll() {
-      if (!ticking) {
-        ticking = true;
-        window.requestAnimationFrame(update);
-      }
-    }
-    update();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", update);
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", update);
-    };
-  }, [heroId]);
-
-  return { pageProgress, heroProgress };
 }
 
 function estimateSolarSavings(prospect: Prospect) {

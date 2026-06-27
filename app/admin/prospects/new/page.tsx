@@ -221,7 +221,7 @@ export default function NewProspectPage() {
                     <Field label="EV charger count" name="ev_charger_count" type="number" />
                     <Field label="EV annual value" name="ev_charger_annual_value" type="number" />
                   </div>
-                  <Field label="EV notes" name="ev_charger_notes" placeholder="Fleet, tenant amenity, public charging, pending assessment" />
+                  <Field label="EV notes" name="ev_charger_notes" placeholder="Fleet, tenant amenity, public charging, utility readiness" />
                 </Section>
               </>
             ) : (

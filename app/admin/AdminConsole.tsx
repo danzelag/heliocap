@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { buildProposalPath } from "@/lib/proposals";
 import type { Prospect, ProspectStage } from "@/lib/types";
 
@@ -230,6 +230,7 @@ function ConsoleTab({
 function ProspectPreview({ prospect }: { prospect: Prospect }) {
   const model = getProspectModel(prospect);
   const stage = stageFor(prospect.stage);
+  const ownerMeta = [prospect.owner_title, displayName(prospect)].filter(Boolean).join(" · ");
 
   return (
     <section className="border border-white/[0.07] bg-gradient-to-b from-[#1a1a1f] to-[#131316] px-5 pb-[30px] pt-7 sm:px-[30px]">
@@ -275,9 +276,7 @@ function ProspectPreview({ prospect }: { prospect: Prospect }) {
           <span className="font-serif text-[19px] font-semibold leading-none text-[#ece9e3]">
             {prospect.owner_name ?? "Owner research pending"}
           </span>
-          <span className="truncate text-[12.5px] text-stone-400">
-            {prospect.owner_title ?? "Facilities contact"} · {displayName(prospect)}
-          </span>
+          {ownerMeta ? <span className="truncate text-[12.5px] text-stone-400">{ownerMeta}</span> : null}
         </div>
         {prospect.owner_name && (prospect.owner_email || prospect.owner_mobile) ? (
           <span className="shrink-0 border border-[#86a06f]/45 px-2 py-1 text-[8.5px] uppercase tracking-[0.14em] text-[#a4ba8d]">
@@ -635,7 +634,7 @@ function OperatorMenu({
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
     <section className="border border-white/[0.07] bg-[#1a1a1f]">
       <div className="flex items-center gap-4 border-b border-white/[0.07] px-4 py-[13px] text-[10.5px] uppercase tracking-[0.26em] text-stone-500">
@@ -865,6 +864,12 @@ function formatMoneyCompact(value: number) {
 
 function formatProspectSubline(prospect: Prospect, model: ProspectModel) {
   const place = prospect.city ? `${prospect.city}, ON` : "Ontario";
+  if (prospect.proposal_type === "residential") {
+    const size = prospect.home_size ?? "home energy intake";
+    const propertyType = prospect.property_type ?? "residential";
+    return `${place} · ${size} · ${propertyType}`;
+  }
+
   const buildingType =
     prospect.industry?.toLowerCase().includes("warehouse")
       ? "single-storey warehouse"

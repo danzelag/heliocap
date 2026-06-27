@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/adminAuth";
-import { autocompletePlaces } from "@/lib/googlePlaces";
+import { autocompletePlaces, googlePlacesRefererFromRequest } from "@/lib/googlePlaces";
 
 export async function POST(req: NextRequest) {
   const auth = requireAdminApi(req);
@@ -13,7 +13,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const suggestions = await autocompletePlaces(input, sessionToken);
+    const suggestions = await autocompletePlaces(input, sessionToken, {
+      referer: googlePlacesRefererFromRequest(req),
+    });
     return NextResponse.json({ suggestions });
   } catch (error) {
     return NextResponse.json(

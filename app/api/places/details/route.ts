@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/adminAuth";
-import { getPlaceDetails } from "@/lib/googlePlaces";
+import { getPlaceDetails, googlePlacesRefererFromRequest } from "@/lib/googlePlaces";
 
 export async function POST(req: NextRequest) {
   const auth = requireAdminApi(req);
@@ -13,7 +13,9 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const place = await getPlaceDetails(placeId, typeof sessionToken === "string" ? sessionToken : undefined);
+    const place = await getPlaceDetails(placeId, typeof sessionToken === "string" ? sessionToken : undefined, {
+      referer: googlePlacesRefererFromRequest(req),
+    });
     return NextResponse.json({ place });
   } catch (error) {
     return NextResponse.json(

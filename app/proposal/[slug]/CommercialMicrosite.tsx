@@ -2,7 +2,8 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
+import { getHeroScrollSvh, ScrollScrubVideo, useProposalScroll } from "./scrollScrub";
 import type { Prospect } from "@/lib/types";
 
 type Props = {
@@ -15,7 +16,9 @@ const COMMERCIAL_FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=1800&q=80";
 
 export function CommercialMicrosite({ prospect, bookingUrl, contactEmail }: Props) {
-  const { pageProgress, heroProgress } = useProposalScroll("commercialHero");
+  const [heroDuration, setHeroDuration] = useState<number | null>(null);
+  const heroScrollSvh = getHeroScrollSvh(heroDuration);
+  const { pageProgress, heroProgress } = useProposalScroll("commercialHero", heroScrollSvh);
   const solarData = hasSolarData(prospect);
   const evData = hasEvData(prospect);
   const hasSolar = prospect.include_solar === true || (prospect.include_solar !== false && solarData);
@@ -44,35 +47,29 @@ export function CommercialMicrosite({ prospect, bookingUrl, contactEmail }: Prop
     ? `${prospect.system_kw ? `${num(prospect.system_kw)} kW` : "SYSTEM"} · ${prospect.panel_count ? `${num(prospect.panel_count)} MODULES` : "MODULES"}`
     : `${prospect.sqft ? `${num(prospect.sqft)} SQFT ROOF` : "PROPERTY ROOF"}`;
 
-  const config = useMemo(() => {
-    if (hasSolar && hasEv) return "both";
-    if (hasSolar) return "solar";
-    if (hasEv) return "ev";
-    return "unknown";
-  }, [hasEv, hasSolar]);
-
   return (
     <main className="min-h-screen overflow-x-hidden bg-[#f8faf9] text-[#252b32] [font-family:var(--font-instrument),ui-sans-serif,system-ui,sans-serif]">
+      <style>{`#commercialHero input[type="file"]{display:none!important;}`}</style>
       <div className="fixed left-0 top-0 z-[80] h-0.5 bg-[#2f9d83] transition-[width] duration-100" style={{ width: `${pageProgress * 100}%` }} />
       <div className="pointer-events-none fixed left-0 right-0 top-0 z-[70] flex items-center justify-between px-5 py-4 mix-blend-difference sm:px-10">
         <div className="flex items-center gap-3">
           <span className="h-3 w-3 bg-[#2f9d83]" />
-          <span className="text-sm font-bold uppercase tracking-[0.16em] text-white">Meridian Commercial</span>
+          <span className="text-sm font-bold uppercase tracking-[0.16em] text-white">AmberField</span>
         </div>
         <span className="hidden text-[10px] uppercase tracking-[0.16em] text-white/65 [font-family:var(--font-jetbrains),ui-monospace,monospace] sm:inline">
           Confidential proposal · Jun 2026
         </span>
       </div>
 
-      <section id="commercialHero" className="relative h-[300svh] bg-[#1f242c]">
+      <section id="commercialHero" className="relative bg-[#1f242c]" style={{ height: `${heroScrollSvh}svh` }}>
         <div className="sticky top-0 h-[100svh] overflow-hidden bg-[#1f242c]">
           <div className="absolute inset-0">
-            <HeroMedia src={heroVideo} poster={heroPoster} fallback={COMMERCIAL_FALLBACK_IMAGE} />
+            <HeroMedia src={heroVideo} poster={heroPoster} fallback={COMMERCIAL_FALLBACK_IMAGE} progress={heroProgress} onDurationChange={setHeroDuration} />
             <div
               className="absolute inset-0"
               style={{ clipPath: `inset(${(100 - wipe * 100).toFixed(1)}% 0 0 0)` }}
             >
-              <HeroMedia src={heroVideo} poster={heroPoster} fallback={COMMERCIAL_FALLBACK_IMAGE} after />
+              <div className="absolute inset-0 bg-[#2f9d83]/10 mix-blend-screen" />
               {hasSolar ? (
                 <div className="absolute left-[18%] top-[30%] grid h-[42%] w-[58%] origin-center [grid-template-columns:repeat(14,minmax(0,1fr))] [transform:perspective(1100px)_rotateX(58deg)_rotateZ(-14deg)] gap-px">
                   {Array.from({ length: panelCount }).map((_, index) => (
@@ -174,13 +171,11 @@ export function CommercialMicrosite({ prospect, bookingUrl, contactEmail }: Prop
         </div>
       </section>
 
-      <OfferConfigurations active={config} />
-
       <footer className="border-t border-white/10 bg-[#1f242c] px-5 py-10 text-[11.5px] leading-7 text-white/42 sm:px-10">
         <div className="mx-auto grid max-w-[1160px] gap-8 md:grid-cols-[1fr_2fr]">
           <div className="flex items-center gap-3">
             <span className="h-3 w-3 bg-[#2f9d83]" />
-            <span className="font-bold uppercase tracking-[0.16em] text-white/70">Meridian Commercial</span>
+            <span className="font-bold uppercase tracking-[0.16em] text-white/70">AmberField</span>
           </div>
           <p>
             <b className="font-semibold text-white/70">About these figures.</b> Savings, payback, incentive, and 25-year values are modeled estimates derived from roof geometry, local irradiance, current utility rates, and standard equipment performance. They are marked <span className="text-white/70">Est.</span> and are not a quote, offer, or guarantee.
@@ -345,58 +340,37 @@ function AssessmentState({
   );
 }
 
-function OfferConfigurations({ active }: { active: "solar" | "ev" | "both" | "unknown" }) {
-  const configs = [
-    ["solar", "Config A", "Solar only", "Hero solar video, solar data band, ROI. EV section omitted entirely."],
-    ["both", "Config B", "Solar + EV", "Both sections render, each with its own media. ROI combines annual and lifetime value."],
-    ["ev", "Config C", "EV only", "Hero uses EV media. Solar section omitted. ROI reframes around charging value."],
-    ["unknown", "Config D", "Unknown", "No confirmed products, so the assessment-in-progress state replaces product sections."],
-  ] as const;
-
-  return (
-    <section className="border-t border-[#252b32]/22 bg-[#edf1f1] px-5 py-[clamp(70px,10vh,120px)] sm:px-10">
-      <div className="mx-auto max-w-[1160px]">
-        <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.18em] text-[#7b878e] [font-family:var(--font-jetbrains),ui-monospace,monospace]">
-          <span className="h-2 w-2 bg-[#2f9d83]" /> Build note · not part of the client proposal
-        </div>
-        <h2 className="mt-4 text-[clamp(24px,3vw,34px)] font-semibold">Four offer configurations the template handles</h2>
-        <p className="mt-2 max-w-[60ch] text-sm leading-7 text-[#5c6870]">
-          Sections appear only when their include flags are true. Each product uses its own uploaded video or falls back to the satellite still, so the page never looks broken.
-        </p>
-        <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {configs.map(([key, tag, title, copy]) => (
-            <div key={key} className={`border bg-[#f8faf9] p-5 ${active === key ? "border-[#2f9d83] shadow-[0_0_0_1px_#2f9d83_inset]" : "border-[#252b32]/22"}`}>
-              <div className="text-[9.5px] uppercase tracking-[0.1em] text-[#2f806d] [font-family:var(--font-jetbrains),ui-monospace,monospace]">{tag}{active === key ? " · shown" : ""}</div>
-              <h3 className="mt-2 text-base font-semibold">{title}</h3>
-              <p className="mt-2 text-[12.5px] leading-5 text-[#7b878e]">{copy}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function HeroMedia({ src, poster, fallback, after }: { src: string | null; poster: string | null; fallback: string; after?: boolean }) {
+function HeroMedia({
+  src,
+  poster,
+  fallback,
+  progress,
+  onDurationChange,
+}: {
+  src: string | null;
+  poster: string | null;
+  fallback: string;
+  progress: number;
+  onDurationChange: (duration: number) => void;
+}) {
   if (src) {
+    const posterImage = poster ?? fallback;
     return (
-      <video
+      <ScrollScrubVideo
         src={src}
-        poster={poster ?? undefined}
-        autoPlay
-        muted
-        loop
-        playsInline
-        className={`absolute inset-0 h-full w-full object-cover ${after ? "brightness-110 saturate-110" : "opacity-75"}`}
+        poster={posterImage}
+        progress={progress}
+        onDurationChange={onDurationChange}
+        className="absolute inset-0 h-full w-full object-cover opacity-75"
       />
     );
   }
   if (poster) {
-    return <img src={poster} alt="" className={`absolute inset-0 h-full w-full object-cover ${after ? "brightness-110 saturate-110" : "opacity-60"}`} />;
+    return <img src={poster} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />;
   }
   return (
     <>
-      <img src={fallback} alt="" className={`absolute inset-0 h-full w-full object-cover ${after ? "brightness-110 saturate-110" : "opacity-60"}`} />
+      <img src={fallback} alt="" className="absolute inset-0 h-full w-full object-cover opacity-60" />
       <div className="absolute inset-0 bg-[radial-gradient(120%_80%_at_60%_22%,rgba(70,92,103,.45),transparent_60%),repeating-linear-gradient(90deg,rgba(255,255,255,.03)_0_1px,transparent_1px_64px),repeating-linear-gradient(0deg,rgba(255,255,255,.03)_0_1px,transparent_1px_64px)]" />
     </>
   );
@@ -458,40 +432,6 @@ function CtaRow({ label, value, accent }: { label: string; value: string; accent
 
 function Estimate({ night }: { night?: boolean }) {
   return <span className={`ml-1 align-[.5em] text-[.5em] uppercase tracking-[0.08em] ${night ? "text-white/55" : "text-[#7b878e]"}`}>Est.</span>;
-}
-
-function useProposalScroll(heroId: string) {
-  const [pageProgress, setPageProgress] = useState(0);
-  const [heroProgress, setHeroProgress] = useState(0);
-
-  useEffect(() => {
-    let ticking = false;
-    function update() {
-      ticking = false;
-      const docTotal = Math.max(document.body.scrollHeight - window.innerHeight, 1);
-      setPageProgress(clamp(window.scrollY / docTotal));
-      const hero = document.getElementById(heroId);
-      if (!hero) return;
-      const rect = hero.getBoundingClientRect();
-      const total = Math.max(hero.offsetHeight - window.innerHeight, 1);
-      setHeroProgress(clamp(-rect.top / total));
-    }
-    function onScroll() {
-      if (!ticking) {
-        ticking = true;
-        window.requestAnimationFrame(update);
-      }
-    }
-    update();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", update);
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", update);
-    };
-  }, [heroId]);
-
-  return { pageProgress, heroProgress };
 }
 
 function hasSolarData(prospect: Prospect) {

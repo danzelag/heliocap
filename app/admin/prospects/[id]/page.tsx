@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { ReactNode } from "react";
 import { getProspect } from "@/lib/supabase";
 import { buildProposalPath } from "@/lib/proposals";
 import type { Prospect, ProspectStage } from "@/lib/types";
@@ -58,6 +59,7 @@ export default async function ProspectDetailPage({
               <div className="mb-[14px] flex flex-wrap items-center gap-[14px]">
                 <StagePill stage={stage} label={labelForStage(prospect.stage)} />
                 <span className="text-xs text-stone-400">{lastTouch(prospect)}</span>
+                <span className="text-xs text-stone-500">Submitted {fullDateTime(prospect.created_at)}</span>
                 {prospect.microsite_url ? (
                   <Link
                     href={buildProposalPath(prospect.slug)}
@@ -113,14 +115,14 @@ export default async function ProspectDetailPage({
 }
 
 function OwnerCard({ prospect }: { prospect: Prospect }) {
+  const ownerMeta = [prospect.owner_title, displayName(prospect)].filter(Boolean).join(" · ");
+
   return (
     <div className="border border-white/[0.07] bg-[#1a1a1f]">
       <div className="flex items-start justify-between gap-4 border-b border-white/[0.07] p-4">
         <div className="min-w-0">
           <div className="font-serif text-[19px] font-semibold leading-[1.1]">{prospect.owner_name ?? "Owner research pending"}</div>
-          <div className="mt-1 text-xs text-stone-400">
-            {prospect.owner_title ?? "Facilities contact"} · {displayName(prospect)}
-          </div>
+          {ownerMeta ? <div className="mt-1 text-xs text-stone-400">{ownerMeta}</div> : null}
         </div>
         {prospect.owner_name && (prospect.owner_email || prospect.owner_mobile) ? (
           <span className="shrink-0 border border-[#86a06f]/45 px-2 py-1 text-[8.5px] uppercase tracking-[0.14em] text-[#a4ba8d]">
@@ -141,6 +143,21 @@ function OwnerCard({ prospect }: { prospect: Prospect }) {
 }
 
 function SpecsGrid({ prospect, model }: { prospect: Prospect; model: ProspectModel }) {
+  if (prospect.proposal_type === "residential") {
+    const specs = [
+      ["Property type", prospect.property_type ?? "Pending"],
+      ["Home size", prospect.home_size ?? "Pending"],
+      ["Heating", prospect.current_heating_system ?? "Pending"],
+      ["Cooling", prospect.current_cooling ?? "Pending"],
+      ["Ductwork", prospect.ductwork ?? "Pending"],
+      ["Electrical panel", prospect.electrical_panel ?? "Pending"],
+      ["Timeline", prospect.timeline ?? "Pending"],
+      ["Record ID", prospect.slug || prospect.id.slice(0, 8)],
+    ];
+
+    return <SpecTiles specs={specs} />;
+  }
+
   const specs = [
     ["Gross floor area", model.sqftLabel],
     ["Year built", prospect.year_built?.toString() ?? "Pending"],
@@ -152,6 +169,10 @@ function SpecsGrid({ prospect, model }: { prospect: Prospect; model: ProspectMod
     ["Record ID", prospect.slug || prospect.id.slice(0, 8)],
   ];
 
+  return <SpecTiles specs={specs} />;
+}
+
+function SpecTiles({ specs }: { specs: string[][] }) {
   return (
     <div className="grid border border-white/[0.07] bg-white/[0.07] sm:grid-cols-2">
       {specs.map(([label, value]) => (
@@ -192,7 +213,7 @@ function SavingsLedger({ model }: { model: ProspectModel }) {
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
     <section>
       <div className="mb-3 flex items-center gap-4 text-[10.5px] uppercase tracking-[0.26em] text-stone-500">
@@ -295,6 +316,12 @@ function lastTouch(prospect: Prospect) {
 
 function formatProspectSubline(prospect: Prospect, model: ProspectModel) {
   const place = prospect.city ? `${prospect.city}, ON` : "Ontario";
+  if (prospect.proposal_type === "residential") {
+    const size = prospect.home_size ?? "home energy intake";
+    const propertyType = prospect.property_type ?? "residential";
+    return `${place} · ${size} · ${propertyType}`;
+  }
+
   const buildingType =
     prospect.industry?.toLowerCase().includes("warehouse")
       ? "single-storey warehouse"
@@ -311,6 +338,18 @@ function displayName(prospect: Prospect) {
 
 function shortDate(value: string) {
   return new Intl.DateTimeFormat("en-CA", { month: "short", day: "numeric" }).format(new Date(value));
+}
+
+function fullDateTime(value: string) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Toronto",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(new Date(value));
 }
 
 function formatNumber(value: number) {

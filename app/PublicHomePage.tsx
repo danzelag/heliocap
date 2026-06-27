@@ -10,7 +10,7 @@ type UpgradeKey = "solar" | "heat" | "ev";
 const upgrades: Array<{
   key: UpgradeKey;
   title: string;
-  partner: string;
+  detail: string;
   label: string;
   description: string;
   image: string;
@@ -20,7 +20,7 @@ const upgrades: Array<{
   {
     key: "solar",
     title: "Solar panels",
-    partner: "Firefly Solar",
+    detail: "Roof-ready generation",
     label: "The foundation",
     description:
       "Generate your own electricity from the roof you already own. Premium panels, engineered placement, decades of clean power.",
@@ -31,7 +31,7 @@ const upgrades: Array<{
   {
     key: "heat",
     title: "Heat pumps",
-    partner: "Smarco Building Solutions",
+    detail: "High-efficiency comfort",
     label: "Comfort upgrade",
     description:
       "One quiet system that heats in winter and cools in summer, running on the power you make.",
@@ -42,40 +42,13 @@ const upgrades: Array<{
   {
     key: "ev",
     title: "EV charging",
-    partner: "Maxperr Energy",
+    detail: "Home charging ready",
     label: "Future-proof",
     description:
       "Charge at home on your own sunshine instead of buying gas. Certified chargers ready for the car in your driveway.",
     image: "/assets/ev-charger.png",
     alt: "EV charger",
     monthlyOffset: 44,
-  },
-];
-
-const partners = [
-  {
-    name: "Firefly Solar",
-    role: "Solar | panels & storage",
-    logo: "/assets/logo-firefly.png",
-    description:
-      "One of Canada's most-reviewed solar installers, with engineering-led designs built to last 25+ years.",
-    accent: "text-[#b9783f]",
-  },
-  {
-    name: "Smarco Building Solutions",
-    role: "Heating & cooling | heat pumps",
-    logo: "/assets/logo-smarco.png",
-    description:
-      "Residential and commercial HVAC-R specialists delivering efficient heat pumps and air systems.",
-    accent: "text-[#397f91]",
-  },
-  {
-    name: "Maxperr Energy",
-    role: "EV charging | infrastructure",
-    logo: "/assets/logo-maxperr.png",
-    description:
-      "Enterprise-grade EV charging infrastructure with hardware, software, and certified installation.",
-    accent: "text-[#287a54]",
   },
 ];
 
@@ -119,7 +92,6 @@ export default function PublicHomePage() {
             <div className="hidden items-center gap-7 text-sm font-medium text-white/80 md:flex">
               <a href="#solutions" className="transition hover:text-[#d29a55]">Solutions</a>
               <a href="#calculator" className="transition hover:text-[#d29a55]">Calculator</a>
-              <a href="#partners" className="transition hover:text-[#d29a55]">Partners</a>
             </div>
             <Link
               href="/estimate"
@@ -145,7 +117,7 @@ export default function PublicHomePage() {
             Turn your roof into a <em className="text-[#d29a55]">power plant.</em>
           </h1>
           <p className="mt-6 max-w-[46ch] text-[clamp(17px,2vw,22px)] leading-normal text-white/80">
-            Solar, heat pumps, and EV charging, designed, installed, and backed by Canada&apos;s best in each field.
+            Solar, heat pumps, and EV charging, coordinated through one trusted AmberField plan.
           </p>
           <div className="mt-9 flex flex-wrap gap-4">
             <Link href="/estimate" className="inline-flex items-center gap-3 bg-[#d29a55] px-8 py-4 font-semibold text-[#1d1a16] transition hover:-translate-y-0.5 hover:bg-[#b9783f] hover:text-white">
@@ -157,7 +129,7 @@ export default function PublicHomePage() {
           </div>
           <div className="mt-12 flex flex-wrap gap-x-9 gap-y-5 border-t border-white/15 pt-5">
             <HeroStat value="$2,180" label="Avg. yearly savings | est." />
-            <HeroStat value="3" label="Trusted specialist partners" />
+            <HeroStat value="3" label="Home energy upgrades" />
             <HeroStat value="25 yrs" label="Of clean power" />
           </div>
         </div>
@@ -186,7 +158,7 @@ export default function PublicHomePage() {
                 <div className="text-left text-xs font-semibold uppercase tracking-[0.14em] text-[#8d8272] lg:text-right">
                   {upgrade.label}
                   <b className="mt-1 block font-serif text-xl font-normal normal-case tracking-normal text-[#302c25]">
-                    {upgrade.partner}
+                    {upgrade.detail}
                   </b>
                 </div>
                 <img src={upgrade.image} alt={upgrade.alt} className="h-40 w-full object-cover lg:h-32" />
@@ -246,7 +218,7 @@ export default function PublicHomePage() {
                     </span>
                     <span className="flex-1">
                       <span className="block font-semibold text-white">{upgrade.title}</span>
-                      <span className="text-xs text-white/55">{upgrade.partner}</span>
+                      <span className="text-xs text-white/55">{upgrade.detail}</span>
                     </span>
                     <span className="font-serif text-xl text-[#d29a55]">${upgrade.monthlyOffset}</span>
                   </button>
@@ -290,36 +262,6 @@ export default function PublicHomePage() {
         </div>
       </section>
 
-      <section id="partners" className="bg-[#f1ece2] px-5 py-20 sm:px-10 lg:py-32">
-        <div className="mx-auto max-w-[1180px]">
-          <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
-            <div>
-              <Kicker>Our specialist partners</Kicker>
-              <h2 className="mt-5 font-serif text-[clamp(34px,5vw,66px)] font-light leading-none tracking-normal">
-                The best in <em className="text-[#b9783f]">every field.</em>
-              </h2>
-            </div>
-            <p className="max-w-[42ch] text-lg leading-8 text-[#6b6255]">
-              AmberField brings together category leaders for each upgrade, vetted, certified, and accountable through one point of contact.
-            </p>
-          </div>
-          <div className="mt-12 grid border border-[#302c25]/15 bg-[#302c25]/15 lg:grid-cols-3">
-            {partners.map((partner) => (
-              <article key={partner.name} className="bg-[#f7f4ed] p-8 text-center">
-                <div className="mx-auto flex h-20 max-w-[220px] items-center justify-center">
-                  <img src={partner.logo} alt={partner.name} className="max-h-full w-auto object-contain" />
-                </div>
-                <div className={`mt-8 text-xs font-semibold uppercase tracking-[0.16em] ${partner.accent}`}>
-                  {partner.role}
-                </div>
-                <h3 className="mt-2 font-serif text-2xl font-normal tracking-normal">{partner.name}</h3>
-                <p className="mt-3 text-sm leading-6 text-[#6b6255]">{partner.description}</p>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section className="px-5 py-20 sm:px-10 lg:py-32">
         <div className="mx-auto max-w-[1180px]">
           <Kicker>How it works</Kicker>
@@ -329,8 +271,8 @@ export default function PublicHomePage() {
           <div className="mt-12 grid gap-8 md:grid-cols-2 lg:grid-cols-4">
             <Step number="01" title="Tell us about your home">Two minutes on one short form: address, bill, and what you&apos;re interested in.</Step>
             <Step number="02" title="Get your free estimate">We model your roof, sun exposure, and rates within 24 hours.</Step>
-            <Step number="03" title="Meet your advisor">One human walks you through the plan and matches the right partners.</Step>
-            <Step number="04" title="We install and you save">Our specialists handle the work. AmberField manages it end to end.</Step>
+            <Step number="03" title="Meet your advisor">One human walks you through the plan and coordinates the right certified trades.</Step>
+            <Step number="04" title="We install and you save">Certified specialists handle the work. AmberField manages it end to end.</Step>
           </div>
         </div>
       </section>
@@ -359,9 +301,9 @@ export default function PublicHomePage() {
             <p className="mt-4 font-serif text-xl italic text-white/80">Your property. Your power.</p>
           </div>
           <FooterLinks title="Solutions" links={["Solar panels", "Heat pumps", "EV charging", "Savings calculator"]} />
-          <FooterLinks title="Company" links={["Our partners", "Get an estimate", "Estimate savings"]} />
+          <FooterLinks title="Company" links={["Get an estimate", "Estimate savings"]} />
           <p className="border-t border-white/10 pt-6 md:col-span-3">
-            <b className="font-semibold text-white/70">About these numbers.</b> Savings and payment figures are illustrative estimates based on typical homes, local sun data, and current utility rates. Your personalized estimate is modeled on your specific property and bill. Installation services are delivered by independent partner companies. © 2026 AmberField Energy.
+            <b className="font-semibold text-white/70">About these numbers.</b> Savings and payment figures are illustrative estimates based on typical homes, local sun data, and current utility rates. Your personalized estimate is modeled on your specific property and bill. Installation services are completed by certified independent contractors. © 2026 AmberField Energy.
           </p>
         </div>
       </footer>
@@ -423,7 +365,11 @@ function FooterLinks({ title, links }: { title: string; links: string[] }) {
     <div>
       <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-white/50">{title}</h3>
       {links.map((link) => (
-        <a key={link} href={link === "Get an estimate" ? "/estimate" : "#solutions"} className="block py-1 text-white/60 transition hover:text-[#d29a55]">
+        <a
+          key={link}
+          href={link === "Get an estimate" ? "/estimate" : link === "Estimate savings" || link === "Savings calculator" ? "#calculator" : "#solutions"}
+          className="block py-1 text-white/60 transition hover:text-[#d29a55]"
+        >
           {link}
         </a>
       ))}

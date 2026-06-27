@@ -54,6 +54,23 @@ export interface Prospect {
   heat_pump_annual_savings: number | null;
   insurance_quote_consent: boolean | null;
   insurance_consent_at: string | null;
+  property_type: string | null;
+  current_heating_system: string | null;
+  current_cooling: string | null;
+  ductwork: string | null;
+  home_size: string | null;
+  main_goal: string | null;
+  timeline: string | null;
+  gas_bill_range: string | null;
+  hydro_bill_range: string | null;
+  rebate_financing_interest: string | null;
+  furnace_ac_age: string | null;
+  comfort_issue: string | null;
+  electrical_panel: string | null;
+  ownership_status: string | null;
+  decision_maker: string | null;
+  solar_status: string | null;
+  google_place_id: string | null;
   // EV inputs
   ev_charger_count: number | null;
   ev_charger_annual_value: number | null;

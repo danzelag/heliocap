@@ -38,6 +38,9 @@ type AutocompleteResponse = {
 };
 
 type PlacePrediction = NonNullable<NonNullable<AutocompleteResponse["suggestions"]>[number]["placePrediction"]>;
+type GooglePlacesRequestOptions = {
+  referer?: string;
+};
 
 const PLACES_BASE_URL = "https://places.googleapis.com/v1";
 
@@ -47,18 +50,18 @@ function getGoogleMapsApiKey() {
 
 export async function autocompletePlaces(
   input: string,
-  sessionToken: string
+  sessionToken: string,
+  options: GooglePlacesRequestOptions = {}
 ): Promise<PlaceSuggestion[]> {
   if (input.trim().length < 3) return [];
 
   const res = await fetch(`${PLACES_BASE_URL}/places:autocomplete`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": getGoogleMapsApiKey(),
-      "X-Goog-FieldMask":
-        "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text,suggestions.placePrediction.structuredFormat.mainText.text,suggestions.placePrediction.structuredFormat.secondaryText.text",
-    },
+    headers: googlePlacesHeaders(
+      "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text,suggestions.placePrediction.structuredFormat.mainText.text,suggestions.placePrediction.structuredFormat.secondaryText.text",
+      options,
+      true
+    ),
     body: JSON.stringify({
       input,
       sessionToken,
@@ -88,7 +91,8 @@ export async function autocompletePlaces(
 
 export async function getPlaceDetails(
   placeId: string,
-  sessionToken?: string
+  sessionToken?: string,
+  options: GooglePlacesRequestOptions = {}
 ): Promise<PlaceDetails> {
   const params = new URLSearchParams({
     languageCode: "en",
@@ -97,10 +101,7 @@ export async function getPlaceDetails(
   if (sessionToken) params.set("sessionToken", sessionToken);
 
   const res = await fetch(`${PLACES_BASE_URL}/places/${encodeURIComponent(placeId)}?${params.toString()}`, {
-    headers: {
-      "X-Goog-Api-Key": getGoogleMapsApiKey(),
-      "X-Goog-FieldMask": "id,formattedAddress,addressComponents,location,displayName,types",
-    },
+    headers: googlePlacesHeaders("id,formattedAddress,addressComponents,location,displayName,types", options),
   });
 
   if (!res.ok) {
@@ -142,4 +143,36 @@ function component(
 ) {
   const match = components.find((item) => item.types?.includes(type));
   return preferShort ? match?.shortText ?? match?.longText ?? "" : match?.longText ?? match?.shortText ?? "";
+}
+
+function googlePlacesHeaders(
+  fieldMask: string,
+  options: GooglePlacesRequestOptions,
+  includeJson = false
+) {
+  const headers: Record<string, string> = {
+    "X-Goog-Api-Key": getGoogleMapsApiKey(),
+    "X-Goog-FieldMask": fieldMask,
+  };
+  if (includeJson) headers["Content-Type"] = "application/json";
+
+  const referer = normalizeReferer(options.referer);
+  if (referer) headers.Referer = referer;
+
+  return headers;
+}
+
+export function googlePlacesRefererFromRequest(req: Request) {
+  return req.headers.get("referer") ?? req.headers.get("origin") ?? undefined;
+}
+
+function normalizeReferer(value?: string) {
+  const referer = value?.trim();
+  if (!referer) return undefined;
+  try {
+    const url = new URL(referer);
+    return url.toString();
+  } catch {
+    return undefined;
+  }
 }
