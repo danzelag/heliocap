@@ -354,11 +354,9 @@ function HeroMedia({
   onDurationChange: (duration: number) => void;
 }) {
   if (includeVideo && prospect.video_url) {
-    const poster = prospect.video_thumbnail_url ?? prospect.satellite_image_url ?? fallback;
     return (
       <ScrollScrubVideo
         src={prospect.video_url}
-        poster={poster}
         progress={progress}
         onDurationChange={onDurationChange}
         className="absolute inset-0 h-full w-full object-cover"

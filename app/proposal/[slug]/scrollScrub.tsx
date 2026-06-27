@@ -74,6 +74,18 @@ export function ScrollScrubVideo({
           onDurationChange?.(nextDuration);
         }
       }}
+      onLoadedData={(event) => {
+        if (poster) return;
+        const video = event.currentTarget;
+        const firstFrameTime =
+          Number.isFinite(video.duration) && video.duration > 0.05 ? 0.01 : 0;
+        try {
+          video.currentTime = firstFrameTime;
+        } catch {
+          // Some browsers briefly reject seeks until enough data is buffered.
+        }
+        video.pause();
+      }}
       className={`${className} pointer-events-none`}
     />
   );

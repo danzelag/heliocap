@@ -333,11 +333,9 @@ function HeroMedia({
   onDurationChange: (duration: number) => void;
 }) {
   if (src) {
-    const posterImage = poster ?? fallback;
     return (
       <ScrollScrubVideo
         src={src}
-        poster={posterImage}
         progress={progress}
         onDurationChange={onDurationChange}
         className="absolute inset-0 h-full w-full object-cover opacity-75"
