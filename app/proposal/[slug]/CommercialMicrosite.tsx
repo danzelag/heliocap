@@ -36,9 +36,6 @@ export function CommercialMicrosite({ prospect, bookingUrl, contactEmail }: Prop
   const solarLifetime = hasSolar ? prospect.savings_25yr ?? solarAnnual * 21 : 0;
   const evLifetime = hasEv ? evAnnual * 10 : 0;
   const lifetimeValue = solarLifetime + evLifetime;
-  const panelCount = Math.max(Math.min(prospect.panel_count ?? 112, 140), 40);
-  const litPanels = Math.round(clamp((heroProgress - 0.18) / 0.52) * panelCount);
-  const wipe = clamp((heroProgress - 0.1) / 0.5);
   const secondHeadline = heroProgress > 0.5;
   const roofSize = prospect.sqft ? `${num(prospect.sqft)} sq ft` : "this";
   const co2 = prospect.yearly_kwh ? Math.round(prospect.yearly_kwh * 0.000356) : null;
@@ -65,27 +62,9 @@ export function CommercialMicrosite({ prospect, bookingUrl, contactEmail }: Prop
         <div className="sticky top-0 h-[100svh] overflow-hidden bg-[#1f242c]">
           <div className="absolute inset-0">
             <HeroMedia src={heroVideo} poster={heroPoster} fallback={COMMERCIAL_FALLBACK_IMAGE} progress={heroProgress} onDurationChange={setHeroDuration} />
-            <div
-              className="absolute inset-0"
-              style={{ clipPath: `inset(${(100 - wipe * 100).toFixed(1)}% 0 0 0)` }}
-            >
-              <div className="absolute inset-0 bg-[#2f9d83]/10 mix-blend-screen" />
-              {hasSolar ? (
-                <div className="absolute left-[18%] top-[30%] grid h-[42%] w-[58%] origin-center [grid-template-columns:repeat(14,minmax(0,1fr))] [transform:perspective(1100px)_rotateX(58deg)_rotateZ(-14deg)] gap-px">
-                  {Array.from({ length: panelCount }).map((_, index) => (
-                    <span
-                      key={index}
-                      className={`min-h-2 border border-[#b7c5e7]/40 bg-[linear-gradient(150deg,#35477f,#1b243c)] transition duration-500 ${
-                        index < litPanels ? "scale-100 opacity-100" : "scale-50 opacity-0"
-                      }`}
-                    />
-                  ))}
-                </div>
-              ) : null}
-            </div>
             <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,18,24,.52)_0%,rgba(15,18,24,.08)_28%,rgba(15,18,24,.12)_48%,rgba(15,18,24,.84)_100%)]" />
             <span className="absolute left-5 top-20 z-10 border border-white/18 px-2.5 py-1 text-[9px] uppercase tracking-[0.12em] text-white/45 [font-family:var(--font-jetbrains),ui-monospace,monospace] sm:left-10">
-              {secondHeadline ? (hasSolar ? "Render complete · modules placed" : "EV charger proposal loaded") : mediaLabel(hasSolar, hasEv)}
+              {mediaLabel(hasSolar, hasEv)}
             </span>
             <div className="absolute right-10 top-20 z-10 hidden text-right text-[10px] uppercase leading-5 tracking-[0.1em] text-white/50 [font-family:var(--font-jetbrains),ui-monospace,monospace] sm:block">
               {readout}<br /><b className="text-[#2f9d83]">{secondHeadline ? qualifiedLabel(hasSolar, hasEv) : "STANDBY"}</b>
@@ -457,8 +436,8 @@ function hasEvData(prospect: Prospect) {
 }
 
 function mediaLabel(hasSolar: boolean, hasEv: boolean) {
-  if (hasSolar) return "Solar flyover · poster frame";
-  if (hasEv) return "EV charger flyover · poster frame";
+  if (hasSolar) return "Uploaded solar flyover";
+  if (hasEv) return "Uploaded EV charger flyover";
   return "Assessment preview";
 }
 
@@ -495,8 +474,4 @@ function money(value: number) {
 
 function num(value: number) {
   return Math.round(Number.isFinite(value) ? value : 0).toLocaleString("en-CA");
-}
-
-function clamp(value: number) {
-  return Math.min(1, Math.max(0, value));
 }

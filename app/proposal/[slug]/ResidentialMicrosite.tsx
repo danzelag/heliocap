@@ -51,10 +51,12 @@ export function ResidentialMicrosite({ prospect, bookingUrl, contactEmail }: Pro
     return { annual, lifetime };
   }, [evValue, heatPumpSavings, prospect.savings_25yr, solarSavings, state]);
 
-  const panelCount = Math.max(Math.min(prospect.panel_count ?? 48, 72), 24);
-  const litPanels = Math.round(clamp((heroProgress - 0.2) / 0.5) * panelCount);
-  const wipe = clamp((heroProgress - 0.1) / 0.5);
   const secondHeadline = heroProgress > 0.5;
+  const heroLabel = prospect.video_url
+    ? "Uploaded solar flyover"
+    : prospect.satellite_image_url
+      ? "Satellite roof image"
+      : "Proposal preview";
 
   function toggle(key: PackageKey) {
     if (key === "solar") return;
@@ -91,25 +93,9 @@ export function ResidentialMicrosite({ prospect, bookingUrl, contactEmail }: Pro
         <div className="sticky top-0 h-[100svh] overflow-hidden bg-[#24221f]">
           <div className="absolute inset-0">
             <HeroMedia prospect={prospect} includeVideo={includeSolar} fallback={RES_FALLBACK_IMAGE} progress={heroProgress} onDurationChange={setHeroDuration} />
-            <div
-              className="absolute inset-0"
-              style={{ clipPath: `inset(${(100 - wipe * 100).toFixed(1)}% 0 0 0)` }}
-            >
-              <div className="absolute inset-0 bg-[#d9a24e]/10 mix-blend-screen" />
-              <div className="absolute left-[22%] top-[34%] grid h-[34%] w-[52%] origin-center [transform:perspective(900px)_rotateX(54deg)_rotateZ(-19deg)] grid-cols-8 gap-0.5">
-                {Array.from({ length: panelCount }).map((_, index) => (
-                  <span
-                    key={index}
-                    className={`min-h-3 border border-[#b8c8ff]/45 bg-[linear-gradient(150deg,#3a4f91,#1d2547)] shadow-[inset_0_0_4px_rgba(5,12,30,.6)] transition duration-500 ${
-                      index < litPanels ? "scale-100 opacity-100" : "scale-50 opacity-0"
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
             <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(22,20,17,.55)_0%,rgba(22,20,17,.08)_28%,rgba(22,20,17,.12)_48%,rgba(22,20,17,.82)_100%)]" />
             <span className="absolute left-5 top-20 z-10 border border-white/18 px-2.5 py-1 text-[9px] uppercase tracking-[0.16em] text-white/45 sm:left-10">
-              {secondHeadline ? `${prospect.panel_count ?? "Solar"} panels placed` : "Solar flyover · poster frame"}
+              {heroLabel}
             </span>
           </div>
 
@@ -553,10 +539,6 @@ function money(value: number) {
 
 function num(value: number) {
   return Math.round(Number.isFinite(value) ? value : 0).toLocaleString("en-CA");
-}
-
-function clamp(value: number) {
-  return Math.min(1, Math.max(0, value));
 }
 
 function stringValue(value: FormDataEntryValue | null) {
