@@ -20,6 +20,9 @@ type SelectedPlace = {
   province: string;
   lat: number;
   lng: number;
+  displayName: string;
+  types: string[];
+  suggestedIndustry: string | null;
 };
 
 type SolarPreview = {
@@ -41,6 +44,8 @@ type SolarPreview = {
     dataLayerWarning?: string | null;
     analysisImageUrl?: string;
     analysisSource?: "proposal_cluster_overlay" | "panel_cluster_fallback";
+    wholeRoofAreaMeters2?: number | null;
+    buildingAreaMeters2?: number | null;
   };
 };
 
@@ -51,6 +56,23 @@ type BrowserMapsConfig = {
 
 type VerificationMode = "target" | "solar";
 type ProposalType = "residential" | "commercial";
+type CommercialFieldKey = "sqft" | "year_built" | "industry";
+type CommercialFields = Record<CommercialFieldKey, string>;
+type CommercialAutofill = Record<CommercialFieldKey, string | null>;
+
+const EMPTY_COMMERCIAL_FIELDS: CommercialFields = {
+  sqft: "",
+  year_built: "",
+  industry: "",
+};
+
+const EMPTY_COMMERCIAL_AUTOFILL: CommercialAutofill = {
+  sqft: null,
+  year_built: null,
+  industry: null,
+};
+
+const SQFT_PER_METER2 = 10.7639;
 
 export default function NewProspectPage() {
   const router = useRouter();
@@ -58,6 +80,59 @@ export default function NewProspectPage() {
   const [error, setError] = useState("");
   const [proposalType, setProposalType] = useState<ProposalType>("commercial");
   const [selectedPlace, setSelectedPlace] = useState<SelectedPlace | null>(null);
+  const [commercialFields, setCommercialFields] = useState<CommercialFields>(EMPTY_COMMERCIAL_FIELDS);
+  const [commercialTouched, setCommercialTouched] = useState<Record<CommercialFieldKey, boolean>>({
+    sqft: false,
+    year_built: false,
+    industry: false,
+  });
+  const [commercialAutofill, setCommercialAutofill] = useState<CommercialAutofill>(EMPTY_COMMERCIAL_AUTOFILL);
+  const commercialTouchedRef = useRef(commercialTouched);
+
+  useEffect(() => {
+    commercialTouchedRef.current = commercialTouched;
+  }, [commercialTouched]);
+
+  const updateCommercialField = useCallback((field: CommercialFieldKey, value: string) => {
+    setCommercialFields((current) => ({ ...current, [field]: value }));
+    setCommercialTouched((current) => {
+      const next = { ...current, [field]: true };
+      commercialTouchedRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const handlePlaceSelect = useCallback((place: SelectedPlace | null) => {
+    setSelectedPlace(place);
+    setCommercialFields({
+      sqft: "",
+      year_built: "",
+      industry: place?.suggestedIndustry ?? "",
+    });
+    const resetTouched = {
+      sqft: false,
+      year_built: false,
+      industry: false,
+    };
+    setCommercialTouched(resetTouched);
+    commercialTouchedRef.current = resetTouched;
+    setCommercialAutofill({
+      sqft: null,
+      year_built: place ? "Manual record needed" : null,
+      industry: place?.suggestedIndustry ? "Google Places category" : null,
+    });
+  }, []);
+
+  const handleSolarEnrichment = useCallback((enrichment: { sqft: number; source: string }) => {
+    setCommercialFields((current) => {
+      if (commercialTouchedRef.current.sqft || current.sqft) return current;
+      return { ...current, sqft: String(enrichment.sqft) };
+    });
+    setCommercialAutofill((current) => ({
+      ...current,
+      sqft: enrichment.source,
+    }));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -185,7 +260,7 @@ export default function NewProspectPage() {
                   text="Homeowner inquiry from ads, referrals, or direct intake."
                   onClick={() => {
                     setProposalType("residential");
-                    setSelectedPlace(null);
+                    handlePlaceSelect(null);
                     setError("");
                   }}
                 />
@@ -196,13 +271,38 @@ export default function NewProspectPage() {
               <>
                 <Section title="Building">
                   <Field label="Company Name" name="company_name" required />
-                  <AddressAutocomplete selectedPlace={selectedPlace} onSelect={setSelectedPlace} />
-                  {selectedPlace ? <TargetVerification key={selectedPlace.placeId} place={selectedPlace} /> : null}
+                  <AddressAutocomplete selectedPlace={selectedPlace} onSelect={handlePlaceSelect} />
+                  {selectedPlace ? (
+                    <TargetVerification
+                      key={selectedPlace.placeId}
+                      place={selectedPlace}
+                      onEnrichment={handleSolarEnrichment}
+                    />
+                  ) : null}
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Building Sqft" name="sqft" type="number" />
-                    <Field label="Year Built" name="year_built" type="number" />
+                    <Field
+                      label="Building Sqft"
+                      name="sqft"
+                      type="number"
+                      value={commercialFields.sqft}
+                      onChange={(value) => updateCommercialField("sqft", value)}
+                    />
+                    <Field
+                      label="Year Built"
+                      name="year_built"
+                      type="number"
+                      value={commercialFields.year_built}
+                      onChange={(value) => updateCommercialField("year_built", value)}
+                    />
                   </div>
-                  <Field label="Industry" name="industry" placeholder="Warehouse, manufacturing, cold storage" />
+                  <Field
+                    label="Industry"
+                    name="industry"
+                    placeholder="Warehouse, manufacturing, cold storage"
+                    value={commercialFields.industry}
+                    onChange={(value) => updateCommercialField("industry", value)}
+                  />
+                  <AutofillReadout values={commercialAutofill} />
                 </Section>
 
                 <Section title="Owner Contact">
@@ -300,7 +400,13 @@ function ChoiceCard({
   );
 }
 
-function TargetVerification({ place }: { place: SelectedPlace }) {
+function TargetVerification({
+  place,
+  onEnrichment,
+}: {
+  place: SelectedPlace;
+  onEnrichment: (enrichment: { sqft: number; source: string }) => void;
+}) {
   const [preview, setPreview] = useState<SolarPreview | null>(null);
   const [mapsConfig, setMapsConfig] = useState<BrowserMapsConfig | null>(null);
   const [mode, setMode] = useState<VerificationMode>("target");
@@ -343,6 +449,10 @@ function TargetVerification({ place }: { place: SelectedPlace }) {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "Solar preview failed");
         setPreview(json);
+        const sqftEstimate = estimateBuildingSqft(json.solar);
+        if (sqftEstimate) {
+          onEnrichment(sqftEstimate);
+        }
       })
       .catch((error) => {
         if (!controller.signal.aborted) {
@@ -364,7 +474,7 @@ function TargetVerification({ place }: { place: SelectedPlace }) {
       });
 
     return () => controller.abort();
-  }, [place]);
+  }, [onEnrichment, place]);
 
   const targetImage = preview?.target.imageUrl ?? `/api/maps/static?lat=${place.lat}&lng=${place.lng}&zoom=18&size=640x400&maptype=satellite`;
   const analysisImage = preview?.solar.analysisImageUrl;
@@ -484,6 +594,16 @@ function TargetVerification({ place }: { place: SelectedPlace }) {
   );
 }
 
+function estimateBuildingSqft(solar: SolarPreview["solar"]) {
+  if (!solar.ok) return null;
+  const meters2 = solar.buildingAreaMeters2 ?? solar.wholeRoofAreaMeters2;
+  if (!meters2 || meters2 <= 0) return null;
+
+  const sqft = Math.round((meters2 * SQFT_PER_METER2) / 100) * 100;
+  const source = solar.buildingAreaMeters2 ? "Google Solar building area estimate" : "Google Solar roof area estimate";
+  return { sqft, source };
+}
+
 function AddressAutocomplete({
   selectedPlace,
   onSelect,
@@ -495,6 +615,7 @@ function AddressAutocomplete({
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedSessionToken, setSelectedSessionToken] = useState("");
   const sessionTokenRef = useRef("");
   const getSessionToken = useCallback(() => {
     if (!sessionTokenRef.current) {
@@ -555,9 +676,11 @@ function AddressAutocomplete({
       if (!res.ok) throw new Error(json.error ?? "Address verification failed");
       setQuery(json.place.formattedAddress);
       setSuggestions([]);
+      setSelectedSessionToken(sessionToken);
       onSelect(json.place);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Address verification failed");
+      setSelectedSessionToken("");
       onSelect(null);
     } finally {
       setLoading(false);
@@ -573,6 +696,7 @@ function AddressAutocomplete({
         value={query}
         onChange={(event) => {
           setQuery(event.target.value);
+          setSelectedSessionToken("");
           onSelect(null);
           setError("");
           setSuggestions([]);
@@ -582,6 +706,7 @@ function AddressAutocomplete({
         className="w-full border border-white/12 bg-[#131316] px-3 py-2.5 text-sm text-[#ece9e3] outline-none transition placeholder:text-stone-700 focus:border-[#c08a4b]/70 focus:bg-[#17171b]"
       />
       <input type="hidden" name="google_place_id" value={selectedPlace?.placeId ?? ""} />
+      <input type="hidden" name="places_session_token" value={selectedPlace ? selectedSessionToken : ""} />
 
       {suggestions.length ? (
         <div className="absolute left-0 right-0 top-[72px] z-20 max-h-72 overflow-y-auto border border-[#c08a4b]/35 bg-[#18181d] shadow-2xl">
@@ -643,6 +768,8 @@ function Field({
   required,
   placeholder,
   defaultValue,
+  value,
+  onChange,
 }: {
   label: string;
   name: string;
@@ -650,6 +777,8 @@ function Field({
   required?: boolean;
   placeholder?: string;
   defaultValue?: string;
+  value?: string;
+  onChange?: (value: string) => void;
 }) {
   return (
     <div>
@@ -662,8 +791,22 @@ function Field({
         required={required}
         placeholder={placeholder}
         defaultValue={defaultValue}
+        value={value}
+        onChange={onChange ? (event) => onChange(event.target.value) : undefined}
         className="w-full border border-white/12 bg-[#131316] px-3 py-2.5 text-sm text-[#ece9e3] outline-none transition placeholder:text-stone-700 focus:border-[#c08a4b]/70 focus:bg-[#17171b]"
       />
+    </div>
+  );
+}
+
+function AutofillReadout({ values }: { values: CommercialAutofill }) {
+  if (!values.sqft && !values.year_built && !values.industry) return null;
+
+  return (
+    <div className="grid gap-px border border-white/[0.07] bg-white/[0.07] sm:grid-cols-3">
+      <Readout label="Sqft source" value={values.sqft ?? "Pending"} />
+      <Readout label="Year source" value={values.year_built ?? "Manual"} />
+      <Readout label="Industry source" value={values.industry ?? "Manual"} />
     </div>
   );
 }

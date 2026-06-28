@@ -16,6 +16,9 @@ export interface PlaceDetails {
   lat: number;
   lng: number;
   isStreetAddress: boolean;
+  displayName: string;
+  types: string[];
+  suggestedIndustry: string | null;
 }
 
 type AddressComponent = {
@@ -119,6 +122,9 @@ export async function getPlaceDetails(
   const province = component(components, "administrative_area_level_1", true);
   const lat = json.location?.latitude;
   const lng = json.location?.longitude;
+  const types = Array.isArray(json.types)
+    ? json.types.filter((type: unknown): type is string => typeof type === "string")
+    : [];
 
   if (!json.id || !json.formattedAddress || typeof lat !== "number" || typeof lng !== "number") {
     throw new Error("Place details response missing address or location");
@@ -133,7 +139,29 @@ export async function getPlaceDetails(
     lat,
     lng,
     isStreetAddress: Boolean(streetNumber && route),
+    displayName: typeof json.displayName?.text === "string" ? json.displayName.text : "",
+    types,
+    suggestedIndustry: suggestIndustry(types, json.displayName?.text),
   };
+}
+
+function suggestIndustry(types: string[], displayName?: string) {
+  const haystack = `${types.join(" ")} ${displayName ?? ""}`.toLowerCase().replace(/_/g, " ");
+
+  const matches: Array<[string, string[]]> = [
+    ["Cold storage", ["cold storage", "refrigerated", "freezer"]],
+    ["Warehouse", ["warehouse", "storage", "self storage", "moving", "logistics", "distribution"]],
+    ["Manufacturing", ["manufacturing", "factory", "industrial", "machining", "fabrication", "plant"]],
+    ["Food processing", ["food processing", "food manufacturer", "bakery", "brewery", "distillery"]],
+    ["Retail", ["store", "shopping", "supermarket", "grocery", "retail"]],
+    ["Automotive", ["car dealer", "auto", "automotive", "truck", "vehicle repair"]],
+    ["Healthcare", ["hospital", "medical", "clinic", "health"]],
+    ["Office", ["office", "corporate", "business center"]],
+    ["Hospitality", ["hotel", "lodging", "restaurant"]],
+    ["School", ["school", "university", "college"]],
+  ];
+
+  return matches.find(([, tokens]) => tokens.some((token) => haystack.includes(token)))?.[0] ?? null;
 }
 
 function component(
