@@ -267,7 +267,8 @@ export async function POST(req: NextRequest) {
         leadNotes,
       });
     }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error("Lead insert error:", error);
+    return NextResponse.json({ error: "Failed to submit lead." }, { status: 400 });
   }
 
   return NextResponse.json({ prospect: data }, { status: 201 });
@@ -345,7 +346,8 @@ async function insertLegacyResidentialLead({
         leadNotes,
       });
     }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error("Legacy lead insert error:", error);
+    return NextResponse.json({ error: "Failed to submit lead." }, { status: 400 });
   }
 
   return NextResponse.json({ prospect: data, storage: "legacy" }, { status: 201 });
@@ -389,7 +391,8 @@ async function insertMinimalLegacyResidentialLead({
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error("Minimal legacy lead insert error:", error);
+    return NextResponse.json({ error: "Failed to submit lead." }, { status: 400 });
   }
 
   return NextResponse.json({ prospect: data, storage: "minimal-legacy" }, { status: 201 });

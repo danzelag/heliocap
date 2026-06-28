@@ -91,7 +91,7 @@ export function createAdminSessionCookie() {
 export function setAdminSessionCookie(res: NextResponse) {
   res.cookies.set(ADMIN_COOKIE, createAdminSessionCookie(), {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: SESSION_TTL_SECONDS,
@@ -101,7 +101,7 @@ export function setAdminSessionCookie(res: NextResponse) {
 export function clearAdminSessionCookie(res: NextResponse) {
   res.cookies.set(ADMIN_COOKIE, "", {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "strict",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 0,
@@ -129,7 +129,8 @@ function sign(value: string) {
 function safeEqual(a: string, b: string) {
   const left = Buffer.from(a);
   const right = Buffer.from(b);
-  return left.length === right.length && crypto.timingSafeEqual(left, right);
+  if (left.length !== right.length) return false;
+  return crypto.timingSafeEqual(left, right);
 }
 
 function adminPassword() {
@@ -141,5 +142,5 @@ function adminEmail() {
 }
 
 function sessionSecret() {
-  return process.env.ADMIN_SESSION_SECRET?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || "";
+  return process.env.ADMIN_SESSION_SECRET?.trim() || "";
 }

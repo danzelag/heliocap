@@ -93,8 +93,9 @@ function firstValue(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
 
-function safeNext(value: string) {
-  return value.startsWith("/") && !value.startsWith("//") ? value : "/admin";
+function safeNext(value: string | undefined) {
+  const v = (value ?? "").trim();
+  return v && v.startsWith("/") && !v.startsWith("//") ? v : "/admin";
 }
 
 function errorState(code: string | undefined) {
